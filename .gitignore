@@ -1,0 +1,9 @@
+build/
+build-*/
+.cache/
+__pycache__/
+*.o
+*.obj
+*.exe
+compile_commands.json
+.godot/
