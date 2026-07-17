@@ -1,0 +1,10 @@
+schema_version: 1
+id: "rome:alias_abuse"
+module: "rome"
+epoch_window: [5, 6]
+class: infantry
+tags: []
+costs: &c {A: 10}
+extra: *c
+stats: {hp: 10, attack: 1, range_millitiles: 100, speed_millitile_tick: 10, morale: 10, build_time_ticks: 100}
+provenance: {status: H}

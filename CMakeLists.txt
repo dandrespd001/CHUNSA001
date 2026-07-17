@@ -34,3 +34,12 @@ add_executable(chunsa_test_props tests/unit/test_props.cpp)
 target_link_libraries(chunsa_test_props PRIVATE chunsa_sim_core)
 add_test(NAME props COMMAND chunsa_test_props)
 add_test(NAME golden COMMAND chunsa_sim_cli golden --vectors ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/golden)
+
+# --- Tests 0.1B ------------------------------------------------------------------
+add_executable(chunsa_test_state tests/unit/test_state.cpp)
+target_link_libraries(chunsa_test_state PRIVATE chunsa_sim_core)
+add_test(NAME state COMMAND chunsa_test_state)
+find_package(Threads REQUIRED)
+add_executable(chunsa_test_ring tests/unit/test_ring.cpp)
+target_link_libraries(chunsa_test_ring PRIVATE chunsa_sim_core Threads::Threads)
+add_test(NAME ring COMMAND chunsa_test_ring)

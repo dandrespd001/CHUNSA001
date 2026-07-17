@@ -1,0 +1,9 @@
+schema_version: 1
+id: "rome:time_traveler"
+module: "rome"
+epoch_window: [6, 5]
+class: infantry
+tags: []
+costs: {A: 10}
+stats: {hp: 10, attack: 1, range_millitiles: 100, speed_millitile_tick: 10, morale: 10, build_time_ticks: 100}
+provenance: {status: H}

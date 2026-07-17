@@ -1,0 +1,10 @@
+schema_version: 1
+id: "rome:marian_legionary"
+module: "rome"
+epoch_window: [5, 6]
+class: infantry
+tags: [can_take_cover, formation_capable]
+costs: {A: 40, Me: 25}
+stats: {hp: 100, attack: 12, range_millitiles: 1000, speed_millitile_tick: 55, morale: 70, build_time_ticks: 600}
+bonus_vs_bp: {cavalry: -2000, artillery: 3000}
+provenance: {status: H, sources: ["A VERIFICAR: Polybius, Histories"]}

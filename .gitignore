@@ -7,3 +7,6 @@ __pycache__/
 *.exe
 compile_commands.json
 .godot/
+*.sav
+*.curp
+fuzz.sav

@@ -26,6 +26,7 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 #include "chunsa/fixed64.hpp"
 #include "chunsa/vec2fx.hpp"
 #include "chunsa/cli_run.hpp"
+#include "chunsa/driver.hpp"
 
 namespace {
 
@@ -165,9 +166,95 @@ int main(int argc, char** argv) {
     }
     if (cmd == "run") return cmd_run(args, false);
     if (cmd == "bench") return cmd_run(args, true);
-    if (cmd == "savetest" || cmd == "verify") {
-        std::cerr << cmd << ": alcance 0.1B (SPEC-001 §13)\n";
-        return 2;
+    if (cmd == "savetest") {
+        // G3 (sin --ai) / G4 (con --ai): corrida A guarda en N y sigue a M;
+        // corrida B carga el save y sigue a M. Ambas deben ser bit-exactas.
+        chunsa::DriveOpts a{};
+        a.units = static_cast<uint32_t>(opt_u64(args, "--units", 200));
+        a.ticks = static_cast<uint32_t>(opt_u64(args, "--resume-to", 400));
+        a.checksum_every = 1;
+        a.seed = opt_u64(args, "--seed", 20260716ull);
+        a.with_ai = has_flag(args, "--ai");
+        a.save_at = static_cast<uint32_t>(opt_u64(args, "--save-at", 200));
+        const char* sp = opt_str(args, "--save-file");
+        a.save_path = sp ? sp : "savetest.sav";
+        a.hold_dispatched_until_save = has_flag(args, "--hold-dispatched");
+        chunsa::DriveOut oa{};
+        if (chunsa::drive_fresh(a, oa) != 0 || oa.save_result != 0) {
+            std::cerr << "savetest: corrida A falló\n";
+            return 2;
+        }
+        auto* gs = new chunsa::GameState();
+        chunsa::AiJobBox box{};
+        chunsa::AiRuntimeV1 rt{};
+        if (chunsa::load_game(*gs, box, rt, a.save_path) != 0) {
+            std::cerr << "savetest: load falló\n";
+            delete gs;
+            return 1;
+        }
+        chunsa::DriveOpts b = a;
+        b.save_path = nullptr;
+        chunsa::DriveOut ob{};
+        const int cb = chunsa::drive(b, *gs, box, rt, ob);
+        delete gs;
+        const bool ok = (cb == 0 && oa.final_checksum == ob.final_checksum
+                         && oa.continuation_checksum == ob.continuation_checksum);
+        std::cout << (a.with_ai ? "G4" : "G3") << " savetest(save@" << a.save_at
+                  << (a.hold_dispatched_until_save ? ",hold" : "") << "): "
+                  << (ok ? "OK" : "FAIL") << " state=" << std::hex << oa.final_checksum
+                  << " cont=" << oa.continuation_checksum << std::dec << "\n";
+        return ok ? 0 : 1;
+    }
+    if (cmd == "record") {
+        chunsa::DriveOpts o{};
+        o.units = static_cast<uint32_t>(opt_u64(args, "--units", 200));
+        o.ticks = static_cast<uint32_t>(opt_u64(args, "--ticks", 400));
+        o.checksum_every = 1;
+        o.seed = opt_u64(args, "--seed", 20260716ull);
+        o.with_ai = true;   // el replay debe contener comandos de IA (G5)
+        chunsa::ReplayWriter rec;
+        rec.begin(o.seed, o.units, o.ticks, o.checksum_every);
+        o.rec = &rec;
+        chunsa::DriveOut out{};
+        if (chunsa::drive_fresh(o, out) != 0) return 3;
+        const char* path = opt_str(args, "--out");
+        if (!path) path = "test.curp";
+        if (rec.finish(out.final_checksum, path) != 0) return 2;
+        std::cout << "record: " << o.ticks << " ticks → " << path << " checksum="
+                  << std::hex << out.final_checksum << std::dec << "\n";
+        return 0;
+    }
+    if (cmd == "verify") {
+        const char* path = opt_str(args, "--replay");
+        if (!path) { std::cerr << "verify: falta --replay\n"; return 2; }
+        chunsa::ReplayData data;
+        const int lc = chunsa::replay_load(path, data);
+        if (lc != 0) { std::cerr << "verify: replay malformado/E-S (" << lc << ")\n"; return lc; }
+        chunsa::DriveOpts o{};
+        o.units = data.units; o.ticks = data.ticks;
+        o.checksum_every = data.checksum_every; o.seed = data.seed;
+        o.with_ai = false;          // G5: la IA JAMÁS se ejecuta al reproducir
+        o.feed = &data;
+        chunsa::DriveOut out{};
+        const int c = chunsa::drive_fresh(o, out);
+        const bool ok = (c == 0 && out.final_checksum == data.final_checksum
+                         && out.ai_executions == 0);
+        std::cout << "G5 verify: " << (ok ? "OK" : "FAIL")
+                  << " ai_executions=" << out.ai_executions
+                  << " checksum=" << std::hex << out.final_checksum << std::dec << "\n";
+        return ok ? 0 : 1;
+    }
+    if (cmd == "loadtest") {
+        // Harness de fuzzing: cargar un save arbitrario JAMÁS debe crashear.
+        const char* path = args.size() > 1 ? args[1].c_str() : nullptr;
+        if (!path) { std::cerr << "loadtest: falta <archivo>\n"; return 2; }
+        auto* gs = new chunsa::GameState();
+        chunsa::AiJobBox box{};
+        chunsa::AiRuntimeV1 rt{};
+        const int c = chunsa::load_game(*gs, box, rt, path);
+        delete gs;
+        std::cout << "loadtest: " << c << "\n";
+        return c;
     }
     std::cerr << "subcomando desconocido: " << cmd << "\n";
     return 2;

@@ -1,0 +1,9 @@
+schema_version: 1
+id: "egipto:citizen"
+module: "egipto"
+epoch_window: [1, 6]
+class: citizen
+tags: [drop_off_carrier]
+costs: {A: 30}
+stats: {hp: 40, attack: 2, range_millitiles: 500, speed_millitile_tick: 60, morale: 40, build_time_ticks: 400}
+provenance: {status: H}
