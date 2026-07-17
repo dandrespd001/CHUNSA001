@@ -9,7 +9,9 @@
 #include <vector>
 
 // Contador global de allocations — gate cero-alloc en tick estable (SPEC-001 §1.2).
-// pragma: GCC16 no reconoce el par new/delete REEMPLAZADO y acusa mismatch con free().
+// pragmas: GCC16 no reconoce el par new/delete reemplazado (falso positivo);
+// MSVC avisa por el reemplazo global de los operators (esperado y deliberado).
+#if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 #endif
@@ -17,8 +19,6 @@
 #pragma warning(push)
 #pragma warning(disable: 4595 28251 4559)
 #endif
-#if defined(__GNUC__) && !defined(__clang__) || defined(__clang__)
-// (bloque GCC/Clang continúa abajo)
 uint64_t g_chunsa_allocs = 0;
 void* operator new(std::size_t n) { ++g_chunsa_allocs; void* p = std::malloc(n); if (!p) std::abort(); return p; }
 void* operator new[](std::size_t n) { ++g_chunsa_allocs; void* p = std::malloc(n); if (!p) std::abort(); return p; }
@@ -26,7 +26,9 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+#if defined(__GNUC__)
 #pragma GCC diagnostic pop
+#endif
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
