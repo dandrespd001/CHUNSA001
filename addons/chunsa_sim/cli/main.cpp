@@ -12,6 +12,13 @@
 // pragma: GCC16 no reconoce el par new/delete REEMPLAZADO y acusa mismatch con free().
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4595 28251 4559)
+#endif
+#if defined(__GNUC__) && !defined(__clang__) || defined(__clang__)
+// (bloque GCC/Clang continúa abajo)
 uint64_t g_chunsa_allocs = 0;
 void* operator new(std::size_t n) { ++g_chunsa_allocs; void* p = std::malloc(n); if (!p) std::abort(); return p; }
 void* operator new[](std::size_t n) { ++g_chunsa_allocs; void* p = std::malloc(n); if (!p) std::abort(); return p; }
@@ -20,6 +27,9 @@ void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 #pragma GCC diagnostic pop
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include "chunsa/fatal.hpp"
 #include "chunsa/wide128.hpp"

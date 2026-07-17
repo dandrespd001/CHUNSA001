@@ -20,6 +20,8 @@ endif()
 # --- Warnings-as-errors (goal 0.1A: build limpio, 0 warnings) ------------------
 if(MSVC)
     add_compile_options(/W4 /WX /permissive-)
+    # fopen/fseek estándar: silenciar C4996 (no usamos las variantes _s por portabilidad)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 else()
     add_compile_options(-Wall -Wextra -Wshadow -Werror)
 endif()
