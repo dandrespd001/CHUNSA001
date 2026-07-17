@@ -25,8 +25,8 @@ jobs:
         run: ./build/chunsa_sim_cli golden --vectors tests/determinism/golden
       - name: Unit props
         run: ctest --test-dir build --output-on-failure
-      - name: G1 (cuando exista `run`, paso 6 del sprint)
-        run: ./build/chunsa_sim_cli run --selftest-g1 || echo "G1 pendiente del paso 6 (no bloquea aún)"
+      - name: G1 (dos corridas bit-exactas)
+        run: ./build/chunsa_sim_cli run --selftest-g1
 
   windows-msvc:
     runs-on: windows-latest

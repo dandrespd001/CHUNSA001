@@ -20,7 +20,7 @@ inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 namespace detail {
 
 struct Hasher {
-    XXH3_state_t st;
+    XXH3_state_t st{};  // zero-init: evita -Werror=uninitialized de GCC16 en reset_withSeed
     void init() noexcept { XXH3_64bits_reset_withSeed(&st, CHECKSUM_SEED); }
     void bytes(const void* p, size_t n) noexcept { XXH3_64bits_update(&st, p, n); }
     void u8(uint8_t v) noexcept { bytes(&v, 1); }

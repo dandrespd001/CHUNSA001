@@ -15,6 +15,7 @@ enum class FatalReason : uint32_t {
     WORLD_BOUNDS = 3,
     AI_JOB_FAILED = 4,
     POOL_EXHAUSTED_INTERNAL = 5,
+    RNG_INVALID_RANGE = 6,
 };
 
 inline const char* fatal_reason_name(FatalReason r) noexcept {
@@ -25,6 +26,7 @@ inline const char* fatal_reason_name(FatalReason r) noexcept {
         case FatalReason::WORLD_BOUNDS: return "WORLD_BOUNDS";
         case FatalReason::AI_JOB_FAILED: return "AI_JOB_FAILED";
         case FatalReason::POOL_EXHAUSTED_INTERNAL: return "POOL_EXHAUSTED_INTERNAL";
+        case FatalReason::RNG_INVALID_RANGE: return "RNG_INVALID_RANGE";
     }
     return "UNKNOWN";
 }
