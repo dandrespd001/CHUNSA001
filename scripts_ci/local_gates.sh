@@ -6,9 +6,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 declare -A CFG=(
-  [gcc]="-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAEON_WIDE128_FORCE_PORTABLE=OFF"
-  [clang]="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAEON_WIDE128_FORCE_PORTABLE=OFF"
-  [portable]="-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAEON_WIDE128_FORCE_PORTABLE=ON"
+  [gcc]="-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCHUNSA_WIDE128_FORCE_PORTABLE=OFF"
+  [clang]="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCHUNSA_WIDE128_FORCE_PORTABLE=OFF"
+  [portable]="-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCHUNSA_WIDE128_FORCE_PORTABLE=ON"
 )
 
 mkdir -p build-reports
@@ -16,7 +16,7 @@ for lane in gcc clang portable; do
   echo "=== lane: $lane ==="
   cmake -B "build-$lane" -DCMAKE_BUILD_TYPE=Release ${CFG[$lane]} >/dev/null
   cmake --build "build-$lane" -j >/dev/null
-  "./build-$lane/aeon_sim_cli" golden --vectors tests/determinism/golden | tee "build-reports/golden-$lane.txt"
+  "./build-$lane/chunsa_sim_cli" golden --vectors tests/determinism/golden | tee "build-reports/golden-$lane.txt"
   ctest --test-dir "build-$lane" --output-on-failure -Q || { echo "ctest falló en $lane"; exit 1; }
 done
 

@@ -5,10 +5,10 @@
 #include <cstdint>
 #include <cstdio>
 
-#include "aeon/fatal.hpp"
-#include "aeon/wide128.hpp"
-#include "aeon/fixed64.hpp"
-#include "aeon/vec2fx.hpp"
+#include "chunsa/fatal.hpp"
+#include "chunsa/wide128.hpp"
+#include "chunsa/fixed64.hpp"
+#include "chunsa/vec2fx.hpp"
 
 static int g_fails = 0;
 #define CHECK(cond)                                                        \
@@ -19,7 +19,7 @@ static int g_fails = 0;
         }                                                                  \
     } while (0)
 
-using namespace aeon;
+using namespace chunsa;
 
 int main() {
     const int64_t pool[] = {0, 1, -1, 65, -65, 65535, 65536, -65536, 98304,
@@ -97,7 +97,7 @@ int main() {
     }
 
     if (g_fails == 0) {
-        std::printf("props: OK (backend=%s)\n", AEON_WIDE128_BACKEND_NAME);
+        std::printf("props: OK (backend=%s)\n", CHUNSA_WIDE128_BACKEND_NAME);
         return 0;
     }
     std::printf("props: %d fallos\n", g_fails);

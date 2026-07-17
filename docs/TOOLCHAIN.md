@@ -16,7 +16,7 @@
 ## Lanes de verificación numérica
 
 - `nativo` — `__int128` (GCC/Clang) / intrinsics (MSVC x64).
-- `AEON_WIDE128_FORCE_PORTABLE=ON` — backend portable de referencia; **obligatorio en CI** aunque el host tenga `__int128`.
+- `CHUNSA_WIDE128_FORCE_PORTABLE=ON` — backend portable de referencia; **obligatorio en CI** aunque el host tenga `__int128`.
 - Gate local (sin runner Windows): golden vectors **byte-idénticos** entre GCC-nativo, Clang-nativo y GCC-portable.
 
 ## Windows (CI, pendiente de primer run en GitHub Actions)

@@ -1,16 +1,16 @@
 #pragma once
 
-// aeon_sim_core - Vec2Fx, cota de mundo y normalize_v1 (SPEC-001 §4.3)
+// chunsa_sim_core - Vec2Fx, cota de mundo y normalize_v1 (SPEC-001 §4.3)
 // generado: minimax-m3  ·  revisado: Arquitecto 2026-07-16
 
 #include <bit>
 #include <cstdint>
 
-#include "aeon/fatal.hpp"
-#include "aeon/wide128.hpp"
-#include "aeon/fixed64.hpp"
+#include "chunsa/fatal.hpp"
+#include "chunsa/wide128.hpp"
+#include "chunsa/fixed64.hpp"
 
-namespace aeon {
+namespace chunsa {
 
 // ---------------------------------------------------------------
 // Geometria de mundo y normalizacion determinista (punto fijo).
@@ -132,4 +132,4 @@ inline Fx fx_mul_small(Fx a, int64_t k) noexcept {
     return Fx{ a.raw * k };
 }
 
-} // namespace aeon
+} // namespace chunsa

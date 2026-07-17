@@ -1,12 +1,12 @@
 #pragma once
 #include <cstdint>
 
-// aeon_sim_core — DeterministicFatalState: razones de fallo determinista.
+// chunsa_sim_core — DeterministicFatalState: razones de fallo determinista.
 // SPEC-001 §2.3 / §4.1. Autor: Arquitecto.
 // Regla global: las operaciones numéricas SIEMPRE devuelven un valor definido;
 // `fatal` solo se escribe si estaba en NONE (el primer error gana).
 
-namespace aeon {
+namespace chunsa {
 
 enum class FatalReason : uint32_t {
     NONE = 0,
@@ -36,4 +36,4 @@ inline void set_fatal(FatalReason& fatal, FatalReason reason) noexcept {
     }
 }
 
-}  // namespace aeon
+}  // namespace chunsa

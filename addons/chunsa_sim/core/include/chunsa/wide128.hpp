@@ -1,15 +1,15 @@
 #pragma once
-// aeon_sim_core — Wide128: aritmética 128-bit para Fixed64 (SPEC-001 §4.2)
+// chunsa_sim_core — Wide128: aritmética 128-bit para Fixed64 (SPEC-001 §4.2)
 // generado: minimax-m3 · revisado: Arquitecto 2026-07-16
 
 #include <cstdint>
 
-#if defined(_MSC_VER) && defined(_M_X64) && !defined(AEON_WIDE128_FORCE_PORTABLE) && !defined(__SIZEOF_INT128__)
+#if defined(_MSC_VER) && defined(_M_X64) && !defined(CHUNSA_WIDE128_FORCE_PORTABLE) && !defined(__SIZEOF_INT128__)
 #  include <intrin.h>
 #  pragma intrinsic(_mul128, _umul128, _udiv128)
 #endif
 
-namespace aeon {
+namespace chunsa {
 
 // Representación 128-bit en two's complement: hi es la parte alta.
 struct Wide128 {
@@ -24,18 +24,18 @@ struct W128DivI64 {
 };
 
 // Selección de backend y nombre.
-#if defined(AEON_WIDE128_FORCE_PORTABLE)
-#  define AEON_WIDE128_BACKEND_NAME "portable"
-#  define AEON_WIDE128_USE_PORTABLE
+#if defined(CHUNSA_WIDE128_FORCE_PORTABLE)
+#  define CHUNSA_WIDE128_BACKEND_NAME "portable"
+#  define CHUNSA_WIDE128_USE_PORTABLE
 #elif defined(__SIZEOF_INT128__)
-#  define AEON_WIDE128_BACKEND_NAME "int128"
-#  define AEON_WIDE128_USE_INT128
+#  define CHUNSA_WIDE128_BACKEND_NAME "int128"
+#  define CHUNSA_WIDE128_USE_INT128
 #elif defined(_MSC_VER) && defined(_M_X64)
-#  define AEON_WIDE128_BACKEND_NAME "msvc"
-#  define AEON_WIDE128_USE_MSVC
+#  define CHUNSA_WIDE128_BACKEND_NAME "msvc"
+#  define CHUNSA_WIDE128_USE_MSVC
 #else
-#  define AEON_WIDE128_BACKEND_NAME "portable"
-#  define AEON_WIDE128_USE_PORTABLE
+#  define CHUNSA_WIDE128_BACKEND_NAME "portable"
+#  define CHUNSA_WIDE128_USE_PORTABLE
 #endif
 
 // ================== Funciones comunes (independientes del backend) ==================
@@ -130,7 +130,7 @@ inline uint64_t isqrt_u64(uint64_t x) noexcept {
 // Implementaciones específicas de backend para w128_mul_i64 y w128_div_i64
 // =====================================================================
 
-#ifdef AEON_WIDE128_USE_PORTABLE
+#ifdef CHUNSA_WIDE128_USE_PORTABLE
 
 namespace detail {
 
@@ -256,12 +256,12 @@ inline W128DivI64 w128_div_i64(Wide128 num, int64_t den) noexcept {
     return result;
 }
 
-#endif // AEON_WIDE128_USE_PORTABLE
+#endif // CHUNSA_WIDE128_USE_PORTABLE
 
 // ---------------------------------------------------------------------
 // Backend __int128
 // ---------------------------------------------------------------------
-#ifdef AEON_WIDE128_USE_INT128
+#ifdef CHUNSA_WIDE128_USE_INT128
 
 inline Wide128 w128_mul_i64(int64_t a, int64_t b) noexcept {
     bool neg = (a < 0) ^ (b < 0);
@@ -311,12 +311,12 @@ inline W128DivI64 w128_div_i64(Wide128 num, int64_t den) noexcept {
     return result;
 }
 
-#endif // AEON_WIDE128_USE_INT128
+#endif // CHUNSA_WIDE128_USE_INT128
 
 // ---------------------------------------------------------------------
 // Backend MSVC (intrinsics) — validar en CI Windows
 // ---------------------------------------------------------------------
-#ifdef AEON_WIDE128_USE_MSVC
+#ifdef CHUNSA_WIDE128_USE_MSVC
 
 // intrinsics incluidos arriba, fuera del namespace
 
@@ -358,6 +358,6 @@ inline W128DivI64 w128_div_i64(Wide128 num, int64_t den) noexcept {
     }
 }
 
-#endif // AEON_WIDE128_USE_MSVC
+#endif // CHUNSA_WIDE128_USE_MSVC
 
-}  // namespace aeon
+}  // namespace chunsa

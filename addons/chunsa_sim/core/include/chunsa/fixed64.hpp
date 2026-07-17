@@ -1,14 +1,14 @@
 #pragma once
 
-// aeon_sim_core — Fixed64<16> (Q47.16), truncamiento hacia cero (SPEC-001 §4.1)
+// chunsa_sim_core — Fixed64<16> (Q47.16), truncamiento hacia cero (SPEC-001 §4.1)
 // generado: minimax-m3 · revisado: Arquitecto 2026-07-16
 
-#include "aeon/fatal.hpp"
-#include "aeon/wide128.hpp"
+#include "chunsa/fatal.hpp"
+#include "chunsa/wide128.hpp"
 
 #include <cstdint>
 
-namespace aeon {
+namespace chunsa {
 
 // ============================================================================
 // Tipo público y constantes del formato Q47.16
@@ -200,4 +200,4 @@ constexpr int64_t fx_trunc(Fx a) noexcept {
 constexpr bool fx_eq(Fx a, Fx b) noexcept { return a.raw == b.raw; }
 constexpr bool fx_lt(Fx a, Fx b) noexcept { return a.raw <  b.raw; }
 
-} // namespace aeon
+} // namespace chunsa

@@ -1,0 +1,95 @@
+#pragma once
+#include <cstdint>
+
+// chunsa_sim_core — state_checksum_v1 sobre el stream canónico (SPEC-001 §10).
+// Autor: Arquitecto. Algoritmo congelado: XXH3_64bits con seed y prefijo de
+// dominio; fuente vendored (xxHash v0.8.3, sha256 en docs/TOOLCHAIN.md).
+// Serialización canónica: CAMPO A CAMPO, little-endian implícito de x86-64,
+// jamás memcpy de structs (evita padding — SPEC-001 §11.1).
+
+#define XXH_INLINE_ALL
+#include "../../third_party/xxhash/xxhash.h"
+
+#include "chunsa/game_state.hpp"
+
+namespace chunsa {
+
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 1;
+inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
+
+namespace detail {
+
+struct Hasher {
+    XXH3_state_t st;
+    void init() noexcept { XXH3_64bits_reset_withSeed(&st, CHECKSUM_SEED); }
+    void bytes(const void* p, size_t n) noexcept { XXH3_64bits_update(&st, p, n); }
+    void u8(uint8_t v) noexcept { bytes(&v, 1); }
+    void u16(uint16_t v) noexcept { bytes(&v, 2); }
+    void u32(uint32_t v) noexcept { bytes(&v, 4); }
+    void u64(uint64_t v) noexcept { bytes(&v, 8); }
+    void i32(int32_t v) noexcept { u32(static_cast<uint32_t>(v)); }
+    void i64(int64_t v) noexcept { u64(static_cast<uint64_t>(v)); }
+    uint64_t digest() noexcept { return XXH3_64bits_digest(&st); }
+};
+
+}  // namespace detail
+
+// Dominio state_checksum_v1 (SPEC-001 §10): reproducible por replay.
+// Cubre: tick, fatal, tabla de entidades CON generaciones y free-list (orden
+// exacto), componentes de vivos en índice ascendente, PendingCommandState,
+// last_seq y mailboxes. EXCLUYE presentación y telemetría de pared.
+inline uint64_t state_checksum_v1(const GameState& g) noexcept {
+    detail::Hasher h;
+    h.init();
+    h.bytes("CHUNSA_STATE_V1", 15);
+    h.u32(CHECKSUM_ALGO_VERSION);
+    h.u32(g.tick);
+    h.u32(static_cast<uint32_t>(g.fatal));
+
+    const EntityTable& t = g.entities;
+    h.u32(t.capacity);
+    h.u32(t.alive_count);
+    h.u32(t.free_top);
+    for (uint32_t i = 0; i < t.free_top; ++i) h.u32(t.free_stack[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        h.u32(t.generation[i]);
+        h.u8(t.alive[i]);
+        h.u8(t.retired[i]);
+    }
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        h.u32(i);
+        h.i64(g.pos_x[i]); h.i64(g.pos_y[i]);
+        h.i64(g.vel_x[i]); h.i64(g.vel_y[i]);
+        h.i64(g.tgt_x[i]); h.i64(g.tgt_y[i]);
+        h.i32(g.speed_mtpt[i]);
+        h.u8(g.owner[i]);
+    }
+
+    h.u32(g.pending.count);
+    for (uint32_t i = 0; i < g.pending.count; ++i) {
+        const ScheduledCommand& c = g.pending.items[i];
+        h.u32(c.effective_tick);
+        h.u16(c.emitter);
+        h.u16(static_cast<uint16_t>(c.type));
+        h.u64(c.sequence);
+        h.u32(c.p.handle.index); h.u32(c.p.handle.generation);
+        h.i64(c.p.x_raw); h.i64(c.p.y_raw);
+        h.i32(c.p.speed_mtpt);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        h.u64(g.last_seq[e]);
+        const ReceiptMailbox& m = g.mailbox[e];
+        h.u32(m.count);
+        h.u64(m.dropped);
+        for (uint32_t i = 0; i < m.count; ++i) {
+            const CommandReceipt& r = m.ring[(m.head + i) % MAILBOX_CAP];
+            h.u64(r.sequence);
+            h.u32(r.processed_tick);
+            h.u16(static_cast<uint16_t>(r.result));
+        }
+    }
+    return h.digest();
+}
+
+}  // namespace chunsa

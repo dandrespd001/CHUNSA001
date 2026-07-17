@@ -18,15 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAEON_WIDE128_FORCE_PORTABLE=${{ matrix.portable }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCHUNSA_WIDE128_FORCE_PORTABLE=${{ matrix.portable }}
       - name: Build
         run: cmake --build build -j
       - name: Golden vectors
-        run: ./build/aeon_sim_cli golden --vectors tests/determinism/golden
+        run: ./build/chunsa_sim_cli golden --vectors tests/determinism/golden
       - name: Unit props
         run: ctest --test-dir build --output-on-failure
       - name: G1 (cuando exista `run`, paso 6 del sprint)
-        run: ./build/aeon_sim_cli run --selftest-g1 || echo "G1 pendiente del paso 6 (no bloquea aún)"
+        run: ./build/chunsa_sim_cli run --selftest-g1 || echo "G1 pendiente del paso 6 (no bloquea aún)"
 
   windows-msvc:
     runs-on: windows-latest
@@ -37,6 +37,6 @@ jobs:
       - name: Build (verifica intrinsics _mul128/_div128 — Anexo B.1)
         run: cmake --build build --config Release -j
       - name: Golden vectors
-        run: ./build/Release/aeon_sim_cli.exe golden --vectors tests/determinism/golden
+        run: ./build/Release/chunsa_sim_cli.exe golden --vectors tests/determinism/golden
       - name: Unit props
         run: ctest --test-dir build -C Release --output-on-failure
