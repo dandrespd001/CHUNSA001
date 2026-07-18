@@ -30,7 +30,8 @@
 | Godot | 4.7.1-stable, commit `a13da4feb` — sha256 del editor y export templates: registrar al descargar (0.2, adaptador GDExtension) |
 | godot-cpp | commit exacto + `extension_api.json` versionado en repo: pendiente (0.2) |
 | Steam Linux Runtime | target `steamrt4`; `sdk_image_digest`: pendiente de pin al preparar builds de distribución |
-| Zstd / xxHash (XXH3_64) | vendored con versión+sha256 al integrarse (checksum de estado: paso 5 del sprint; saves: 0.1B) |
+| zstd | `v1.5.7`, commit `f8745da6ff1ad1e7bab384bd1f9d742439278e99` — `zstd.c` sha256 `208e110a1f052d007242d4eef6ed20a03ab1dc6e13eb2c4ff8d158112120ba8e`, `zstd.h` sha256 `9b4bc8245565c98ccfc61c07749928b57e7c0f6fddb0530c4f6aa1971893d88b` (single-file vía `build/single_file_libs/create_single_file_library.sh`; usado por saves: 0.1B) |
+| xxHash (XXH3_64) | pendiente de vendor (saves: 0.1B) |
 
 ## Definición de "reproducible" (base §1.2)
 
