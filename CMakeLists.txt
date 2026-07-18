@@ -48,3 +48,26 @@ add_test(NAME ring COMMAND chunsa_test_ring)
 add_executable(chunsa_test_ff tests/unit/test_flow_field.cpp)
 target_link_libraries(chunsa_test_ff PRIVATE chunsa_sim_core)
 add_test(NAME flow_field COMMAND chunsa_test_ff)
+
+# --- Adaptador GDExtension + demo (Sprint 0.2; fuentes: kimi-k3, revisado) -------
+option(CHUNSA_BUILD_GODOT "Compilar el adaptador GDExtension y la demo" OFF)
+if(CHUNSA_BUILD_GODOT)
+    add_library(chunsa_godot SHARED
+        addons/chunsa_sim/gdextension/register_types.cpp
+        addons/chunsa_sim/gdextension/chunsa_sim_node.cpp)
+    target_include_directories(chunsa_godot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/core/include)
+    target_include_directories(chunsa_godot SYSTEM PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party_build/godot-cpp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party_build/godot-cpp/build/gen/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party_build/godot-cpp/gdextension)
+    target_compile_definitions(chunsa_godot PRIVATE
+        DEBUG_ENABLED GDEXTENSION LINUX_ENABLED THREADS_ENABLED UNIX_ENABLED)
+    find_package(Threads REQUIRED)
+    target_link_libraries(chunsa_godot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party_build/godot-cpp/build/bin/libgodot-cpp.linux.template_debug.x86_64.a
+        Threads::Threads)
+    set_target_properties(chunsa_godot PROPERTIES
+        OUTPUT_NAME "chunsa_godot"
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo/bin)
+endif()
