@@ -208,6 +208,13 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         }
     }
 
+    // (g) Visión: solo explored (visible se reconstruye en la próxima fase).
+    for (uint32_t p = 0; p < VIS_MAX_PLAYERS; ++p) {
+        for (uint32_t wd = 0; wd < VIS_WORDS; ++wd) {
+            w.u64(g.vision.explored[p][wd]);
+        }
+    }
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -333,6 +340,14 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         }
     }
 
+    if (r.fail) return false;
+
+    // (g) Visión: explored; visible queda a cero (derivada, se reconstruye).
+    for (uint32_t p = 0; p < VIS_MAX_PLAYERS; ++p) {
+        for (uint32_t wd = 0; wd < VIS_WORDS; ++wd) {
+            g.vision.explored[p][wd] = r.u64();
+        }
+    }
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes

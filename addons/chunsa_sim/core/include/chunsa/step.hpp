@@ -4,6 +4,8 @@
 #include "chunsa/game_state.hpp"
 #include "chunsa/checksum.hpp"
 
+namespace chunsa { inline constexpr uint32_t VIS_RADIUS_TILES = 8; }  // [DEFAULT] radio de visión v1
+
 // chunsa_sim_core — ciclo normativo de Step() y MovementSystemV1.
 // SPEC-001 §2 (orden total) y §12 (movimiento congelado). Autor: Arquitecto.
 // Subconjunto 0.1A del pipeline: Ingesta → Aplicación de Commands →
@@ -151,6 +153,19 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // (5) Sistemas del tick (subconjunto 0.1A).
         detail::movement_v1(g);
         sh_rebuild(g.shash, g.pos_x, g.pos_y, g.entities.alive, g.entities.capacity);
+
+        // Visión en su fase (SPEC-001 §8: t % 4 == 1). La actualización vive
+        // aquí (no en vision.hpp) para evitar el ciclo de includes con GameState.
+        if (t % 4u == 1u) {
+            VisionGrid& vg = g.vision;
+            for (uint32_t p = 0; p < VIS_MAX_PLAYERS; ++p)
+                for (uint32_t wd = 0; wd < VIS_WORDS; ++wd)
+                    vg.visible[p][wd] = 0;
+            for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+                if (!g.entities.alive[i]) continue;
+                vis_mark_circle(vg, g.owner[i], g.pos_x[i], g.pos_y[i], VIS_RADIUS_TILES);
+            }
+        }
 
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.
         for (uint32_t a = 1; a < g.destroy_count; ++a) {

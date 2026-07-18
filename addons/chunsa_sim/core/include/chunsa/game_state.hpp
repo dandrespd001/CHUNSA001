@@ -8,6 +8,7 @@
 #include "chunsa/entity_table.hpp"
 #include "chunsa/spatial_hash.hpp"
 #include "chunsa/commands.hpp"
+#include "chunsa/vision.hpp"
 
 // chunsa_sim_core — GameState (SoA, pools preasignados) y su configuración.
 // SPEC-001 §1.2/§3.2. Autor: Arquitecto.
@@ -62,6 +63,10 @@ struct GameState {
 
     SpatialHash shash;
 
+    // Visión (SPEC-001 §8, fase t%4==1). `explored` es ESTADO (acumulativo,
+    // serializado y checksummeado); `visible` es DERIVADA (se reconstruye).
+    VisionGrid vision;
+
     // DestroyBatch del tick en curso (paso 6 de Step: se ordena ASC y se recicla).
     uint32_t destroy_batch[PENDING_CAP];
     uint32_t destroy_count;
@@ -86,6 +91,7 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     g.cfg = cfg;
     et_init(g.entities, cfg.max_entities);
     sh_init(g.shash, cfg.map_tiles_x, cfg.map_tiles_y);
+    vis_init(g.vision, cfg.map_tiles_x, cfg.map_tiles_y);
 }
 
 }  // namespace chunsa

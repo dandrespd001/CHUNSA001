@@ -89,6 +89,12 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
             h.u16(static_cast<uint16_t>(r.result));
         }
     }
+    // Visión: solo `explored` (estado acumulativo); `visible` es derivada.
+    for (uint32_t p = 0; p < VIS_MAX_PLAYERS; ++p) {
+        for (uint32_t wgt = 0; wgt < VIS_WORDS; ++wgt) {
+            h.u64(g.vision.explored[p][wgt]);
+        }
+    }
     return h.digest();
 }
 
