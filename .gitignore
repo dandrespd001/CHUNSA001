@@ -10,3 +10,4 @@ compile_commands.json
 *.sav
 *.curp
 fuzz.sav
+third_party_build/
