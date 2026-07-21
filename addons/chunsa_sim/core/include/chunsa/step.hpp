@@ -7,6 +7,15 @@
 namespace chunsa { inline constexpr uint32_t VIS_RADIUS_TILES = 8; }  // [DEFAULT] radio de visión v1
 namespace chunsa { inline constexpr uint16_t ATK_COOLDOWN_TICKS = 10; }  // 0.5s @ 20Hz (Sprint 0.3)
 
+namespace chunsa {
+inline constexpr int32_t MORALE_MAX = 100;
+inline constexpr int32_t MORALE_PANIC = 20;    // <= ⇒ entra en pánico
+inline constexpr int32_t MORALE_RALLY = 50;    // >= ⇒ deja de huir
+inline constexpr int32_t MORALE_DROP = 8;      // baja/tick si en desventaja
+inline constexpr int32_t MORALE_REGEN = 2;     // sube/tick si a salvo
+inline constexpr uint32_t MORALE_RADIUS_CELLS = 1;  // celda + vecinas
+}  // namespace chunsa
+
 // chunsa_sim_core — ciclo normativo de Step() y MovementSystemV1.
 // SPEC-001 §2 (orden total) y §12 (movimiento congelado). Autor: Arquitecto.
 // Subconjunto 0.1A del pipeline: Ingesta → Aplicación de Commands →
@@ -69,6 +78,8 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.unit_class[i] = c.p.unit_class;
             g.atk_cd[i] = 0;
             g.speed_mtpt[i] = 0;
+            g.morale[i] = MORALE_MAX;
+            g.fleeing[i] = 0;
             return RejectReason::ACCEPTED;
         }
         case CommandType::MOVE_TO: {
@@ -124,6 +135,61 @@ inline void movement_v1(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
+        if (g.fleeing[i]) {
+            // Huir: moverse en dirección OPUESTA al enemigo vivo más cercano
+            // (celda + 8 vecinas). Si no hay enemigo cerca, quedarse quieto.
+            const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
+            const uint32_t cx = cell_i % g.shash.cells_x;
+            const uint32_t cy = cell_i / g.shash.cells_x;
+
+            uint32_t best = SH_EMPTY;
+            uint64_t best_d2 = 0;
+            const Vec2Fx pos_i{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
+
+            for (int32_t dcy = -1; dcy <= 1; ++dcy) {
+                const int64_t ncy64 = static_cast<int64_t>(cy) + dcy;
+                if (ncy64 < 0 || ncy64 >= static_cast<int64_t>(g.shash.cells_y)) continue;
+                const uint32_t ncy = static_cast<uint32_t>(ncy64);
+                for (int32_t dcx = -1; dcx <= 1; ++dcx) {
+                    const int64_t ncx64 = static_cast<int64_t>(cx) + dcx;
+                    if (ncx64 < 0 || ncx64 >= static_cast<int64_t>(g.shash.cells_x)) continue;
+                    const uint32_t ncx = static_cast<uint32_t>(ncx64);
+                    const uint32_t cell = ncy * g.shash.cells_x + ncx;
+
+                    for (uint32_t j = sh_first(g.shash, cell); j != SH_EMPTY; j = sh_next(g.shash, j)) {
+                        if (j == i) continue;
+                        if (!t.alive[j]) continue;
+                        if (g.hp[j] <= 0) continue;
+                        if (g.owner[j] == g.owner[i]) continue;
+
+                        FatalReason local_fatal = FatalReason::NONE;
+                        const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
+                        const uint64_t d2 = dist_sq_raw(pos_i, pos_j, local_fatal);
+
+                        if (best == SH_EMPTY || d2 < best_d2 || (d2 == best_d2 && j < best)) {
+                            best = j;
+                            best_d2 = d2;
+                        }
+                    }
+                }
+            }
+
+            if (best != SH_EMPTY) {
+                const int64_t step_fx = (int64_t)g.speed_mtpt[i] * FX_ONE_RAW / 1000;
+                Vec2Fx away = normalize_v1(Vec2Fx{Fx{g.pos_x[i]-g.pos_x[best]},
+                                                  Fx{g.pos_y[i]-g.pos_y[best]}}, g.fatal);
+                Fx vx = fx_mul(away.x, Fx{step_fx}, g.fatal);
+                Fx vy = fx_mul(away.y, Fx{step_fx}, g.fatal);
+                g.vel_x[i]=vx.raw; g.vel_y[i]=vy.raw;
+                g.pos_x[i]=fx_add(Fx{g.pos_x[i]},vx,g.fatal).raw;
+                g.pos_y[i]=fx_add(Fx{g.pos_y[i]},vy,g.fatal).raw;
+                if (g.pos_x[i] < 0) g.pos_x[i] = 0;
+                if (g.pos_y[i] < 0) g.pos_y[i] = 0;
+                if (g.pos_x[i] >= WORLD_RAW_MAX) g.pos_x[i] = WORLD_RAW_MAX - 1;
+                if (g.pos_y[i] >= WORLD_RAW_MAX) g.pos_y[i] = WORLD_RAW_MAX - 1;
+            } else { g.vel_x[i]=0; g.vel_y[i]=0; }
+            continue;
+        }
         if (g.flow_mode[i] == 1u && g.flow_has_goal) {
             // Clamp al rango del flow field (256): la cota de mundo (8192) es mayor,
             // así que una unidad más allá del tile 255 leería fuera de dir_x/dir_y.
@@ -205,6 +271,7 @@ inline void combat_system(GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.hp[i] <= 0) continue;
+        if (g.fleeing[i]) { if (g.atk_cd[i] > 0) --g.atk_cd[i]; continue; }
         if (g.atk_cd[i] > 0) { --g.atk_cd[i]; continue; }
 
         const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
@@ -260,6 +327,56 @@ inline void combat_system(GameState& g) noexcept {
             }
             g.atk_cd[i] = ATK_COOLDOWN_TICKS;
         }
+    }
+}
+
+// Sistema de moral (Sprint 0.3, doc 07_COMBATE §7.6). Se llama tras el
+// combate del tick, antes del DESTROY, para reaccionar a lo que pasó.
+// Cada unidad viva cuenta aliados/enemigos en su celda + 8 vecinas (mismo
+// patrón que combat_system): en fuerte desventaja local pierde moral y,
+// bajo histéresis, entra en pánico (huye, no ataca).
+inline void morale_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.hp[i] <= 0) continue;
+
+        const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
+        const uint32_t cx = cell_i % g.shash.cells_x;
+        const uint32_t cy = cell_i / g.shash.cells_x;
+
+        uint32_t allies = 0, enemies = 0;
+
+        for (int32_t dcy = -1; dcy <= 1; ++dcy) {
+            const int64_t ncy64 = static_cast<int64_t>(cy) + dcy;
+            if (ncy64 < 0 || ncy64 >= static_cast<int64_t>(g.shash.cells_y)) continue;
+            const uint32_t ncy = static_cast<uint32_t>(ncy64);
+            for (int32_t dcx = -1; dcx <= 1; ++dcx) {
+                const int64_t ncx64 = static_cast<int64_t>(cx) + dcx;
+                if (ncx64 < 0 || ncx64 >= static_cast<int64_t>(g.shash.cells_x)) continue;
+                const uint32_t ncx = static_cast<uint32_t>(ncx64);
+                const uint32_t cell = ncy * g.shash.cells_x + ncx;
+
+                for (uint32_t j = sh_first(g.shash, cell); j != SH_EMPTY; j = sh_next(g.shash, j)) {
+                    if (j == i) continue;
+                    if (!t.alive[j]) continue;
+                    if (g.hp[j] <= 0) continue;
+                    if (g.owner[j] == g.owner[i]) ++allies;
+                    else ++enemies;
+                }
+            }
+        }
+
+        if (enemies > allies + 1) {
+            g.morale[i] -= MORALE_DROP;
+        } else if (enemies == 0) {
+            g.morale[i] += MORALE_REGEN;
+        }
+        if (g.morale[i] < 0) g.morale[i] = 0;
+        if (g.morale[i] > MORALE_MAX) g.morale[i] = MORALE_MAX;
+
+        if (g.morale[i] <= MORALE_PANIC) g.fleeing[i] = 1;
+        if (g.morale[i] >= MORALE_RALLY) g.fleeing[i] = 0;
     }
 }
 
@@ -326,6 +443,10 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
 
         // (5b) Combate (Sprint 0.3): cada tick, período 1. Antes de DESTROY.
         detail::combat_system(g);
+
+        // (5c) Moral (Sprint 0.3, doc 07 §7.6): tras el combate del tick,
+        // para reaccionar a lo que pasó. Antes de DESTROY.
+        detail::morale_system(g);
 
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.
         for (uint32_t a = 1; a < g.destroy_count; ++a) {

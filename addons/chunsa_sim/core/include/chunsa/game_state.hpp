@@ -86,6 +86,10 @@ struct GameState {
     uint8_t  unit_class[ENTITY_HARD_CAP]; // 0=infantry 1=cavalry 2=artillery
     uint16_t atk_cd[ENTITY_HARD_CAP];     // ticks restantes hasta poder atacar de nuevo
 
+    // Moral (Sprint 0.3, doc 07 §7.6). ESTADO: serializado + checksummeado.
+    int32_t morale[ENTITY_HARD_CAP];   // 0..MORALE_MAX; SPAWN_UNIT lo pone a MORALE_MAX
+    uint8_t fleeing[ENTITY_HARD_CAP];  // 1 = en pánico (huye, no ataca)
+
     // DestroyBatch del tick en curso (paso 6 de Step: se ordena ASC y se recicla).
     uint32_t destroy_batch[PENDING_CAP];
     uint32_t destroy_count;
@@ -103,6 +107,7 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.hp[i] = 0; g.max_hp[i] = 0;
     g.attack[i] = 0; g.range_mt[i] = 0;
     g.unit_class[i] = 0; g.atk_cd[i] = 0;
+    g.morale[i] = 0; g.fleeing[i] = 0;
 }
 
 // Patrón determinista fijo del cost_grid de navegación (Sprint 0.2): todo
