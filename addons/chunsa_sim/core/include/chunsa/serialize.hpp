@@ -191,6 +191,10 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         w.i64(it.p.x_raw);
         w.i64(it.p.y_raw);
         w.i32(it.p.speed_mtpt);
+        w.i32(it.p.hp);
+        w.i32(it.p.attack);
+        w.i32(it.p.range_mt);
+        w.u8 (it.p.unit_class);
     }
 
     // (f) Por emisor (0..15): last_seq, mailbox count/dropped, ring en orden lógico
@@ -221,6 +225,14 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.flow_mode[i]);
     w.u32(g.flow_goal_cell);
     w.u8(g.flow_has_goal);
+
+    // (i) Combate (Sprint 0.3): 6 arrays, todos los slots, en este orden.
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.hp[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.max_hp[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.attack[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.range_mt[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.unit_class[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u16(g.atk_cd[i]);
 
     if (w.overflow) return 0;
     return w.len;
@@ -322,9 +334,13 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.x_raw               = r.i64();
         it.p.y_raw               = r.i64();
         it.p.speed_mtpt          = r.i32();
+        it.p.hp                  = r.i32();
+        it.p.attack              = r.i32();
+        it.p.range_mt            = r.i32();
+        it.p.unit_class          = r.u8();
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        if (type_raw < 1 || type_raw > 4)    return false; // CommandType ∈ {1,2,3,4}
+        if (type_raw < 1 || type_raw > 5)    return false; // CommandType ∈ {1,2,3,4,5}
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -365,6 +381,15 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     g.flow_has_goal  = r.u8();
     if (r.fail) return false;
     g.flow_dirty = g.flow_has_goal;
+
+    // (i) Combate (Sprint 0.3): 6 arrays, mismo orden que gs_serialize.
+    for (uint32_t i = 0; i < cap_e; ++i) g.hp[i]         = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.max_hp[i]     = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.attack[i]     = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.range_mt[i]   = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.unit_class[i] = r.u8();
+    for (uint32_t i = 0; i < cap_e; ++i) g.atk_cd[i]     = r.u16();
+    if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
     g.destroy_count = 0;

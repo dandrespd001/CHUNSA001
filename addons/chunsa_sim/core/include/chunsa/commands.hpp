@@ -14,6 +14,7 @@ enum class CommandType : uint16_t {
     MOVE_TO = 2,
     DESTROY_DEBUG = 3,
     FLOW_MOVE = 4,
+    SPAWN_UNIT = 5,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 
@@ -35,6 +36,10 @@ struct CmdPayload {
     int64_t x_raw;         // SPAWN_DEBUG / MOVE_TO
     int64_t y_raw;
     int32_t speed_mtpt;    // SPAWN_DEBUG (mili-tiles por tick)
+    int32_t hp;            // SPAWN_UNIT
+    int32_t attack;        // SPAWN_UNIT
+    int32_t range_mt;      // SPAWN_UNIT (mili-tiles, 1000 = 1 tile)
+    uint8_t unit_class;    // SPAWN_UNIT (0=infantry 1=cavalry 2=artillery)
 };
 
 struct RawCommand {

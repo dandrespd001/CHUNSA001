@@ -78,6 +78,14 @@ struct GameState {
     uint8_t  flow_dirty;                 // 1 = recalcular flow al inicio del próximo movement
     FlowField flow;                      // DERIVADA — NO serializar, NO checksummear
 
+    // Combate (Sprint 0.3). ESTADO: serializado + checksummeado.
+    int32_t  hp[ENTITY_HARD_CAP];         // <=0 ⇒ muere al final del tick
+    int32_t  max_hp[ENTITY_HARD_CAP];
+    int32_t  attack[ENTITY_HARD_CAP];     // daño base (entero)
+    int32_t  range_mt[ENTITY_HARD_CAP];   // alcance en mili-tiles (1000 = 1 tile)
+    uint8_t  unit_class[ENTITY_HARD_CAP]; // 0=infantry 1=cavalry 2=artillery
+    uint16_t atk_cd[ENTITY_HARD_CAP];     // ticks restantes hasta poder atacar de nuevo
+
     // DestroyBatch del tick en curso (paso 6 de Step: se ordena ASC y se recicla).
     uint32_t destroy_batch[PENDING_CAP];
     uint32_t destroy_count;
@@ -92,6 +100,9 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.tgt_x[i] = 0; g.tgt_y[i] = 0;
     g.speed_mtpt[i] = 0;
     g.owner[i] = 0;
+    g.hp[i] = 0; g.max_hp[i] = 0;
+    g.attack[i] = 0; g.range_mt[i] = 0;
+    g.unit_class[i] = 0; g.atk_cd[i] = 0;
 }
 
 // Patrón determinista fijo del cost_grid de navegación (Sprint 0.2): todo

@@ -101,6 +101,13 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.flow_mode[i]);
     h.u32(g.flow_goal_cell);
     h.u8(g.flow_has_goal);
+    // Combate (Sprint 0.3): componentes por índice ascendente, todos los slots.
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.hp[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.max_hp[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.attack[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.range_mt[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.unit_class[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.atk_cd[i]);
     return h.digest();
 }
 
