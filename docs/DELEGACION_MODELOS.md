@@ -2,13 +2,14 @@
 
 **Autor**: Arquitecto. Basada en benchmarks públicos (julio 2026) + evidencia empírica de los Sprints 0.1A/0.1B.
 
-## Los tres roles
+## Los cuatro roles
 
 | Agente | Acceso | Para qué es MEJOR | Evitar |
 |---|---|---|---|
-| **Claude (Arquitecto)** | esta sesión | Arquitectura, specs/contratos, revisión línea a línea, integración, seguridad, decisiones, orquestación | Generación masiva (caro en tokens) |
-| **Kimi K3** (Moonshot, 2.8T) | `~/.kimi-code/bin/kimi -p "..."` (+`-y` para editar; agéntico) | **① Frontend/UI** (#1 en Frontend Code Arena, 1679 Elo): GDScript de UI/HUD, herramientas visuales, escenas · **② Tareas agénticas de largo horizonte**: implementaciones multi-archivo, refactors de repo, "monta X de punta a punta" (Coding Index 76.2, sostiene tareas largas con terminal) · ③ Cuando haga falta más músculo de razonamiento que M3 | Micro-tareas de un archivo (desperdicio); tocar `main` directamente |
-| **MiniMax M3** | ① bridge MCP (fire-and-forget paralelo, **cap real 600 s**) · ② `fish -c 'claude-minimax -p "..."'` (Claude Code sobre M3 **contexto 1M**, sin cap, con herramientas web) | **① Módulos únicos bajo spec cerrada** (probado: serialize/sha/Dial impecables) · **② Contexto masivo barato** (MSA: 1/20 de cómputo a 1M — analizar corpus/logs/datos grandes) · **③ Investigación con navegación** (BrowseComp 83.5 > Opus 4.7) vía claude-minimax · ④ Lotes de datos masivos (T1) | Razonamiento abstracto novedoso ("ejecutor competente, no gran razonador"); tareas grandes por el bridge (se sobre-razona y muere a los 600 s — visto 2×) |
+| **Claude Arquitecto** (esta sesión, Opus 4.8) | — | Arquitectura, specs/contratos, revisión línea a línea, integración, seguridad, decisiones de determinismo, orquestación | Generación masiva (caro) |
+| **Sonnet 5** (Claude, tu suscripción) | `claude --model sonnet -p "..." --dangerously-skip-permissions` (agéntico; rama propia) | **Tareas agénticas con JUICIO durante la implementación**: conectar sistemas del kernel, refactors delicados, código donde la corrección importa más que el volumen. El punto medio: mejor razonamiento que M3, más barato que Opus/Fable. Cuando M3 no razona lo suficiente y no justifica gastar al Arquitecto | Boilerplate trivial (usa M3); frontend puro (usa Kimi) |
+| **Kimi K3** (Moonshot, 2.8T) | `~/.kimi-code/bin/kimi -p "..."` (agéntico; `-p` ya auto-aprueba) | **① Frontend/UI** (#1 Frontend Code Arena, 1679 Elo): render, GDScript de HUD, escenas · **② Tareas agénticas de largo horizonte multi-archivo** (Coding Index 76.2) | Micro-tareas de un archivo; **cuota limitada — se agota (visto 2×), no dársela a tareas que deban terminar sí o sí** |
+| **MiniMax M3** | ① bridge MCP (paralelo, **cap real 600 s**) · ② `fish -c 'claude-minimax --dangerously-skip-permissions -p "..."'` (Claude Code sobre M3 **ctx 1M**, sin cap, con web) | **① Módulos únicos bajo spec cerrada** (serialize/sha/Dial/visión impecables) · **② Contexto masivo barato** · **③ Investigación con navegación** (BrowseComp 83.5) vía claude-minimax · ④ Datos masivos. Bridge = **cero carga local** (inferencia remota), el más seguro para paralelo | Razonamiento abstracto novedoso ("ejecutor competente, no gran razonador"); firmas de API en prosa (las inventa — dáselas como código) |
 
 ## Reglas operativas (aprendidas a golpes)
 

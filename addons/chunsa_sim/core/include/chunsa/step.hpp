@@ -74,6 +74,10 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (!world_contains(goal)) return RejectReason::MALFORMED;
             const uint32_t tx = static_cast<uint32_t>(c.p.x_raw >> 16);
             const uint32_t ty = static_cast<uint32_t>(c.p.y_raw >> 16);
+            // El flow field es 256×256; un goal fuera de él no es representable.
+            // (Endurecimiento del Arquitecto: el contrato usaba world_contains
+            //  (cota 8192), pero el campo es FF_AXIS=256 — evita índice inválido.)
+            if (tx >= FF_AXIS || ty >= FF_AXIS) return RejectReason::MALFORMED;
             g.flow_goal_cell = ty * FF_AXIS + tx;
             g.flow_has_goal = 1;
             g.flow_dirty = 1;
@@ -98,9 +102,14 @@ inline void movement_v1(GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.flow_mode[i] == 1u && g.flow_has_goal) {
-            const uint32_t tx = static_cast<uint32_t>(g.pos_x[i] >> 16);
-            const uint32_t ty = static_cast<uint32_t>(g.pos_y[i] >> 16);
-            const uint32_t cell = ty * FF_AXIS + tx;   // tx,ty <256 por cota de mundo
+            // Clamp al rango del flow field (256): la cota de mundo (8192) es mayor,
+            // así que una unidad más allá del tile 255 leería fuera de dir_x/dir_y.
+            // (Endurecimiento del Arquitecto sobre el contrato original.)
+            uint32_t tx = static_cast<uint32_t>(g.pos_x[i] >> 16);
+            uint32_t ty = static_cast<uint32_t>(g.pos_y[i] >> 16);
+            if (tx >= FF_AXIS) tx = FF_AXIS - 1u;
+            if (ty >= FF_AXIS) ty = FF_AXIS - 1u;
+            const uint32_t cell = ty * FF_AXIS + tx;
             const int8_t dx = g.flow.dir_x[cell];
             const int8_t dy = g.flow.dir_y[cell];
             if (dx == 0 && dy == 0) {           // goal o inalcanzable → detener

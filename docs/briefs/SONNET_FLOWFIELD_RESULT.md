@@ -43,3 +43,13 @@ Rama: `sonnet/flowfield-move` (desde `main`). Contrato: `docs/briefs/SONNET_FLOW
 ## Desviaciones del contrato
 
 Ninguna. El pseudocódigo del §3b (`ff_compute(g.flow, g.cost_grid, VIS_AXIS_DUMMY? ...)`) se implementó literalmente con la forma concreta que el propio contrato aclara a continuación: `ff_compute(g.flow, g.cost_grid, 256u, 256u, g.flow_goal_cell % FF_AXIS, g.flow_goal_cell / FF_AXIS);`.
+
+---
+
+## Revisión del Arquitecto (2026-07-21)
+
+**Veredicto: ACEPTADO con un endurecimiento.** Sonnet 5 implementó el contrato con **cero desviaciones** y calidad alta (campos de estado correctos, flow field bien excluido del checksum/save como derivada, recompute forzado en load, test de rodeo sólido). Re-verifiqué TODO yo mismo: build 0-warnings, ctest 6/6, golden 1074/1074, G1 (alloc_delta=0), G3/G4/G5, rodeo 181/200 (90.5%) por el hueco, determinismo bit-exacto.
+
+**Hallazgo de mi revisión (bug de MI contrato, no de Sonnet):** el índice `cell = ty*FF_AXIS+tx` asumía `tx,ty<256`, pero la cota de mundo del kernel es 8192 tiles — una unidad más allá del tile 255 leería `flow.dir_x[cell]` fuera de rango. El escenario no lo dispara (todo <256), pero es una lectura OOB latente. Corregido por el Arquitecto en 2 puntos de `step.hpp`: FLOW_MOVE rechaza goals fuera del flow field (`tx/ty >= FF_AXIS → MALFORMED`), y el bucle de movimiento clampea la celda a `[0, FF_AXIS)`. El checksum del test de rodeo no cambió (`c60105b7…`) → fix puramente defensivo.
+
+**Nota de reparto:** Sonnet 5 en su primer encargo confirmó el nicho — tarea de kernel con juicio, contrato respetado al 100%, determinismo intacto. El único fallo fue de diseño (mío), no de implementación.
