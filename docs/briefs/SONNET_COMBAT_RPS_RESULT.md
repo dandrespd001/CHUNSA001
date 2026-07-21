@@ -47,3 +47,11 @@ Ninguna. Notas de implementación (decisiones de forma, no de fondo, dejadas abi
 - `rps_mult_bp` y `combat_system` se colocaron en `namespace detail` (como `apply_command`/`movement_v1`), llamado como `detail::combat_system(g)` — mismas firmas que pide el contrato.
 - El contrato no pide tocar el checksum/serialize de los 4 campos nuevos de `CmdPayload` dentro del *checksum* de `pending` (§4 solo habla del bloque de componentes); se dejó tal cual — no afecta a los gates porque ninguno agenda `SPAWN_UNIT`.
 - La distribución exacta de las 60+60 unidades dentro de los rangos de tiles que da el contrato (x∈[120,130]/[126,136], y∈[120,136)) quedó a discreción del test: se usó una rejilla `tile_x = base + i%11`, `tile_y = 120 + i/11` para tener solape denso y determinismo trivial de leer.
+
+---
+
+## Revisión del Arquitecto (2026-07-21)
+
+**Veredicto: ACEPTADO sin cambios.** Sonnet 5 implementó el contrato con cero desviaciones y calidad alta. Auditoría de determinismo (el punto crítico de un sistema de combate): sin floats · desempate de objetivo por menor `dist_sq` y luego menor índice (determinista) · `int64` antes de multiplicar en `range_raw` y en el daño (sin overflow) · muerte sin doble-marca (el filtro `hp<=0` en la búsqueda + el check `alive[best]` lo garantizan) · orden de fase correcto (combate tras `sh_rebuild`, antes de DESTROY, usando el spatial hash del tick actual). Re-verifiqué yo mismo: build 0-warnings, ctest 7/7, golden 1074/1074, G1 (`1c849cd6`, alloc_delta=0), G3/G4/G5. Test de combate: caballería 52 > artillería 33 (ventaja RPS +30% confirmada), 35 bajas, determinismo bit-exacto (`59dfb1a7`).
+
+**Reparto:** segundo encargo de kernel para Sonnet 5, de nuevo impecable — a diferencia del flowfield (donde el bug fue de mi contrato), aquí contrato e implementación estaban correctos. Confirma su nicho: sistemas de kernel con juicio, determinismo respetado.
