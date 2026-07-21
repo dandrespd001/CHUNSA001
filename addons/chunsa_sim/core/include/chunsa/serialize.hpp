@@ -215,6 +215,13 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         }
     }
 
+    // (h) Flujo de navegación: cost_grid + flow_mode + goal. `flow` (derivada)
+    // NO se serializa; se recalcula al cargar (ver flow_dirty en deserialize).
+    for (uint32_t i = 0; i < FF_CELLS; ++i) w.u8(g.cost_grid[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.flow_mode[i]);
+    w.u32(g.flow_goal_cell);
+    w.u8(g.flow_has_goal);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -317,7 +324,7 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.speed_mtpt          = r.i32();
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        if (type_raw < 1 || type_raw > 3)    return false; // CommandType ∈ {1,2,3}
+        if (type_raw < 1 || type_raw > 4)    return false; // CommandType ∈ {1,2,3,4}
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -349,6 +356,15 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         }
     }
     if (r.fail) return false;
+
+    // (h) Flujo de navegación: cost_grid + flow_mode + goal. `flow` (derivada)
+    // se fuerza a recomputar (flow_dirty = flow_has_goal) en vez de leerse.
+    for (uint32_t i = 0; i < FF_CELLS; ++i) g.cost_grid[i] = r.u8();
+    for (uint32_t i = 0; i < cap_e; ++i) g.flow_mode[i] = r.u8();
+    g.flow_goal_cell = r.u32();
+    g.flow_has_goal  = r.u8();
+    if (r.fail) return false;
+    g.flow_dirty = g.flow_has_goal;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
     g.destroy_count = 0;

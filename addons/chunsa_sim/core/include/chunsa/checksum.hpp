@@ -95,6 +95,12 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
             h.u64(g.vision.explored[p][wgt]);
         }
     }
+    // Flujo de navegación: cost_grid + flow_mode + goal. `flow` es derivada
+    // (excluida) y `flow_dirty` es transitorio de cómputo (excluido).
+    for (uint32_t i = 0; i < FF_CELLS; ++i) h.u8(g.cost_grid[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.flow_mode[i]);
+    h.u32(g.flow_goal_cell);
+    h.u8(g.flow_has_goal);
     return h.digest();
 }
 

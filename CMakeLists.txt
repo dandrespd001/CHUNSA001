@@ -49,6 +49,11 @@ add_executable(chunsa_test_ff tests/unit/test_flow_field.cpp)
 target_link_libraries(chunsa_test_ff PRIVATE chunsa_sim_core)
 add_test(NAME flow_field COMMAND chunsa_test_ff)
 
+# --- Test Sprint 0.2: FlowField -> MovementSystem --------------------------------
+add_executable(chunsa_test_flow_move tests/unit/test_flow_move.cpp)
+target_link_libraries(chunsa_test_flow_move PRIVATE chunsa_sim_core)
+add_test(NAME flow_move COMMAND chunsa_test_flow_move)
+
 # --- Adaptador GDExtension + demo (Sprint 0.2; fuentes: kimi-k3, revisado) -------
 option(CHUNSA_BUILD_GODOT "Compilar el adaptador GDExtension y la demo" OFF)
 if(CHUNSA_BUILD_GODOT)
