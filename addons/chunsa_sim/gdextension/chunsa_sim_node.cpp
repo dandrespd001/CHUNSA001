@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <vector>
 
 #include <godot_cpp/classes/camera3d.hpp>
@@ -44,6 +45,7 @@ namespace {
 constexpr uint64_t DEMO_SEED = 20260716ull;
 constexpr auto TICK_PERIOD = std::chrono::milliseconds(50);  // 20 Hz
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
+const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 }  // namespace
 
 void ChunsaSimNode::_bind_methods() {
@@ -94,8 +96,7 @@ void ChunsaSimNode::sim_loop() {
     auto next_tick = clock::now();
     while (running.load(std::memory_order_relaxed)) {
         const uint32_t t = gs->tick;
-        const uint32_t n =
-                chunsa::build_human_batch(batch, t, demo_units, DEMO_SEED, false);
+        const uint32_t n = build_flow_batch(batch.data(), t);
         chunsa::step(*gs, batch.data(), n);
 
         DemoSnapshot* s = ring->begin_write();
@@ -195,6 +196,41 @@ void ChunsaSimNode::render_interpolated() {
 // Escena 3D (rig del modo (c), reutilizado del SPIKE-RENDER-0)
 // ---------------------------------------------------------------------------
 
+// Escenario de demo (FlowField): spawns en el lado IZQUIERDO del muro y un
+// FLOW_MOVE hacia un goal a la DERECHA; las unidades convergen en el hueco y
+// cruzan. Muestra el hito de navegación del Sprint 0.2. Determinista.
+uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) {
+    using namespace chunsa;
+    FatalReason dummy = FatalReason::NONE;
+    const uint32_t BENCH = static_cast<uint32_t>(RngStream::BENCH);
+    uint32_t n = 0;
+    if (t == 0u) {
+        for (uint32_t i = 0; i < demo_units; ++i) {
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 0; c.type = CommandType::SPAWN_DEBUG;
+            c.sequence = i + 1u;
+            c.p.handle = EntityHandle{i, 1u};
+            const uint32_t tx = rng_range(DEMO_SEED, BENCH, 0u, i, 1u, 4u, 60u, dummy);
+            const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 40u, 216u, dummy);
+            c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
+            c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
+            c.p.speed_mtpt = static_cast<int32_t>(
+                    rng_range(DEMO_SEED, BENCH, 0u, i, 3u, 100u, 300u, dummy));
+            ++n;
+        }
+    } else if (t == 1u) {
+        RawCommand& c = batch[0];
+        std::memset(&c, 0, sizeof(RawCommand));
+        c.target_tick = 1; c.emitter = 0; c.type = CommandType::FLOW_MOVE;
+        c.sequence = demo_units + 1u;
+        c.p.x_raw = static_cast<int64_t>(220) * 65536 + 32768;
+        c.p.y_raw = static_cast<int64_t>(128) * 65536 + 32768;
+        n = 1;
+    }
+    return n;
+}
+
 void ChunsaSimNode::setup_3d() {
     godot::RenderingServer::get_singleton()->set_default_clear_color(
             godot::Color(0.05, 0.05, 0.08));
@@ -239,6 +275,35 @@ void ChunsaSimNode::setup_3d() {
     mmi_units3d->set_multimesh(mm_units);
     add_child(mmi_units3d);
 
+    // Muro visible: celdas FF_WALL del cost_grid (el obstáculo que el FlowField
+    // hace rodear). Quads de 1 tile (4 px), gris, mismo plano; z ligeramente
+    // atrás para que las unidades pasen por delante.
+    uint32_t wall_n = 0;
+    for (uint32_t i = 0; i < chunsa::FF_CELLS; ++i)
+        if (gs->cost_grid[i] == chunsa::FF_WALL) ++wall_n;
+    if (wall_n > 0) {
+        godot::Ref<godot::MultiMesh> mm_wall;
+        mm_wall.instantiate();
+        mm_wall->set_transform_format(godot::MultiMesh::TRANSFORM_3D);
+        mm_wall->set_use_colors(true);
+        mm_wall->set_mesh(quad);
+        mm_wall->set_instance_count(static_cast<int32_t>(wall_n));
+        const godot::Basis wsc(godot::Vector3(4, 0, 0), godot::Vector3(0, 4, 0),
+                               godot::Vector3(0, 0, 1));
+        int32_t w = 0;
+        for (uint32_t i = 0; i < chunsa::FF_CELLS; ++i) {
+            if (gs->cost_grid[i] != chunsa::FF_WALL) continue;
+            const float px = (static_cast<float>(i % chunsa::FF_AXIS) + 0.5f) * 4.0f;
+            const float py = (static_cast<float>(i / chunsa::FF_AXIS) + 0.5f) * 4.0f;
+            mm_wall->set_instance_transform(w, godot::Transform3D(
+                    wsc, godot::Vector3(px, -py, py - 1.0f)));
+            mm_wall->set_instance_color(w, WALL_COLOR);
+            ++w;
+        }
+        mmi_wall3d = memnew(godot::MultiMeshInstance3D);
+        mmi_wall3d->set_multimesh(mm_wall);
+        add_child(mmi_wall3d);
+    }
 }
 
 void ChunsaSimNode::maybe_screenshot() {

@@ -66,6 +66,7 @@ private:
     bool shot_f600_done = false;
 
     godot::MultiMeshInstance3D* mmi_units3d = nullptr;
+    godot::MultiMeshInstance3D* mmi_wall3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
@@ -80,6 +81,11 @@ protected:
 public:
     ChunsaSimNode() = default;
     ~ChunsaSimNode() override = default;
+
+    // Escenario de demo: las unidades marchan a un goal rodeando el muro
+    // (usa el FlowField integrado; SPEC-001 §8 / doc 10.4). Puntero para no
+    // arrastrar <vector> al header.
+    uint32_t build_flow_batch(chunsa::RawCommand* batch, uint32_t t);
 
     void _ready() override;
     void _process(double delta) override;
