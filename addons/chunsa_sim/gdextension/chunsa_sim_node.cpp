@@ -24,7 +24,6 @@
 #include <chrono>
 #include <vector>
 
-#include <godot_cpp/classes/box_mesh.hpp>
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/image.hpp>
@@ -45,7 +44,6 @@ namespace {
 constexpr uint64_t DEMO_SEED = 20260716ull;
 constexpr auto TICK_PERIOD = std::chrono::milliseconds(50);  // 20 Hz
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
-const godot::Color BUILDING_COLOR(0.85, 0.55, 0.2);
 }  // namespace
 
 void ChunsaSimNode::_bind_methods() {
@@ -82,7 +80,6 @@ void ChunsaSimNode::_ready() {
     ring = new chunsa::SnapshotRing<DemoSnapshot>();
     ring->init();
 
-    init_buildings();
     setup_3d();
 
     set_process(true);
@@ -198,20 +195,6 @@ void ChunsaSimNode::render_interpolated() {
 // Escena 3D (rig del modo (c), reutilizado del SPIKE-RENDER-0)
 // ---------------------------------------------------------------------------
 
-void ChunsaSimNode::init_buildings() {
-    // 20 edificios falsos de 32×96 px, posiciones deterministas (LCG local,
-    // seed fija — no toca el RNG del kernel). Top-left ∈ [16,959]×[40,919].
-    uint64_t lcg = 0xC5A11E5EEDF00D5ull;
-    auto rnd = [&lcg]() {
-        lcg = lcg * 6364136223846793005ull + 1442695040888963407ull;
-        return lcg >> 33;
-    };
-    for (int j = 0; j < NUM_BUILDINGS; ++j) {
-        bld_x[j] = 16.0f + static_cast<float>(rnd() % 944u);
-        bld_y[j] = 40.0f + static_cast<float>(rnd() % 880u);
-    }
-}
-
 void ChunsaSimNode::setup_3d() {
     godot::RenderingServer::get_singleton()->set_default_clear_color(
             godot::Color(0.05, 0.05, 0.08));
@@ -256,32 +239,6 @@ void ChunsaSimNode::setup_3d() {
     mmi_units3d->set_multimesh(mm_units);
     add_child(mmi_units3d);
 
-    // Edificios = cajas 3D estáticas: se rellenan una sola vez. Profundidad
-    // z=2: la cámara ortográfica mira de frente (las caras laterales no se
-    // ven) y una cara frontal en base_v+1 limita la banda de empate en la
-    // línea de base a ±1 px (con 8 serían ±4 px de falsa oclusión).
-    godot::Ref<godot::BoxMesh> box;
-    box.instantiate();
-    box->set_size(godot::Vector3(32, 96, 2));
-    box->set_material(mat);
-    godot::Ref<godot::MultiMesh> mm_bld;
-    mm_bld.instantiate();
-    mm_bld->set_transform_format(godot::MultiMesh::TRANSFORM_3D);
-    mm_bld->set_use_colors(true);
-    mm_bld->set_mesh(box);
-    mm_bld->set_instance_count(NUM_BUILDINGS);
-    for (int j = 0; j < NUM_BUILDINGS; ++j) {
-        const float base_v = bld_y[j] + 96.0f;
-        const godot::Transform3D t(
-                godot::Basis(godot::Vector3(1, 0, 0), godot::Vector3(0, 1, 0),
-                             godot::Vector3(0, 0, 1)),
-                godot::Vector3(bld_x[j] + 16.0f, -(bld_y[j] + 48.0f), base_v));
-        mm_bld->set_instance_transform(j, t);
-        mm_bld->set_instance_color(j, BUILDING_COLOR);
-    }
-    mmi_bld3d = memnew(godot::MultiMeshInstance3D);
-    mmi_bld3d->set_multimesh(mm_bld);
-    add_child(mmi_bld3d);
 }
 
 void ChunsaSimNode::maybe_screenshot() {

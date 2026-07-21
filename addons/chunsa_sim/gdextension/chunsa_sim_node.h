@@ -41,7 +41,6 @@ public:
     };
 
 private:
-    static constexpr int NUM_BUILDINGS = 20;  // "edificios" falsos 32×96 px
     static constexpr float MAP_PX = 1024.0f;  // 256 tiles × 4 px
 
     std::thread sim_thread;
@@ -66,17 +65,11 @@ private:
     std::string shot_prefix;     // CHUNSA_SHOT: prefijo para el PNG
     bool shot_f600_done = false;
 
-    // Edificios falsos: top-left en px (determinista, seed fija local).
-    float bld_x[NUM_BUILDINGS]{};
-    float bld_y[NUM_BUILDINGS]{};
-
     godot::MultiMeshInstance3D* mmi_units3d = nullptr;
-    godot::MultiMeshInstance3D* mmi_bld3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
-    void init_buildings();
     void setup_3d();               // rig del modo (c), reutilizado del spike
     void render_interpolated();    // cada frame: lerp(prev, curr, alpha)
     void maybe_screenshot();
