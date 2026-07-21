@@ -82,3 +82,13 @@ el código está listo (`maybe_screenshot()`, frame 600, `<prefix>.f600.png`).
 - `demo/bin/libchunsa_godot.so` (recompilado)
 - `docs/briefs/KIMI_RENDER_PROD.md` (brief del sprint)
 - `docs/briefs/KIMI_RENDER_PROD_RESULT.md` (este informe)
+
+---
+
+## Revisión del Arquitecto (2026-07-21)
+
+**Veredicto: ACEPTADO sin cambios.** Verifiqué yo mismo: build 0-warnings, demo headless sin crash (`tick=100 units=600`), **kernel/ring intactos** (`git diff main -- addons/chunsa_sim/core` vacío — confirmado), golden 1074/1074. Revisión de código: `_process` copia el snapshot y libera el slot del ring de inmediato (sin retención → sin race); `render_interpolated` interpola solo entre slots vivos en ambos snapshots (spawns nuevos usan curr), mapea `z=y` para el depth-order del modo (c); float solo en presentación (legítimo). Las 2 desviaciones de Kimi son del entorno (sin display para PNG; semántica de `--quit-after`), no del código.
+
+Caso borde anotado (no bloquea, demo no destruye): si un slot se reciclara (muerte+spawn en el mismo slot entre dos snapshots de 50 ms), el lerp mezclaría dos unidades distintas un frame. Trivial de blindar en 0.3 con un id de generación en el snapshot si el reciclaje se vuelve frecuente.
+
+**Reparto:** Kimi K3 en su nicho (render/frontend) — reutilizó su propio modo (c) del spike, implementó el contrato de snapshot+interpolación al 100%, esta vez sin agotar cuota. Cierra el Sprint 0.2.
