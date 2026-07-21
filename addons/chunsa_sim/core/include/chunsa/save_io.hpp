@@ -21,7 +21,7 @@
 namespace chunsa {
 
 inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 3;  // v3: +flow_field (cost_grid/flow_mode/goal)
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 4;  // v4: +combate (hp/max_hp/attack/range_mt/unit_class/atk_cd)
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

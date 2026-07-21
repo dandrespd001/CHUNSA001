@@ -5,6 +5,7 @@
 #include "chunsa/checksum.hpp"
 
 namespace chunsa { inline constexpr uint32_t VIS_RADIUS_TILES = 8; }  // [DEFAULT] radio de visión v1
+namespace chunsa { inline constexpr uint16_t ATK_COOLDOWN_TICKS = 10; }  // 0.5s @ 20Hz (Sprint 0.3)
 
 // chunsa_sim_core — ciclo normativo de Step() y MovementSystemV1.
 // SPEC-001 §2 (orden total) y §12 (movimiento congelado). Autor: Arquitecto.
@@ -46,6 +47,28 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.vel_x[i] = 0; g.vel_y[i] = 0;
             g.speed_mtpt[i] = c.p.speed_mtpt;
             g.owner[i] = static_cast<uint8_t>(c.emitter);
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::SPAWN_UNIT: {
+            const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            const bool combat_ok = c.p.hp > 0 && c.p.attack >= 0
+                                 && c.p.range_mt >= 0 && c.p.unit_class <= 2;
+            if (!world_contains(p) || !combat_ok) {
+                return RejectReason::MALFORMED;
+            }
+            const EntityHandle h = et_spawn(g.entities);
+            if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
+            const uint32_t i = h.index;
+            g.pos_x[i] = c.p.x_raw; g.pos_y[i] = c.p.y_raw;
+            g.tgt_x[i] = c.p.x_raw; g.tgt_y[i] = c.p.y_raw;
+            g.vel_x[i] = 0; g.vel_y[i] = 0;
+            g.owner[i] = static_cast<uint8_t>(c.emitter);
+            g.hp[i] = g.max_hp[i] = c.p.hp;
+            g.attack[i] = c.p.attack;
+            g.range_mt[i] = c.p.range_mt;
+            g.unit_class[i] = c.p.unit_class;
+            g.atk_cd[i] = 0;
+            g.speed_mtpt[i] = 0;
             return RejectReason::ACCEPTED;
         }
         case CommandType::MOVE_TO: {
@@ -159,6 +182,87 @@ inline void movement_v1(GameState& g) noexcept {
     }
 }
 
+// Multiplicador RPS en basis points (10000 = 100%), tabla congelada (doc 07_COMBATE):
+//            tgt=inf  tgt=cav  tgt=art
+// atk=inf     10000    10000    10000
+// atk=cav      8000    10000    13000
+// atk=art     13000     8000    10000
+inline int32_t rps_mult_bp(uint8_t atk_class, uint8_t tgt_class) noexcept {
+    static constexpr int32_t TABLE[3][3] = {
+        {10000, 10000, 10000},
+        { 8000, 10000, 13000},
+        {13000,  8000, 10000},
+    };
+    return TABLE[atk_class][tgt_class];
+}
+
+// Sistema de combate (Sprint 0.3). Cada tick, período 1: cada unidad viva en
+// orden ascendente busca al enemigo más cercano en rango (celda propia + 8
+// vecinas del spatial hash), le inflige daño RPS y entra en cooldown.
+// Determinismo: el daño se aplica inmediatamente en orden ascendente de i.
+inline void combat_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.hp[i] <= 0) continue;
+        if (g.atk_cd[i] > 0) { --g.atk_cd[i]; continue; }
+
+        const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
+        const uint32_t cx = cell_i % g.shash.cells_x;
+        const uint32_t cy = cell_i / g.shash.cells_x;
+
+        const int64_t range_raw = static_cast<int64_t>(g.range_mt[i]) * 65536 / 1000;
+        const uint64_t range_sq = static_cast<uint64_t>(range_raw) * static_cast<uint64_t>(range_raw);
+
+        uint32_t best = SH_EMPTY;
+        uint64_t best_d2 = 0;
+        const Vec2Fx pos_i{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
+
+        for (int32_t dcy = -1; dcy <= 1; ++dcy) {
+            const int64_t ncy64 = static_cast<int64_t>(cy) + dcy;
+            if (ncy64 < 0 || ncy64 >= static_cast<int64_t>(g.shash.cells_y)) continue;
+            const uint32_t ncy = static_cast<uint32_t>(ncy64);
+            for (int32_t dcx = -1; dcx <= 1; ++dcx) {
+                const int64_t ncx64 = static_cast<int64_t>(cx) + dcx;
+                if (ncx64 < 0 || ncx64 >= static_cast<int64_t>(g.shash.cells_x)) continue;
+                const uint32_t ncx = static_cast<uint32_t>(ncx64);
+                const uint32_t cell = ncy * g.shash.cells_x + ncx;
+
+                for (uint32_t j = sh_first(g.shash, cell); j != SH_EMPTY; j = sh_next(g.shash, j)) {
+                    if (j == i) continue;
+                    if (!t.alive[j]) continue;
+                    if (g.hp[j] <= 0) continue;
+                    if (g.owner[j] == g.owner[i]) continue;
+
+                    FatalReason local_fatal = FatalReason::NONE;
+                    const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
+                    const uint64_t d2 = dist_sq_raw(pos_i, pos_j, local_fatal);
+                    if (d2 > range_sq) continue;
+
+                    if (best == SH_EMPTY || d2 < best_d2 || (d2 == best_d2 && j < best)) {
+                        best = j;
+                        best_d2 = d2;
+                    }
+                }
+            }
+        }
+
+        if (best != SH_EMPTY) {
+            const int32_t mult = rps_mult_bp(g.unit_class[i], g.unit_class[best]);
+            const int32_t dmg = static_cast<int32_t>(
+                (static_cast<int64_t>(g.attack[i]) * mult) / 10000);
+            g.hp[best] -= dmg;
+            if (g.hp[best] <= 0 && t.alive[best]) {
+                et_mark_dead(g.entities, best);
+                if (g.destroy_count < PENDING_CAP) {
+                    g.destroy_batch[g.destroy_count++] = best;
+                }
+            }
+            g.atk_cd[i] = ATK_COOLDOWN_TICKS;
+        }
+    }
+}
+
 }  // namespace detail
 
 // Ejecuta el tick t = g.tick con el corte de ingesta `batch` (RawCommands
@@ -219,6 +323,9 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
                 vis_mark_circle(vg, g.owner[i], g.pos_x[i], g.pos_y[i], VIS_RADIUS_TILES);
             }
         }
+
+        // (5b) Combate (Sprint 0.3): cada tick, período 1. Antes de DESTROY.
+        detail::combat_system(g);
 
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.
         for (uint32_t a = 1; a < g.destroy_count; ++a) {
