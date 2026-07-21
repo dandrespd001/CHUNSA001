@@ -69,15 +69,68 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.destroy_batch[g.destroy_count++] = i; // reciclaje al final del tick (paso 6)
             return RejectReason::ACCEPTED;
         }
+        case CommandType::FLOW_MOVE: {
+            const Vec2Fx goal{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            if (!world_contains(goal)) return RejectReason::MALFORMED;
+            const uint32_t tx = static_cast<uint32_t>(c.p.x_raw >> 16);
+            const uint32_t ty = static_cast<uint32_t>(c.p.y_raw >> 16);
+            // El flow field es 256×256; un goal fuera de él no es representable.
+            // (Endurecimiento del Arquitecto: el contrato usaba world_contains
+            //  (cota 8192), pero el campo es FF_AXIS=256 — evita índice inválido.)
+            if (tx >= FF_AXIS || ty >= FF_AXIS) return RejectReason::MALFORMED;
+            g.flow_goal_cell = ty * FF_AXIS + tx;
+            g.flow_has_goal = 1;
+            g.flow_dirty = 1;
+            for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+                if (g.entities.alive[i] && g.owner[i] == c.emitter) g.flow_mode[i] = 1u;
+            }
+            return RejectReason::ACCEPTED;
+        }
     }
     return RejectReason::MALFORMED;
 }
 
 // MovementSystemV1 — CONGELADO (SPEC-001 §12).
 inline void movement_v1(GameState& g) noexcept {
+    if (g.flow_dirty && g.flow_has_goal) {
+        ff_compute(g.flow, g.cost_grid, 256u, 256u,
+                  g.flow_goal_cell % FF_AXIS, g.flow_goal_cell / FF_AXIS);
+        g.flow_dirty = 0;
+    }
+
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
+        if (g.flow_mode[i] == 1u && g.flow_has_goal) {
+            // Clamp al rango del flow field (256): la cota de mundo (8192) es mayor,
+            // así que una unidad más allá del tile 255 leería fuera de dir_x/dir_y.
+            // (Endurecimiento del Arquitecto sobre el contrato original.)
+            uint32_t tx = static_cast<uint32_t>(g.pos_x[i] >> 16);
+            uint32_t ty = static_cast<uint32_t>(g.pos_y[i] >> 16);
+            if (tx >= FF_AXIS) tx = FF_AXIS - 1u;
+            if (ty >= FF_AXIS) ty = FF_AXIS - 1u;
+            const uint32_t cell = ty * FF_AXIS + tx;
+            const int8_t dx = g.flow.dir_x[cell];
+            const int8_t dy = g.flow.dir_y[cell];
+            if (dx == 0 && dy == 0) {           // goal o inalcanzable → detener
+                g.vel_x[i] = 0; g.vel_y[i] = 0;
+                continue;
+            }
+            const int64_t step_fx = (static_cast<int64_t>(g.speed_mtpt[i]) * FX_ONE_RAW) / 1000;
+            const Vec2Fx dir = normalize_v1(Vec2Fx{Fx{static_cast<int64_t>(dx) * FX_ONE_RAW},
+                                                   Fx{static_cast<int64_t>(dy) * FX_ONE_RAW}}, g.fatal);
+            const Fx vx = fx_mul(dir.x, Fx{step_fx}, g.fatal);
+            const Fx vy = fx_mul(dir.y, Fx{step_fx}, g.fatal);
+            g.vel_x[i] = vx.raw; g.vel_y[i] = vy.raw;
+            g.pos_x[i] = fx_add(Fx{g.pos_x[i]}, vx, g.fatal).raw;
+            g.pos_y[i] = fx_add(Fx{g.pos_y[i]}, vy, g.fatal).raw;
+            // Clamp defensivo a cota de mundo [0, WORLD_RAW_MAX) para no salir del grid.
+            if (g.pos_x[i] < 0) g.pos_x[i] = 0;
+            if (g.pos_y[i] < 0) g.pos_y[i] = 0;
+            if (g.pos_x[i] >= WORLD_RAW_MAX) g.pos_x[i] = WORLD_RAW_MAX - 1;
+            if (g.pos_y[i] >= WORLD_RAW_MAX) g.pos_y[i] = WORLD_RAW_MAX - 1;
+            continue;
+        }
         // step_fx = trunc_to_zero(speed_mtpt * FX_ONE / 1000) — enteros positivos.
         const int64_t step_fx = (static_cast<int64_t>(g.speed_mtpt[i]) * FX_ONE_RAW) / 1000;
         const Vec2Fx pos{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
