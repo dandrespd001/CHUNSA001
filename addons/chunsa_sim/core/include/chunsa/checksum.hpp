@@ -108,6 +108,9 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.range_mt[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.unit_class[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.atk_cd[i]);
+    // Moral (Sprint 0.3): componentes por índice ascendente, todos los slots.
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.morale[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.fleeing[i]);
     return h.digest();
 }
 

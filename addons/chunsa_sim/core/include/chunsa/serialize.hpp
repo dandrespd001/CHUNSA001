@@ -234,6 +234,10 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.unit_class[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u16(g.atk_cd[i]);
 
+    // (j) Moral (Sprint 0.3): 2 arrays, todos los slots, en este orden.
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.morale[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.fleeing[i]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -389,6 +393,11 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.range_mt[i]   = r.i32();
     for (uint32_t i = 0; i < cap_e; ++i) g.unit_class[i] = r.u8();
     for (uint32_t i = 0; i < cap_e; ++i) g.atk_cd[i]     = r.u16();
+    if (r.fail) return false;
+
+    // (j) Moral (Sprint 0.3): 2 arrays, mismo orden que gs_serialize.
+    for (uint32_t i = 0; i < cap_e; ++i) g.morale[i]  = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.fleeing[i] = r.u8();
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
