@@ -68,6 +68,10 @@ add_executable(chunsa_test_economy tests/unit/test_economy.cpp)
 target_link_libraries(chunsa_test_economy PRIVATE chunsa_sim_core)
 add_test(NAME economy COMMAND chunsa_test_economy)
 
+add_executable(chunsa_test_aggro tests/unit/test_aggro.cpp)
+target_link_libraries(chunsa_test_aggro PRIVATE chunsa_sim_core)
+add_test(NAME aggro COMMAND chunsa_test_aggro)
+
 # --- Adaptador GDExtension + demo (Sprint 0.2; fuentes: kimi-k3, revisado) -------
 option(CHUNSA_BUILD_GODOT "Compilar el adaptador GDExtension y la demo" OFF)
 if(CHUNSA_BUILD_GODOT)

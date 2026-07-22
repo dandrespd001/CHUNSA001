@@ -14,6 +14,14 @@ inline constexpr int32_t MORALE_RALLY = 50;    // >= ⇒ deja de huir
 inline constexpr int32_t MORALE_DROP = 8;      // baja/tick si en desventaja
 inline constexpr int32_t MORALE_REGEN = 2;     // sube/tick si a salvo
 inline constexpr uint32_t MORALE_RADIUS_CELLS = 1;  // celda + vecinas
+
+// Aggro v1 (Sprint 0.3+): radio de adquisición de objetivos para la
+// persecución automática. 10 tiles → anillo de ±5 celdas del spatial hash
+// (celda = 2 tiles). Solo unidades con attack > 0 participan, lo que excluye
+// por construcción a SPAWN_DEBUG (attack queda en 0) y con ello preserva los
+// vectores golden y los escenarios de record/verify sin cambio alguno.
+inline constexpr int32_t  AGGRO_RANGE_MT    = 10000;  // 10 tiles
+inline constexpr uint32_t AGGRO_RADIUS_CELLS = 5;
 }  // namespace chunsa
 
 // chunsa_sim_core — ciclo normativo de Step() y MovementSystemV1.
@@ -374,6 +382,83 @@ inline void combat_system(GameState& g) noexcept {
     }
 }
 
+// Sistema de aggro/persecución (Sprint 0.3+). Sin esto el combate se estanca:
+// combat_system solo dispara dentro de range_mt y nadie se re-acerca, así que
+// tras el primer choque los supervivientes fuera de rango quedan inertes.
+// Regla v1: una unidad de combate OCIOSA (pos == tgt — así una orden MOVE_TO
+// del jugador en curso siempre tiene prioridad y jamás se redirige), viva, no
+// huyendo y con attack > 0 busca al enemigo más cercano en AGGRO_RANGE_MT
+// (anillo de ±AGGRO_RADIUS_CELLS del spatial hash, empate → j más bajo); si
+// está más allá de su rango de arma, fija tgt a la posición del enemigo y
+// movement_v1 la acerca en los ticks siguientes. Al llegar (movement_v1 hace
+// snap exacto a tgt) vuelve a estar ociosa y re-adquiere, de modo que persigue
+// blancos móviles por etapas. Sin estado nuevo: reutiliza tgt_x/tgt_y →
+// checksum, serialización y versión de guardado intactos. Se ejecuta tras
+// combat_system (hash fresco; los muertos del tick ya están marcados y no se
+// adquieren). Determinismo: orden ascendente de i, lecturas post-movimiento.
+inline void aggro_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.hp[i] <= 0) continue;
+        if (g.unit_class[i] > 2) continue;   // ciudadanos: no persiguen
+        if (g.attack[i] <= 0) continue;      // excluye SPAWN_DEBUG (golden intacto)
+        if (g.fleeing[i]) continue;          // huir tiene prioridad
+        if (g.pos_x[i] != g.tgt_x[i] || g.pos_y[i] != g.tgt_y[i]) continue;  // ocupada
+
+        const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
+        const uint32_t cx = cell_i % g.shash.cells_x;
+        const uint32_t cy = cell_i / g.shash.cells_x;
+
+        const int64_t aggro_raw = static_cast<int64_t>(AGGRO_RANGE_MT) * 65536 / 1000;
+        const uint64_t aggro_sq = static_cast<uint64_t>(aggro_raw) * static_cast<uint64_t>(aggro_raw);
+        const int64_t range_raw = static_cast<int64_t>(g.range_mt[i]) * 65536 / 1000;
+        const uint64_t range_sq = static_cast<uint64_t>(range_raw) * static_cast<uint64_t>(range_raw);
+
+        uint32_t best = SH_EMPTY;
+        uint64_t best_d2 = 0;
+        const Vec2Fx pos_i{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
+        const int32_t R = static_cast<int32_t>(AGGRO_RADIUS_CELLS);
+
+        for (int32_t dcy = -R; dcy <= R; ++dcy) {
+            const int64_t ncy64 = static_cast<int64_t>(cy) + dcy;
+            if (ncy64 < 0 || ncy64 >= static_cast<int64_t>(g.shash.cells_y)) continue;
+            const uint32_t ncy = static_cast<uint32_t>(ncy64);
+            for (int32_t dcx = -R; dcx <= R; ++dcx) {
+                const int64_t ncx64 = static_cast<int64_t>(cx) + dcx;
+                if (ncx64 < 0 || ncx64 >= static_cast<int64_t>(g.shash.cells_x)) continue;
+                const uint32_t ncx = static_cast<uint32_t>(ncx64);
+                const uint32_t cell = ncy * g.shash.cells_x + ncx;
+
+                for (uint32_t j = sh_first(g.shash, cell); j != SH_EMPTY; j = sh_next(g.shash, j)) {
+                    if (j == i) continue;
+                    if (!t.alive[j]) continue;
+                    if (g.hp[j] <= 0) continue;
+                    if (g.owner[j] == g.owner[i]) continue;
+                    if (g.unit_class[j] > 2) continue;  // ciudadanos: no se persiguen (v1)
+
+                    FatalReason local_fatal = FatalReason::NONE;
+                    const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
+                    const uint64_t d2 = dist_sq_raw(pos_i, pos_j, local_fatal);
+                    if (d2 > aggro_sq) continue;
+
+                    if (best == SH_EMPTY || d2 < best_d2 || (d2 == best_d2 && j < best)) {
+                        best = j;
+                        best_d2 = d2;
+                    }
+                }
+            }
+        }
+
+        // Enemigo detectado fuera del rango de arma → perseguir. Dentro de
+        // rango: quieta (combat_system ya le dispara donde está).
+        if (best != SH_EMPTY && best_d2 > range_sq) {
+            g.tgt_x[i] = g.pos_x[best];
+            g.tgt_y[i] = g.pos_y[best];
+        }
+    }
+}
+
 // Sistema de moral (Sprint 0.3, doc 07_COMBATE §7.6). Se llama tras el
 // combate del tick, antes del DESTROY, para reaccionar a lo que pasó.
 // Cada unidad viva cuenta aliados/enemigos en su celda + 8 vecinas (mismo
@@ -527,6 +612,11 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
 
         // (5b) Combate (Sprint 0.3): cada tick, período 1. Antes de DESTROY.
         detail::combat_system(g);
+
+        // (5b') Aggro/persecución (Sprint 0.3+): tras el combate (muertos del
+        // tick ya marcados), fija tgt de las unidades ociosas hacia el enemigo
+        // más cercano en radio de adquisición. Antes de moral y DESTROY.
+        detail::aggro_system(g);
 
         // (5c) Moral (Sprint 0.3, doc 07 §7.6): tras el combate del tick,
         // para reaccionar a lo que pasó. Antes de DESTROY.
