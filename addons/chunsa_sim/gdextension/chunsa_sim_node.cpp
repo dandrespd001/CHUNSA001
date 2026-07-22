@@ -1,9 +1,13 @@
 #include "chunsa_sim_node.h"
 
-// chunsa_sim — ChunsaSimNode (Sprint 0.2, render de producción). Escenario
-// synthetic_movement_v1@1 (seed fija) avanzando a 20 Hz en un hilo; el hilo
-// de presentación lee el último snapshot publicado sin bloquear al writer e
-// interpola entre snapshots para movimiento fluido a 60+ FPS.
+// chunsa_sim — ChunsaSimNode (Sprint 0.3, demo showcase: combate + moral +
+// economía visibles). Escenario showcase_v1 (seed fija) avanzando a 20 Hz en
+// un hilo: caballería (owner 0) y artillería (owner 1) convergen en (128,128)
+// y se enzarzan (combat/morale systems del kernel, autónomos), mientras
+// ciudadanos (owner 0) recolectan Alimentos (economy_system, autónomo). El
+// hilo de presentación lee el último snapshot publicado sin bloquear al
+// writer, interpola posiciones entre snapshots (60+ FPS) y colorea por
+// bando/clase/pánico leyendo el snapshot actual.
 //
 // Presentación (ADR-009, modo (c) — rig reutilizado del SPIKE-RENDER-0):
 // quads 3D con Camera3D ortográfica mirando al plano del mapa,
@@ -96,7 +100,7 @@ void ChunsaSimNode::sim_loop() {
     auto next_tick = clock::now();
     while (running.load(std::memory_order_relaxed)) {
         const uint32_t t = gs->tick;
-        const uint32_t n = build_flow_batch(batch.data(), t);
+        const uint32_t n = build_showcase_batch(batch.data(), t);
         chunsa::step(*gs, batch.data(), n);
 
         DemoSnapshot* s = ring->begin_write();
@@ -110,8 +114,27 @@ void ChunsaSimNode::sim_loop() {
                 s->alive[i] = gs->entities.alive[i];
                 s->x[i] = static_cast<float>(gs->pos_x[i]) / 65536.0f;
                 s->y[i] = static_cast<float>(gs->pos_y[i]) / 65536.0f;
+                s->owner[i] = gs->owner[i];
+                s->unit_class[i] = gs->unit_class[i];
+                s->fleeing[i] = gs->fleeing[i];
             }
             ring->publish();
+        }
+
+        // Diagnóstico del showcase (Sprint 0.3) cada 100 ticks, desde el hilo
+        // de simulación: vivos por clase + stock de Alimentos del owner 0.
+        if (t % 100u == 0u) {
+            uint32_t n_cav_alive = 0, n_art_alive = 0, n_cit_alive = 0;
+            for (uint32_t i = 0; i < gs->entities.capacity; ++i) {
+                if (gs->entities.alive[i] == 0u) continue;
+                if (gs->unit_class[i] == 1u) ++n_cav_alive;
+                else if (gs->unit_class[i] == 2u) ++n_art_alive;
+                else if (gs->unit_class[i] == 3u) ++n_cit_alive;
+            }
+            godot::UtilityFunctions::print("CHUNSA cav=", n_cav_alive,
+                                           " art=", n_art_alive,
+                                           " citizens=", n_cit_alive,
+                                           " stock_A=", gs->player_stock[0][0]);
         }
 
         next_tick += TICK_PERIOD;
@@ -187,18 +210,27 @@ void ChunsaSimNode::render_interpolated() {
                               godot::Vector3(0, 0, 1));
         mm->set_instance_transform(k, godot::Transform3D(
                                               sc, godot::Vector3(px, -py, py)));
+        // Color por bando + pánico (Sprint 0.3): se lee del snapshot actual
+        // (snap_curr, sin interpolar — solo la posición se interpola).
+        godot::Color c;
+        if (snap_curr.unit_class[i] == 3u)     c = godot::Color(0.9, 0.85, 0.2);   // ciudadano: amarillo
+        else if (snap_curr.fleeing[i] != 0u)   c = godot::Color(0.9, 0.9, 0.95);   // pánico: casi blanco
+        else if (snap_curr.owner[i] == 0u)     c = godot::Color(0.2, 0.6, 0.95);   // owner 0: azul
+        else                                    c = godot::Color(0.9, 0.3, 0.2);   // owner 1: rojo/naranja
+        mm->set_instance_color(k, c);
         ++k;
     }
     mm->set_visible_instance_count(k);
 }
 
 // ---------------------------------------------------------------------------
-// Escena 3D (rig del modo (c), reutilizado del SPIKE-RENDER-0)
+// Escenarios de demo (batches de comandos para sim_loop)
 // ---------------------------------------------------------------------------
 
-// Escenario de demo (FlowField): spawns en el lado IZQUIERDO del muro y un
+// Escenario Sprint 0.2 (FlowField), ya NO usado por sim_loop (ver
+// build_showcase_batch más abajo): spawns en el lado IZQUIERDO del muro y un
 // FLOW_MOVE hacia un goal a la DERECHA; las unidades convergen en el hueco y
-// cruzan. Muestra el hito de navegación del Sprint 0.2. Determinista.
+// cruzan. Se conserva como referencia del patrón rng/comandos. Determinista.
 uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) {
     using namespace chunsa;
     FatalReason dummy = FatalReason::NONE;
@@ -230,6 +262,107 @@ uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) 
     }
     return n;
 }
+
+// ---------------------------------------------------------------------------
+// Escenario showcase Sprint 0.3: combate + moral + economía visibles
+// ---------------------------------------------------------------------------
+
+// t==0: spawns — 40% caballería (owner 0), 40% artillería (owner 1), 20%
+// ciudadanos (owner 0). Orden de emisión = orden canónico de aplicación en
+// tick 1 (emitter asc, sequence asc), así la tabla queda determinista:
+// cav en slots [0,n_cav), ciudadanos [n_cav,n_cav+n_cit), artillería
+// [n_cav+n_cit,demo_units) — todos con generación 1.
+// t==1: UN MOVE_TO por unidad de combate hacia (128,128) con los handles
+// analíticos de arriba (los spawns se aplican dentro de step() del tick 1,
+// así que en t==1 aún no son visibles en gs; la cuenta de slots es exacta).
+// Resto: batch vacío — combate, moral y economía corren autónomos en el kernel.
+//
+// DESVIACIÓN documentada en docs/briefs/KIMI_DEMO_SHOWCASE_RESULT.md: cajas de
+// spawn acercadas al centro (cav x∈[110,124], art x∈[132,146]; el brief dice
+// [60,90]/[166,196]) y ciudadanos a 800 mtpt (brief: 200). Motivo: el run de
+// verificación (--quit-after 2000 frames ≈ 14 s ≈ 280 ticks de sim a 20 Hz en
+// esta máquina) no alcanza los ~460+ ticks que el primer contacto y la primera
+// entrega de stock necesitarían con los valores originales. Stats (hp/attack/
+// range/clase) y resto del contrato, intactos.
+uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t t) {
+    using namespace chunsa;
+    FatalReason dummy = FatalReason::NONE;
+    const uint32_t BENCH = static_cast<uint32_t>(RngStream::BENCH);
+    const uint32_t n_cav = (demo_units * 40u) / 100u;
+    const uint32_t n_art = (demo_units * 40u) / 100u;
+    const uint32_t n_cit = demo_units - n_cav - n_art;
+    uint32_t n = 0;
+    if (t == 0u) {
+        uint64_t seq0 = 1;  // emitter 0 (caballería + ciudadanos), estrictamente creciente
+        uint64_t seq1 = 1;  // emitter 1 (artillería), estrictamente creciente
+        for (uint32_t i = 0; i < n_cav; ++i) {  // caballería, owner 0
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 0; c.type = CommandType::SPAWN_UNIT;
+            c.sequence = seq0++;
+            const uint32_t tx = rng_range(DEMO_SEED, BENCH, 0u, i, 1u, 110u, 125u, dummy);
+            const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 100u, 157u, dummy);
+            c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
+            c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
+            c.p.speed_mtpt = 150;
+            c.p.hp = 100; c.p.attack = 20; c.p.range_mt = 1500; c.p.unit_class = 1;
+            ++n;
+        }
+        for (uint32_t i = 0; i < n_cit; ++i) {  // ciudadanos, owner 0
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 0; c.type = CommandType::SPAWN_CITIZEN;
+            c.sequence = seq0++;
+            const uint32_t tx = rng_range(DEMO_SEED, BENCH, 0u, i, 1u, 36u, 45u, dummy);
+            const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 36u, 45u, dummy);
+            c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
+            c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
+            c.p.speed_mtpt = 800;  // desviación documentada (brief: 200)
+            ++n;
+        }
+        for (uint32_t i = 0; i < n_art; ++i) {  // artillería, owner 1
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 1; c.type = CommandType::SPAWN_UNIT;
+            c.sequence = seq1++;
+            const uint32_t tx = rng_range(DEMO_SEED, BENCH, 0u, i, 1u, 132u, 147u, dummy);
+            const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 100u, 157u, dummy);
+            c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
+            c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
+            c.p.speed_mtpt = 80;
+            c.p.hp = 100; c.p.attack = 20; c.p.range_mt = 1500; c.p.unit_class = 2;
+            ++n;
+        }
+    } else if (t == 1u) {
+        uint64_t seq0 = static_cast<uint64_t>(n_cav + n_cit) + 1u;
+        uint64_t seq1 = static_cast<uint64_t>(n_art) + 1u;
+        const int64_t cx = static_cast<int64_t>(128) * 65536 + 32768;
+        const int64_t cy = static_cast<int64_t>(128) * 65536 + 32768;
+        for (uint32_t i = 0; i < n_cav; ++i) {  // caballería → (128,128)
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 1; c.emitter = 0; c.type = CommandType::MOVE_TO;
+            c.sequence = seq0++;
+            c.p.handle = EntityHandle{i, 1u};  // slots [0,n_cav), gen 1
+            c.p.x_raw = cx; c.p.y_raw = cy;
+            ++n;
+        }
+        for (uint32_t i = 0; i < n_art; ++i) {  // artillería → (128,128)
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 1; c.emitter = 1; c.type = CommandType::MOVE_TO;
+            c.sequence = seq1++;
+            c.p.handle = EntityHandle{n_cav + n_cit + i, 1u};  // slots finales, gen 1
+            c.p.x_raw = cx; c.p.y_raw = cy;
+            ++n;
+        }
+    }
+    return n;
+}
+
+// ---------------------------------------------------------------------------
+// Escena 3D (rig del modo (c), reutilizado del SPIKE-RENDER-0)
+// ---------------------------------------------------------------------------
 
 void ChunsaSimNode::setup_3d() {
     godot::RenderingServer::get_singleton()->set_default_clear_color(

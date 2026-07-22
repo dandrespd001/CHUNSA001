@@ -32,12 +32,17 @@ public:
     // el índice ES el slot de entidad (identidad estable mientras la unidad
     // vive) → permite interpolar entre snapshots. Posiciones en tiles
     // (pos raw Q47.16 / 65536); válidas si alive[i] != 0.
+    // Sprint 0.3: owner/unit_class/fleeing por slot para el coloreado por
+    // bando + pánico (se interpolan posiciones; el color se lee de curr).
     struct DemoSnapshot {
         uint32_t tick;
         uint32_t capacity;      // gs->entities.capacity (cap a 1024)
         float x[1024];
         float y[1024];
         uint8_t alive[1024];    // 1 = slot vivo este snapshot
+        uint8_t owner[1024];    // 0..7
+        uint8_t unit_class[1024]; // 0=infantry 1=cavalry 2=artillery 3=citizen
+        uint8_t fleeing[1024];  // 1 = en pánico
     };
 
 private:
@@ -82,10 +87,15 @@ public:
     ChunsaSimNode() = default;
     ~ChunsaSimNode() override = default;
 
-    // Escenario de demo: las unidades marchan a un goal rodeando el muro
-    // (usa el FlowField integrado; SPEC-001 §8 / doc 10.4). Puntero para no
-    // arrastrar <vector> al header.
+    // Escenario de demo Sprint 0.2 (FlowField): unidades marchando a un goal
+    // rodeando el muro. Ya no se usa en sim_loop (reemplazado por el showcase
+    // del Sprint 0.3); se conserva como referencia del patrón rng/comandos.
     uint32_t build_flow_batch(chunsa::RawCommand* batch, uint32_t t);
+
+    // Escenario de demo Sprint 0.3 (showcase): dos ejércitos (caballería
+    // owner 0 vs artillería owner 1) convergen en (128,128) — combate RPS +
+    // pánico visibles — mientras ciudadanos owner 0 recolectan (economía).
+    uint32_t build_showcase_batch(chunsa::RawCommand* batch, uint32_t t);
 
     void _ready() override;
     void _process(double delta) override;
