@@ -1,61 +1,19 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "chunsa/unit.schema.json",
-  "title": "unit",
-  "description": "Unidad de CHUNSA (v1, subset 0.1B). Cantidades autoritativas ENTERAS: mili-tiles/tick, ticks, basis points (base §2.4.3). Floats prohibidos en todo el documento.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schema_version", "id", "module", "epoch_window", "class", "tags", "costs", "stats", "provenance"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "chunsa/unit.schema.json", "title": "unit v2",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "id", "display_name_key", "description_key", "civ_id", "epoch_window", "class", "tags", "resource_costs", "stats", "playable_period_ids", "availability_mode", "provenance"],
   "properties": {
-    "schema_version": { "const": 1 },
-    "id": { "type": "string", "pattern": "^[a-z0-9_]+:[a-z0-9_]+$" },
-    "module": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-    "epoch_window": {
-      "type": "array", "minItems": 2, "maxItems": 2,
-      "items": { "type": "integer", "minimum": 1, "maximum": 15 }
-    },
-    "class": { "enum": ["infantry", "cavalry", "artillery", "siege", "naval_light", "citizen"] },
-    "tags": {
-      "type": "array", "uniqueItems": true,
-      "items": { "enum": ["can_take_cover", "formation_capable", "suppression_resist_low", "suppression_resist_high", "drop_off_carrier"] }
-    },
-    "costs": {
-      "type": "object", "additionalProperties": false, "minProperties": 1,
-      "properties": {
-        "A": { "type": "integer", "minimum": 0 }, "B": { "type": "integer", "minimum": 0 },
-        "P": { "type": "integer", "minimum": 0 }, "W": { "type": "integer", "minimum": 0 },
-        "Me": { "type": "integer", "minimum": 0 }, "F": { "type": "integer", "minimum": 0 },
-        "I": { "type": "integer", "minimum": 0 }, "El": { "type": "integer", "minimum": 0 }
-      }
-    },
-    "stats": {
-      "type": "object", "additionalProperties": false,
-      "required": ["hp", "attack", "range_millitiles", "speed_millitile_tick", "morale", "build_time_ticks"],
-      "properties": {
-        "hp": { "type": "integer", "minimum": 1, "maximum": 1000000 },
-        "attack": { "type": "integer", "minimum": 0, "maximum": 1000000 },
-        "range_millitiles": { "type": "integer", "minimum": 0, "maximum": 100000 },
-        "speed_millitile_tick": { "type": "integer", "minimum": 1, "maximum": 100000 },
-        "morale": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "build_time_ticks": { "type": "integer", "minimum": 1, "maximum": 1000000 }
-      }
-    },
-    "bonus_vs_bp": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "infantry": { "type": "integer", "minimum": -10000, "maximum": 10000 },
-        "cavalry": { "type": "integer", "minimum": -10000, "maximum": 10000 },
-        "artillery": { "type": "integer", "minimum": -10000, "maximum": 10000 },
-        "siege": { "type": "integer", "minimum": -10000, "maximum": 10000 },
-        "naval_light": { "type": "integer", "minimum": -10000, "maximum": 10000 }
-      }
-    },
-    "provenance": {
-      "type": "object", "additionalProperties": false, "required": ["status"],
-      "properties": {
-        "status": { "enum": ["H", "C", "P", "X"] },
-        "sources": { "type": "array", "items": { "type": "string" } }
-      }
-    }
-  }
+    "schema_version": {"const": 2}, "id": {"$ref": "common.schema.json#/$defs/record_id"}, "display_name_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "description_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "civ_id": {"$ref": "common.schema.json#/$defs/record_id"}, "epoch_window": {"$ref": "common.schema.json#/$defs/epoch_window"},
+    "class": {"enum": ["infantry", "cavalry", "artillery", "citizen", "siege", "naval_light"]}, "tags": {"type": "array", "uniqueItems": true, "items": {"enum": ["can_take_cover", "formation_capable", "suppression_resist_low", "suppression_resist_high", "drop_off_carrier"]}},
+    "resource_costs": {"$ref": "common.schema.json#/$defs/positive_resource_costs"}, "material_costs": {"$ref": "common.schema.json#/$defs/material_costs"},
+    "playable_period_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/record_id"}}, "availability_mode": {"enum": ["historical", "counterfactual"]}, "counterfactual_label_key": {"$ref": "common.schema.json#/$defs/localization_key"},
+    "stats": {"type": "object", "additionalProperties": false, "required": ["hp", "attack", "range_millitiles", "speed_millitile_tick", "morale", "build_time_ticks"], "properties": {"hp": {"type": "integer", "minimum": 1, "maximum": 1000000}, "attack": {"type": "integer", "minimum": 0, "maximum": 1000000}, "range_millitiles": {"type": "integer", "minimum": 0, "maximum": 100000}, "speed_millitile_tick": {"type": "integer", "minimum": 1, "maximum": 100000}, "morale": {"type": "integer", "minimum": 0, "maximum": 100}, "build_time_ticks": {"type": "integer", "minimum": 1, "maximum": 1000000}}},
+    "bonus_vs_bp": {"type": "object", "additionalProperties": false, "properties": {"infantry": {"type": "integer", "minimum": -10000, "maximum": 10000}, "cavalry": {"type": "integer", "minimum": -10000, "maximum": 10000}, "artillery": {"type": "integer", "minimum": -10000, "maximum": 10000}, "citizen": {"type": "integer", "minimum": -10000, "maximum": 10000}, "siege": {"type": "integer", "minimum": -10000, "maximum": 10000}, "naval_light": {"type": "integer", "minimum": -10000, "maximum": 10000}}},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  },
+  "allOf": [
+    {"if": {"properties": {"availability_mode": {"const": "historical"}}}, "then": {"not": {"required": ["counterfactual_label_key"]}}}, {"if": {"properties": {"availability_mode": {"const": "counterfactual"}}}, "then": {"required": ["counterfactual_label_key"]}},
+    {"if": {"properties": {"class": {"const": "citizen"}}}, "then": {"properties": {"tags": {"contains": {"const": "drop_off_carrier"}}, "stats": {"properties": {"attack": {"const": 0}, "range_millitiles": {"const": 0}}}}}, "else": {"properties": {"stats": {"properties": {"attack": {"minimum": 1}}}}}},
+    {"not": {"properties": {"tags": {"allOf": [{"contains": {"const": "suppression_resist_low"}}, {"contains": {"const": "suppression_resist_high"}}]}}}}
+  ]
 }

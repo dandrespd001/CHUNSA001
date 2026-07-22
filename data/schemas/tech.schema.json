@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "chunsa/tech.schema.json", "title": "tech v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "id", "display_name_key", "description_key", "available_to", "epoch", "branch", "evidence", "resource_costs", "required_capabilities", "research_time_ticks", "prerequisites", "required_buildings", "mutually_exclusive_with", "grants", "playable_period_ids", "availability_mode", "provenance"],
+  "properties": {
+    "schema_version": {"const": 1}, "id": {"$ref": "common.schema.json#/$defs/record_id"}, "display_name_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "description_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "available_to": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/record_id"}}, "epoch": {"$ref": "common.schema.json#/$defs/epoch"}, "branch": {"enum": ["institution", "E", "C", "S", "M"]}, "evidence": {"enum": ["H", "C", "P", "X"]},
+    "resource_costs": {"$ref": "common.schema.json#/$defs/resource_costs"}, "material_costs": {"$ref": "common.schema.json#/$defs/material_costs"}, "required_capabilities": {"$ref": "common.schema.json#/$defs/record_id_set"}, "research_time_ticks": {"type": "integer", "minimum": 1, "maximum": 10000000}, "prerequisites": {"$ref": "common.schema.json#/$defs/record_id_set"}, "required_buildings": {"$ref": "common.schema.json#/$defs/record_id_set"}, "mutually_exclusive_with": {"$ref": "common.schema.json#/$defs/record_id_set"},
+    "grants": {"type": "object", "additionalProperties": false, "required": ["units", "buildings", "capabilities"], "properties": {"units": {"$ref": "common.schema.json#/$defs/record_id_set"}, "buildings": {"$ref": "common.schema.json#/$defs/record_id_set"}, "capabilities": {"$ref": "common.schema.json#/$defs/record_id_set"}}}, "regional_variant_group": {"$ref": "common.schema.json#/$defs/record_id"},
+    "playable_period_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/record_id"}}, "availability_mode": {"enum": ["historical", "counterfactual"]}, "counterfactual_label_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  },
+  "allOf": [
+    {"if": {"properties": {"availability_mode": {"const": "historical"}}}, "then": {"not": {"required": ["counterfactual_label_key"]}}}, {"if": {"properties": {"availability_mode": {"const": "counterfactual"}}}, "then": {"required": ["counterfactual_label_key"]}},
+    {"if": {"properties": {"branch": {"const": "institution"}}}, "then": {}, "else": {"properties": {"resource_costs": {"$ref": "common.schema.json#/$defs/positive_resource_costs"}}}},
+    {"if": {"properties": {"evidence": {"const": "H"}}}, "then": {"properties": {"provenance": {"properties": {"historical_claims": {"properties": {"evidence": {"const": "H"}}}}}}}},
+    {"if": {"properties": {"evidence": {"const": "C"}}}, "then": {"properties": {"provenance": {"properties": {"historical_claims": {"properties": {"evidence": {"const": "C"}}}}}}}},
+    {"if": {"properties": {"evidence": {"const": "P"}}}, "then": {"properties": {"provenance": {"properties": {"historical_claims": {"properties": {"evidence": {"const": "P"}}}}}}}},
+    {"if": {"properties": {"evidence": {"const": "X"}}}, "then": {"properties": {"provenance": {"properties": {"historical_claims": {"properties": {"evidence": {"const": "X"}}}}}}}}
+  ]
+}
