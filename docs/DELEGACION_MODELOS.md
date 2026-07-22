@@ -9,7 +9,18 @@
 | **Claude Arquitecto** (esta sesión, Opus 4.8) | — | Arquitectura, specs/contratos, revisión línea a línea, integración, seguridad, decisiones de determinismo, orquestación | Generación masiva (caro) |
 | **Sonnet 5** (Claude, tu suscripción) | `claude --model sonnet -p "..." --dangerously-skip-permissions` (agéntico; rama propia) | **Tareas agénticas con JUICIO durante la implementación**: conectar sistemas del kernel, refactors delicados, código donde la corrección importa más que el volumen. El punto medio: mejor razonamiento que M3, más barato que Opus/Fable. Cuando M3 no razona lo suficiente y no justifica gastar al Arquitecto | Boilerplate trivial (usa M3); frontend puro (usa Kimi) |
 | **Kimi K3** (Moonshot, 2.8T) | `~/.kimi-code/bin/kimi -p "..."` (agéntico; `-p` ya auto-aprueba) | **① Frontend/UI** (#1 Frontend Code Arena, 1679 Elo): render, GDScript de HUD, escenas · **② Tareas agénticas de largo horizonte multi-archivo** (Coding Index 76.2) | Micro-tareas de un archivo; **cuota limitada — se agota (visto 2×), no dársela a tareas que deban terminar sí o sí** |
-| **MiniMax M3** | ① bridge MCP (paralelo, **cap real 600 s**) · ② `fish -c 'claude-minimax --dangerously-skip-permissions -p "..."'` (Claude Code sobre M3 **ctx 1M**, sin cap, con web) | **① Módulos únicos bajo spec cerrada** (serialize/sha/Dial/visión impecables) · **② Contexto masivo barato** · **③ Investigación con navegación** (BrowseComp 83.5) vía claude-minimax · ④ Datos masivos. Bridge = **cero carga local** (inferencia remota), el más seguro para paralelo | Razonamiento abstracto novedoso ("ejecutor competente, no gran razonador"); firmas de API en prosa (las inventa — dáselas como código) |
+| **MiniMax M3** | ① bridge MCP **v2.1** (paralelo, cap 600 s) · ② `fish -c 'claude-minimax --dangerously-skip-permissions -p "..."'` (Claude Code sobre M3 **ctx 1M**, sin cap, con web) | **① CÓDIGO EXTENSO de spec cerrada** (módulos grandes, multi-archivo) — es el más BARATO (MSA: 1/20 de coste a 1M) → darle el VOLUMEN · ② Módulos únicos (serialize/sha/Dial/visión impecables) · ③ Contexto masivo barato · ④ Investigación con navegación (BrowseComp 83.5) vía claude-minimax · ⑤ Datos masivos. Bridge = cero carga local (el más seguro para paralelo) | Razonamiento abstracto novedoso ("ejecutor competente, no gran razonador"); firmas de API en prosa (las inventa — dáselas como código); código EXTENSO por el bridge si tarda >600 s (usa claude-minimax sin cap) |
+
+## Estrategia de reparto por consumo (equilibrar las 3 suscripciones)
+
+**Principio: cada token en el modelo más barato que lo hace bien.** De más barato a más caro por token: **MiniMax M3 ≪ Kimi K3 < Sonnet 5 < Opus (Arquitecto)**.
+
+- **El VOLUMEN de código → MiniMax M3** (bridge v2.1). Es 1/20 del coste; ahora optimizado para código extenso: `max_tokens=65536`, `thinking=disabled` (no gasta tokens/tiempo razonando lo que la spec ya trae → menos truncamiento, menos timeouts), `temp=1.0/top_p=0.95`. Dale módulos grandes, boilerplate, datos, cualquier cosa donde la spec cerrada + golden basten. Código extenso que pase de 600 s → por `claude-minimax` (sin cap).
+- **El JUICIO de kernel → Sonnet 5.** Reservado para donde la corrección/determinismo importa más que el volumen (combate, moral, integraciones delicadas). No malgastarlo en boilerplate (eso es de M3).
+- **El FRONTEND/render → Kimi K3.** Su especialidad; cuota limitada → no para lo que deba terminar sí o sí.
+- **Lo indelegable → Arquitecto (Opus).** Contratos, revisión línea a línea, integración, decisiones. El más caro: solo lo que nadie más puede hacer.
+
+**Bridge v2.1 (2026-07-21):** `MINIMAX_MCP_THINKING` (enabled/disabled), `MINIMAX_MCP_MAX_TOKENS` hasta 131072, `MINIMAX_MCP_TOP_P`. Config del proyecto: thinking disabled + 65K tokens (perfil código extenso). Requiere `/mcp` reconectar para activar.
 
 ## Reglas operativas (aprendidas a golpes)
 
