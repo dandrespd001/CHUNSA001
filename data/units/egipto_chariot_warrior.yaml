@@ -1,0 +1,52 @@
+schema_version: 2
+id: egipto:chariot_warrior
+display_name_key: egipto:unit.chariot_warrior
+description_key: egipto:unit.chariot_warrior.description
+civ_id: egipto:dynastic_nile
+epoch_window:
+  - 4
+  - 4
+class: cavalry
+tags:
+  - formation_capable
+resource_costs:
+  A: 35
+  B: 20
+  Me: 15
+stats:
+  hp: 85
+  attack: 9
+  range_millitiles: 800
+  speed_millitile_tick: 70
+  morale: 65
+  build_time_ticks: 600
+playable_period_ids:
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: P
+    evidence_label_key: egipto:evidence.chariot_adoption_debated
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Encyclopaedia Britannica, Chariot"
+        locator: "Light chariot construction and historical use"
+        url: "https://www.britannica.com/technology/chariot"
+        accessed_on: "2026-07-22"
+      - citation: "The Metropolitan Museum of Art, The New Kingdom"
+        locator: "New Kingdom military expansion and material context"
+        url: "https://www.metmuseum.org/toah/hd/nking/hd_nking.htm"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "La clase cavalry aproxima movilidad de carro, no caballería montada; stats y RPS son balance."
+    reviewed_by:
+      - architect

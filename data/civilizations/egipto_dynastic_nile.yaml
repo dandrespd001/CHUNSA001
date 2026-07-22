@@ -1,0 +1,68 @@
+schema_version: 1
+id: egipto:dynastic_nile
+historical_window:
+  start_year: -3100
+  end_year: -1069
+epoch_window:
+  - 3
+  - 4
+region_key: egipto:region.nile_valley
+display_name_key: egipto:civ.dynastic_nile
+description_key: egipto:civ.dynastic_nile.description
+gameplay_verb:
+  id: egipto:coordinate_flood
+  name_key: egipto:verb.coordinate_flood
+  description_key: egipto:verb.coordinate_flood.description
+playable_periods:
+  - id: egipto:old_kingdom
+    start_year: -2686
+    end_year: -2181
+    label_key: egipto:period.old_kingdom
+  - id: egipto:new_kingdom
+    start_year: -1550
+    end_year: -1069
+    label_key: egipto:period.new_kingdom
+institutions:
+  - id: egipto:state_administration
+    name_key: egipto:institution.state_administration
+    mechanic_description_key: egipto:institution.state_administration.mechanic
+    cost_or_tension_key: egipto:institution.state_administration.tension
+    required_capability_ids:
+      - egipto:coordinate_flood
+social_tensions:
+  - id: egipto:provincial_authorities
+    name_key: egipto:tension.provincial_authorities
+    description_key: egipto:tension.provincial_authorities.description
+unit_ids:
+  - egipto:chariot_warrior
+  - egipto:work_crew
+building_ids: []
+tech_ids: []
+art_rule_keys:
+  - egipto:art.period_and_provenance
+  - egipto:art.responsible_labor
+review_roles:
+  - architect
+  - egyptology_review
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "UCL Digital Egypt, Egyptian Chronology"
+        locator: "Dynasties I-XX and principal periods"
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/chronology/index.html"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "Ventanas y verbo derivados de la ficha promovida; efectos y números siguen siendo diseño calibrable."
+    reviewed_by:
+      - architect

@@ -1,0 +1,46 @@
+schema_version: 2
+id: rome:camp_work_crew
+display_name_key: rome:unit.camp_work_crew
+description_key: rome:unit.camp_work_crew.description
+civ_id: rome:republic_imperial
+epoch_window:
+  - 5
+  - 5
+class: citizen
+tags:
+  - drop_off_carrier
+resource_costs:
+  A: 20
+stats:
+  hp: 45
+  attack: 0
+  range_millitiles: 0
+  speed_millitile_tick: 55
+  morale: 45
+  build_time_ticks: 300
+playable_period_ids:
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: P
+    evidence_label_key: rome:evidence.camp_work_abstraction
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "British Museum, Legion: life in the Roman army — large print guide"
+        locator: "Army supply, construction and fort-building contexts"
+        url: "https://www.britishmuseum.org/exhibitions/legion-life-roman-army/large-print-guide"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "Citizen es la clase económica del kernel; la cuadrilla agrupa trabajo logístico sin fijar estatus jurídico."
+    reviewed_by:
+      - architect

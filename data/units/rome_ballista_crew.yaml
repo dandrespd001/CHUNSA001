@@ -1,0 +1,46 @@
+schema_version: 2
+id: rome:ballista_crew
+display_name_key: rome:unit.ballista_crew
+description_key: rome:unit.ballista_crew.description
+civ_id: rome:republic_imperial
+epoch_window:
+  - 5
+  - 5
+class: artillery
+tags: []
+resource_costs:
+  A: 45
+  B: 25
+  Me: 30
+stats:
+  hp: 70
+  attack: 8
+  range_millitiles: 4000
+  speed_millitile_tick: 35
+  morale: 50
+  build_time_ticks: 700
+playable_period_ids:
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "British Museum, Legion: life in the Roman army — large print guide"
+        locator: "Tormenta, bolt-shooting catapults, stone-hurling ballistae and dated torsion components"
+        url: "https://www.britishmuseum.org/exhibitions/legion-life-roman-army/large-print-guide"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "Artillery representa un equipo y su máquina; calibre, alcance, cadencia y stats son balance de demo."
+    reviewed_by:
+      - architect

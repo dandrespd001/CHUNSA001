@@ -267,6 +267,33 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual(compiler._normalize({"sources": list(reversed(sources))}),
                          {"sources": normalized})
 
+    def test_repository_release_fixture_matches_versioned_golden(self):
+        source_root = ROOT / "data"
+        golden = source_root / "compiled/chunsa_base.chdb"
+        golden_sidecar = source_root / "compiled/chunsa_base.chdb.content.json"
+        self.assertTrue(golden.is_file())
+        self.assertTrue(golden_sidecar.is_file())
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "chunsa_base.chdb"
+            sidecar = Path(directory) / "chunsa_base.chdb.content.json"
+            rc, stdout, stderr = self.invoke([
+                "compile", str(source_root), "--out", str(out),
+                "--hash-out", str(sidecar), "--profile", "release", "--print-hash",
+            ])
+            self.assertEqual((rc, stderr), (0, ""), stderr)
+            self.assertEqual(out.read_bytes(), golden.read_bytes())
+            self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
+            self.assertIn("records unit=5 building=0 tech=0 civ=2 map=1 ai-profile=1", stdout)
+            flags, records = compiler.parse_blob(out.read_bytes())
+            self.assertEqual(flags, 0)
+            self.assertEqual(
+                [record["id"] for record in records[2]],
+                [
+                    "egipto:chariot_warrior", "egipto:work_crew",
+                    "rome:ballista_crew", "rome:camp_work_crew", "rome:legionary",
+                ],
+            )
+
     def test_blob_header_directory_and_file_corruption(self):
         td, root = self.make_root()
         with td:

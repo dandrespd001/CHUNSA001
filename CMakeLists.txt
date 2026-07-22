@@ -76,6 +76,15 @@ add_executable(chunsa_test_replay_v2 tests/unit/test_replay_v2.cpp)
 target_link_libraries(chunsa_test_replay_v2 PRIVATE chunsa_sim_core)
 add_test(NAME replay_v2 COMMAND chunsa_test_replay_v2)
 
+# --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME data_compile
+    COMMAND ${Python3_EXECUTABLE} -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR}/tools/data_compile
+            -p test_*.py -v)
+set_tests_properties(data_compile PROPERTIES
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
 # --- Adaptador GDExtension + demo (Sprint 0.2; fuentes: kimi-k3, revisado) -------
 option(CHUNSA_BUILD_GODOT "Compilar el adaptador GDExtension y la demo" OFF)
 if(CHUNSA_BUILD_GODOT)

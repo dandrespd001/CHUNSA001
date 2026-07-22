@@ -1,0 +1,53 @@
+schema_version: 1
+id: base:demo_normal
+display_name_key: base:ai.demo_normal
+personality: balanced
+difficulty: normal
+strategic_weights_bp:
+  economy_focus_bp: 5000
+  military_focus_bp: 5000
+  tech_focus_bp: 5000
+  expansion_aggressiveness_bp: 5000
+  risk_tolerance_bp: 5000
+  diplomacy_openness_bp: 5000
+utility_curves:
+  - consideration: threat
+    points:
+      - input_bp: 0
+        output_bp: 0
+      - input_bp: 10000
+        output_bp: 10000
+tactical_behaviors:
+  - group_type: melee_line
+    behavior_id: base:melee_line_v1
+    seek_cover: true
+    suppression_response: hold
+    formation_preference: line
+    retreat_hp_threshold_bp: 2500
+    retreat_morale_threshold_bp: 3000
+difficulty_params:
+  decision_period_ticks: 20
+  reaction_latency_ticks: 4
+  micro_quality_bp: 5000
+  build_order_variance_bp: 1500
+  scouting_thoroughness_bp: 5000
+  counter_reaction_delay_ticks: 8
+performance_lod:
+  min_decision_period_ticks: 20
+  cache_ttl_ticks: 40
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Perfil determinista de prueba; pesos y curvas no son afirmaciones históricas."
+    reviewed_by:
+      - architect
