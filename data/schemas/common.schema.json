@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chunsa/common.schema.json",
+  "title": "CHUNSA SPEC-002 common types",
+  "$defs": {
+    "record_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_]{0,63}$"},
+    "package_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,63}$"},
+    "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+    "localization_key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_.]{0,127}$"},
+    "snake_tag": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "iso_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "epoch": {"type": "integer", "minimum": 1, "maximum": 15},
+    "epoch_window": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/epoch"}},
+    "year": {"type": "integer", "not": {"const": 0}},
+    "resource": {"enum": ["A", "B", "P", "W", "Me", "F", "I", "El"]},
+    "resource_costs": {
+      "type": "object", "additionalProperties": false, "maxProperties": 8,
+      "properties": {
+        "A": {"type": "integer", "minimum": 0, "maximum": 1000000}, "B": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "P": {"type": "integer", "minimum": 0, "maximum": 1000000}, "W": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "Me": {"type": "integer", "minimum": 0, "maximum": 1000000}, "F": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "I": {"type": "integer", "minimum": 0, "maximum": 1000000}, "El": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "positive_resource_costs": {
+      "allOf": [
+        {"$ref": "#/$defs/resource_costs"},
+        {"minProperties": 1},
+        {"anyOf": [
+          {"required": ["A"], "properties": {"A": {"minimum": 1}}}, {"required": ["B"], "properties": {"B": {"minimum": 1}}},
+          {"required": ["P"], "properties": {"P": {"minimum": 1}}}, {"required": ["W"], "properties": {"W": {"minimum": 1}}},
+          {"required": ["Me"], "properties": {"Me": {"minimum": 1}}}, {"required": ["F"], "properties": {"F": {"minimum": 1}}},
+          {"required": ["I"], "properties": {"I": {"minimum": 1}}}, {"required": ["El"], "properties": {"El": {"minimum": 1}}}
+        ]}
+      ]
+    },
+    "material_cost": {
+      "type": "object", "additionalProperties": false, "required": ["material_id", "amount"],
+      "properties": {"material_id": {"$ref": "#/$defs/record_id"}, "amount": {"type": "integer", "minimum": 1, "maximum": 1000000}}
+    },
+    "material_costs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/material_cost"}},
+    "record_id_set": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}},
+    "resource_set": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/resource"}},
+    "availability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["playable_period_ids", "availability_mode"],
+      "properties": {
+        "playable_period_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}},
+        "availability_mode": {"enum": ["historical", "counterfactual"]},
+        "counterfactual_label_key": {"$ref": "#/$defs/localization_key"}
+      },
+      "allOf": [
+        {"if": {"properties": {"availability_mode": {"const": "historical"}}}, "then": {"not": {"required": ["counterfactual_label_key"]}}},
+        {"if": {"properties": {"availability_mode": {"const": "counterfactual"}}}, "then": {"required": ["counterfactual_label_key"]}}
+      ]
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "generator", "task_id", "generated_on", "reviewed_by", "historical_claims", "balance_design"],
+      "properties": {
+        "status": {"enum": ["draft_unverified", "verified", "promoted"]},
+        "generator": {"type": "string", "minLength": 1, "maxLength": 64},
+        "task_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "generated_on": {"$ref": "#/$defs/iso_date"},
+        "reviewed_by": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+        "historical_claims": {"$ref": "#/$defs/historical_claims"},
+        "balance_design": {"$ref": "#/$defs/balance_design"}
+      }
+    },
+    "historical_claims": {
+      "type": "object", "additionalProperties": false, "required": ["evidence", "verification_reports", "sources"],
+      "properties": {
+        "evidence": {"enum": ["H", "C", "P", "X", "N"]},
+        "evidence_label_key": {"$ref": "#/$defs/localization_key"},
+        "verification_reports": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "sources": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/source"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"evidence": {"enum": ["H", "C"]}}}, "then": {"properties": {"verification_reports": {"minItems": 1}, "sources": {"minItems": 1}}, "not": {"required": ["evidence_label_key"]}}},
+        {"if": {"properties": {"evidence": {"enum": ["P", "X"]}}}, "then": {"required": ["evidence_label_key"], "properties": {"verification_reports": {"minItems": 1}, "sources": {"minItems": 1}}}},
+        {"if": {"properties": {"evidence": {"const": "N"}}}, "then": {"properties": {"verification_reports": {"maxItems": 0}, "sources": {"maxItems": 0}}, "not": {"required": ["evidence_label_key"]}}}
+      ]
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["citation"],
+      "properties": {
+        "citation": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 512},
+        "url": {"type": "string", "pattern": "^https://", "maxLength": 2048},
+        "accessed_on": {"$ref": "#/$defs/iso_date"}
+      },
+      "allOf": [
+        {"if": {"required": ["url"]}, "then": {"required": ["accessed_on"]}, "else": {"not": {"required": ["accessed_on"]}}}
+      ]
+    },
+    "balance_design": {
+      "type": "object", "additionalProperties": false, "required": ["author", "rationale", "reviewed_by"],
+      "properties": {
+        "author": {"type": "string", "minLength": 1, "maxLength": 64},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "reviewed_by": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}}
+      }
+    }
+  }
+}
