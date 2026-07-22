@@ -1,12 +1,19 @@
 #pragma once
 
-// chunsa_sim_cli — replay v1: log de input crudo por tick (SPEC-001 §11.3 subset 0.1B)
+// chunsa_sim_cli — replay: log de input por tick (SPEC-001 §11.3).
 // generado: minimax-m3 · revisado: Arquitecto 2026-07-17
-// Nota de alcance: 0.1B graba RawCommands (la normalización del kernel es
-// determinista); el stream de ScheduledCommand con effective_tick llega en 0.2.
+// v2 (effective_tick, Sprint 0.3-cierre 2026-07-22, Arquitecto): la agenda
+// deja de ser IMPLÍCITA. v1 grababa RawCommands crudos y el reproductor
+// RECOMPUTABA el effective_tick con constantes (delay/max_future) hardcodeadas
+// en drive_fresh y NO persistidas → un cambio de esas constantes divergía en
+// silencio. v2 graba (a) la config de normalización en la cabecera y (b) el
+// effective_tick real de cada comando; verify usa la config del archivo y
+// ASEVERA que la agenda recomputada coincide con la grabada (fallo ruidoso,
+// no divergencia silenciosa del checksum). v1 se sigue cargando (compat).
 
 #include "chunsa/commands.hpp"
 #include "chunsa/serialize.hpp"
+#include "chunsa/step.hpp"   // command_effective_tick (regla §6.2, no duplicar)
 
 #include <cstdint>
 #include <cstdio>
@@ -49,30 +56,43 @@ inline void pb_i64(std::vector<uint8_t>& b, int64_t v) {
     pb_u64(b, static_cast<uint64_t>(v));
 }
 
+// Versión del formato que ESCRIBE el recorder (siempre la última).
+constexpr uint32_t REPLAY_WRITE_VERSION = 2u;
+
 } // namespace replay_detail
 
 // ============================================================================
-// ReplayWriter — acumula en memoria, vuelca a disco en finish()
+// ReplayWriter — acumula en memoria, vuelca a disco en finish() (formato v2)
 // ============================================================================
 struct ReplayWriter {
     std::vector<uint8_t> buf;   // acumulación en memoria
+    uint32_t delay = 0;         // human_input_delay_ticks (para el effective_tick)
 
-    // Inicia el stream: escribe magic + versión + cabecera de la simulación.
-    void begin(uint64_t seed, uint32_t units, uint32_t ticks, uint16_t checksum_every) {
+    // Inicia el stream: magic + versión + cabecera de la simulación + config de
+    // normalización (v2). `delay`/`max_future` son las constantes §6.2 con las
+    // que se capturó, ahora PERSISTIDAS para que la reproducción sea
+    // auto-contenida (no dependa de valores hardcodeados en el reproductor).
+    void begin(uint64_t seed, uint32_t units, uint32_t ticks,
+               uint16_t checksum_every, uint32_t human_input_delay_ticks,
+               uint32_t max_future_command_ticks) {
         buf.clear();
+        delay = human_input_delay_ticks;
         // magic "CURP" en little-endian: 0x43 0x55 0x52 0x50
         replay_detail::pb_u32(buf, 0x50525543u);
-        // versión del formato
-        replay_detail::pb_u32(buf, 1u);
-        // cabecera
+        replay_detail::pb_u32(buf, replay_detail::REPLAY_WRITE_VERSION);
         replay_detail::pb_u64(buf, seed);
         replay_detail::pb_u32(buf, units);
         replay_detail::pb_u32(buf, ticks);
         replay_detail::pb_u16(buf, checksum_every);
+        replay_detail::pb_u32(buf, human_input_delay_ticks);
+        replay_detail::pb_u32(buf, max_future_command_ticks);
     }
 
-    // Añade un batch de n RawCommands correspondientes al tick actual.
-    void tick_batch(const RawCommand* cmds, uint32_t n) {
+    // Añade un batch de n RawCommands correspondientes al tick `t`. Graba, por
+    // comando, su effective_tick calculado con la MISMA función pura que usa el
+    // kernel (command_effective_tick, §6.2) → la agenda queda explícita en el
+    // archivo y es verificable byte a byte al reproducir.
+    void tick_batch(const RawCommand* cmds, uint32_t n, uint32_t t) {
         replay_detail::pb_u32(buf, n);
         for (uint32_t i = 0; i < n; ++i) {
             const RawCommand& c = cmds[i];
@@ -85,6 +105,7 @@ struct ReplayWriter {
             replay_detail::pb_i64(buf, c.p.x_raw);
             replay_detail::pb_i64(buf, c.p.y_raw);
             replay_detail::pb_i32(buf, c.p.speed_mtpt);
+            replay_detail::pb_u32(buf, command_effective_tick(c.target_tick, t, delay));
         }
     }
 
@@ -114,20 +135,28 @@ struct ReplayWriter {
 // ReplayData — estructura rellenada por replay_load
 // ============================================================================
 struct ReplayData {
+    uint32_t version{0};                            // 1 (legacy) o 2 (con agenda)
     uint64_t seed{0};
     uint32_t units{0};
     uint32_t ticks{0};
     uint16_t checksum_every{0};
+    // Config de normalización §6.2 grabada (v2); en v1 quedan a 0 y el
+    // reproductor debe usar sus defaults históricos (delay=1, max_future=20).
+    uint32_t human_input_delay_ticks{0};
+    uint32_t max_future_command_ticks{0};
     std::vector<std::vector<RawCommand>> batches;   // batches[t]
+    // Agenda grabada (v2): eff_ticks[t][i] = effective_tick del comando i del
+    // tick t. Vacío en v1. Paralelo a `batches` cuando presente.
+    std::vector<std::vector<uint32_t>> eff_ticks;
     uint64_t final_checksum{0};
 };
 
 // ============================================================================
-// Loader con límites duros aplicados ANTES de reservar memoria
+// Loader con límites duros aplicados ANTES de reservar memoria (v1 y v2)
 // ============================================================================
 namespace replay_detail {
 
-// Límites del formato v1 (congelados para subset 0.1B)
+// Límites del formato (congelados)
 constexpr uint64_t MAX_FILE_SIZE  = 256ull * 1024ull * 1024ull;  // 256 MiB
 constexpr uint32_t MAX_TICKS      = 10'000'000u;                // 10 M
 constexpr uint32_t MAX_PER_TICK   = 4096u;
@@ -173,7 +202,8 @@ inline int replay_load(const char* path, ReplayData& out) {
 
     const uint32_t version = rdr.u32();
     if (rdr.fail) return 1;
-    if (version != 1u) return 1;
+    if (version != 1u && version != 2u) return 1;
+    out.version = version;
 
     out.seed           = rdr.u64();
     out.units          = rdr.u32();
@@ -181,10 +211,18 @@ inline int replay_load(const char* path, ReplayData& out) {
     out.checksum_every = rdr.u16();
     if (rdr.fail) return 1;
 
-    // límite de ticks ANTES de reservar el vector de batches
+    const bool v2 = (version == 2u);
+    if (v2) {
+        out.human_input_delay_ticks = rdr.u32();
+        out.max_future_command_ticks = rdr.u32();
+        if (rdr.fail) return 1;
+    }
+
+    // límite de ticks ANTES de reservar los vectores por tick
     if (out.ticks > replay_detail::MAX_TICKS) return 1;
     out.batches.clear();
     out.batches.resize(out.ticks);
+    if (v2) out.eff_ticks.resize(out.ticks);
 
     // --- cuerpo: un bloque por tick ---------------------------------------
     uint64_t total_cmds = 0;
@@ -196,6 +234,8 @@ inline int replay_load(const char* path, ReplayData& out) {
 
         std::vector<RawCommand> batch;
         batch.resize(n);
+        std::vector<uint32_t> effs;
+        if (v2) effs.resize(n);
         for (uint32_t i = 0; i < n; ++i) {
             RawCommand& c = batch[i];
             c.target_tick  = rdr.u32();
@@ -208,6 +248,7 @@ inline int replay_load(const char* path, ReplayData& out) {
             c.p.x_raw      = rdr.i64();
             c.p.y_raw      = rdr.i64();
             c.p.speed_mtpt = rdr.i32();
+            if (v2) effs[i] = rdr.u32();
         }
         if (rdr.fail) return 1;
 
@@ -215,6 +256,7 @@ inline int replay_load(const char* path, ReplayData& out) {
         if (total_cmds > replay_detail::MAX_TOTAL_CMDS) return 1;
 
         out.batches[t] = std::move(batch);
+        if (v2) out.eff_ticks[t] = std::move(effs);
     }
 
     // --- trailer: checksum final ------------------------------------------

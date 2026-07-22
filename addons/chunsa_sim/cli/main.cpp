@@ -225,7 +225,8 @@ int main(int argc, char** argv) {
         o.seed = opt_u64(args, "--seed", 20260716ull);
         o.with_ai = true;   // el replay debe contener comandos de IA (G5)
         chunsa::ReplayWriter rec;
-        rec.begin(o.seed, o.units, o.ticks, o.checksum_every);
+        rec.begin(o.seed, o.units, o.ticks, o.checksum_every,
+                  o.human_input_delay_ticks, o.max_future_command_ticks);
         o.rec = &rec;
         chunsa::DriveOut out{};
         if (chunsa::drive_fresh(o, out) != 0) return 3;
@@ -246,13 +247,21 @@ int main(int argc, char** argv) {
         o.units = data.units; o.ticks = data.ticks;
         o.checksum_every = data.checksum_every; o.seed = data.seed;
         o.with_ai = false;          // G5: la IA JAMÁS se ejecuta al reproducir
+        // v2: reproducir con la config §6.2 del propio replay (auto-contenido).
+        // v1: los defaults de DriveOpts (1/20) preservan el comportamiento legacy.
+        if (data.version >= 2u) {
+            o.human_input_delay_ticks = data.human_input_delay_ticks;
+            o.max_future_command_ticks = data.max_future_command_ticks;
+        }
         o.feed = &data;
         chunsa::DriveOut out{};
         const int c = chunsa::drive_fresh(o, out);
         const bool ok = (c == 0 && out.final_checksum == data.final_checksum
-                         && out.ai_executions == 0);
+                         && out.ai_executions == 0 && out.schedule_mismatches == 0);
         std::cout << "G5 verify: " << (ok ? "OK" : "FAIL")
                   << " ai_executions=" << out.ai_executions
+                  << " schedule_mismatches=" << out.schedule_mismatches
+                  << " replay_v=" << data.version
                   << " checksum=" << std::hex << out.final_checksum << std::dec << "\n";
         return ok ? 0 : 1;
     }

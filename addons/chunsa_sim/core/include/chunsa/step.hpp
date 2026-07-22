@@ -22,6 +22,18 @@ inline constexpr uint32_t MORALE_RADIUS_CELLS = 1;  // celda + vecinas
 // vectores golden y los escenarios de record/verify sin cambio alguno.
 inline constexpr int32_t  AGGRO_RANGE_MT    = 10000;  // 10 tiles
 inline constexpr uint32_t AGGRO_RADIUS_CELLS = 5;
+
+// Normalización del tick efectivo de un comando (SPEC-001 §6.2): un comando
+// capturado en el tick `t` no puede surtir efecto antes de `t + delay` (retardo
+// de input humano). Función PURA extraída de la fase (3) de step() para que el
+// recorder de replays calcule EXACTAMENTE el mismo effective_tick que el kernel
+// (agenda auto-verificada, sin duplicar la fórmula). No aplica el rechazo
+// OUT_OF_WINDOW (eso depende de max_future y lo decide step); solo el piso.
+inline uint32_t command_effective_tick(uint32_t target_tick, uint32_t t,
+                                       uint32_t delay) noexcept {
+    const uint32_t min_eff = t + delay;
+    return target_tick < min_eff ? min_eff : target_tick;
+}
 }  // namespace chunsa
 
 // chunsa_sim_core — ciclo normativo de Step() y MovementSystemV1.
@@ -568,9 +580,8 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
                 ++res.rejected;
                 continue;
             }
-            uint32_t eff = rc.target_tick;
-            const uint32_t min_eff = t + g.cfg.human_input_delay_ticks;  // §6.2
-            if (eff < min_eff) eff = min_eff;
+            const uint32_t eff = command_effective_tick(
+                    rc.target_tick, t, g.cfg.human_input_delay_ticks);  // §6.2
             if (eff > t + g.cfg.max_future_command_ticks) {
                 detail::receipt(g, rc.emitter, rc.sequence, RejectReason::OUT_OF_WINDOW);
                 ++res.rejected;

@@ -30,6 +30,10 @@ struct DriveOpts {
     uint16_t checksum_every = 1;
     uint64_t seed = 20260716ull;
     bool with_ai = false;               // emisor 1 = IA stub
+    // Config de normalización §6.2 (defaults históricos del fixture). En verify
+    // se sobreescriben con los del replay v2 → reproducción auto-contenida.
+    uint32_t human_input_delay_ticks = 1;
+    uint32_t max_future_command_ticks = 20;
     // Save-at (G3/G4): si save_path != nullptr, guarda cuando gs.tick == save_at.
     uint32_t save_at = 0;
     const char* save_path = nullptr;
@@ -38,8 +42,12 @@ struct DriveOpts {
     bool hold_dispatched_until_save = false;
     // Modo replay-feed (G5): alimenta los batches grabados; PROHIBIDO ejecutar IA.
     const ReplayData* feed = nullptr;
-    ReplayWriter* rec = nullptr;        // recorder (graba el batch crudo por tick)
+    ReplayWriter* rec = nullptr;        // recorder (graba el batch + agenda por tick)
 };
+
+// Nº de comandos cuya agenda grabada (v2) NO coincide con la recomputada bajo
+// la config §6.2 del propio replay. > 0 ⇒ archivo corrupto o regla de
+// normalización cambiada tras grabar. Ver DriveOut::schedule_mismatches.
 
 struct DriveOut {
     uint64_t final_checksum = 0;        // último checksum de estado computado
@@ -47,6 +55,7 @@ struct DriveOut {
     FatalReason fatal = FatalReason::NONE;
     uint64_t accepted = 0, rejected = 0;
     uint32_t ai_executions = 0;         // gate G5: en feed-mode DEBE ser 0
+    uint32_t schedule_mismatches = 0;   // verify v2: DEBE ser 0 (agenda exacta)
     int save_result = -1;               // 0 ok si hubo save
 };
 
@@ -133,7 +142,20 @@ inline int drive(const DriveOpts& o, GameState& gs, AiJobBox& box, AiRuntimeV1& 
             // --- G5: replay-feed. IA JAMÁS se ejecuta aquí. ---
             if (t < o.feed->batches.size()) {
                 const auto& b = o.feed->batches[t];
-                for (const RawCommand& c : b) batch[n++] = c;
+                // v2: la agenda grabada debe reproducir bit a bit la recomputada
+                // bajo la config §6.2 del propio replay (auto-verificación).
+                const bool has_agenda = (o.feed->version >= 2u)
+                                     && (t < o.feed->eff_ticks.size())
+                                     && (o.feed->eff_ticks[t].size() == b.size());
+                for (uint32_t i = 0; i < b.size(); ++i) {
+                    const RawCommand& c = b[i];
+                    if (has_agenda) {
+                        const uint32_t recomputed = command_effective_tick(
+                                c.target_tick, t, gs.cfg.human_input_delay_ticks);
+                        if (recomputed != o.feed->eff_ticks[t][i]) ++out.schedule_mismatches;
+                    }
+                    batch[n++] = c;
+                }
             }
         } else {
             n = build_human_batch(batch, t, o.units, o.seed, o.with_ai);
@@ -158,7 +180,7 @@ inline int drive(const DriveOpts& o, GameState& gs, AiJobBox& box, AiRuntimeV1& 
             }
         }
 
-        if (o.rec != nullptr) o.rec->tick_batch(batch.data(), n);
+        if (o.rec != nullptr) o.rec->tick_batch(batch.data(), n, t);
 
         const StepResult res = step(gs, batch.data(), n);
         if (res.checksum_computed) out.final_checksum = res.checksum;
@@ -176,8 +198,8 @@ inline int drive_fresh(const DriveOpts& o, DriveOut& out) {
     MatchConfig01A cfg{};
     cfg.max_entities = o.units + 4;
     cfg.player_count = o.with_ai ? uint8_t{2} : uint8_t{1};
-    cfg.human_input_delay_ticks = 1;
-    cfg.max_future_command_ticks = 20;
+    cfg.human_input_delay_ticks = o.human_input_delay_ticks;
+    cfg.max_future_command_ticks = o.max_future_command_ticks;
     cfg.checksum_every_ticks = o.checksum_every;
     cfg.map_tiles_x = 256; cfg.map_tiles_y = 256;
     cfg.seed = o.seed;
