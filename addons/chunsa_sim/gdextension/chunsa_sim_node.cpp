@@ -27,11 +27,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <iterator>
 #include <vector>
 
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/input_event_mouse_button.hpp>
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/multi_mesh_instance3d.hpp>
 #include <godot_cpp/classes/os.hpp>
@@ -95,12 +97,22 @@ void ChunsaSimNode::_ready() {
 
 void ChunsaSimNode::sim_loop() {
     using clock = std::chrono::steady_clock;
-    std::vector<chunsa::RawCommand> batch(std::max<uint32_t>(demo_units, 700u));
+    // +512: margen para las órdenes del jugador (Sprint 0.3+) que se drenan
+    // de pending_player_commands cada tick, además del batch del showcase.
+    std::vector<chunsa::RawCommand> batch(std::max<uint32_t>(demo_units, 700u) + 512u);
 
     auto next_tick = clock::now();
     while (running.load(std::memory_order_relaxed)) {
         const uint32_t t = gs->tick;
-        const uint32_t n = build_showcase_batch(batch.data(), t);
+        uint32_t n = build_showcase_batch(batch.data(), t);
+        {
+            // Drenar órdenes del jugador encoladas por _input (hilo principal).
+            std::lock_guard<std::mutex> lock(input_mutex);
+            for (const chunsa::RawCommand& pc : pending_player_commands) {
+                batch[n++] = pc;
+            }
+            pending_player_commands.clear();
+        }
         chunsa::step(*gs, batch.data(), n);
 
         DemoSnapshot* s = ring->begin_write();
@@ -177,6 +189,97 @@ void ChunsaSimNode::_process(double /*delta*/) {
     maybe_screenshot();
 }
 
+// Selección y órdenes del jugador (Sprint 0.3+): clic/arrastre izquierdo
+// selecciona caballería propia; clic derecho ordena MOVE_TO a lo seleccionado.
+// Corre en el hilo principal; encola en pending_player_commands (protegida por
+// input_mutex) y sim_loop los drena en el siguiente tick.
+void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
+    if (cam3d == nullptr) return;
+    godot::Ref<godot::InputEventMouseButton> mb = event;
+    if (mb.is_null()) return;
+
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+
+    if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_LEFT) {
+        if (mb->is_pressed()) {
+            dragging = true;
+            drag_start = mb->get_position();
+            return;
+        }
+        // Soltar botón izquierdo: cerrar selección.
+        dragging = false;
+        const godot::Vector2 drag_end = mb->get_position();
+        std::fill(std::begin(is_selected), std::end(is_selected), false);
+
+        const bool is_click = (drag_start - drag_end).length() < 6.0f;
+        godot::Vector2 rmin(std::min(drag_start.x, drag_end.x), std::min(drag_start.y, drag_end.y));
+        godot::Vector2 rmax(std::max(drag_start.x, drag_end.x), std::max(drag_start.y, drag_end.y));
+
+        uint32_t best_i = UINT32_MAX;
+        float best_d2 = 1.0e30f;
+        for (uint32_t i = 0; i < cap; ++i) {
+            // Solo caballería propia (owner 0, unit_class 1) es seleccionable:
+            // los ciudadanos tienen IA autónoma y la artillería es del rival.
+            if (snap_curr.alive[i] == 0u) continue;
+            if (snap_curr.owner[i] != 0u) continue;
+            if (snap_curr.unit_class[i] != 1u) continue;
+
+            const float px = snap_curr.x[i] * 4.0f;
+            const float py = snap_curr.y[i] * 4.0f;
+            const godot::Vector3 world_pos(px, -py, py);
+            const godot::Vector2 screen_pos = cam3d->unproject_position(world_pos);
+
+            if (is_click) {
+                const float dx = screen_pos.x - drag_end.x;
+                const float dy = screen_pos.y - drag_end.y;
+                const float d2 = dx * dx + dy * dy;
+                if (d2 < 20.0f * 20.0f && d2 < best_d2) {
+                    best_d2 = d2;
+                    best_i = i;
+                }
+            } else {
+                if (screen_pos.x >= rmin.x && screen_pos.x <= rmax.x &&
+                    screen_pos.y >= rmin.y && screen_pos.y <= rmax.y) {
+                    is_selected[i] = true;
+                }
+            }
+        }
+        if (is_click && best_i != UINT32_MAX) {
+            is_selected[best_i] = true;
+        }
+        return;
+    }
+
+    if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
+        // Screen → mundo: cámara ortográfica SIN rotación mirando -Z, con el
+        // mapeo world=(px,-py,py) ya usado en render_interpolated. El origen
+        // del rayo en cada píxel YA da directamente (px, world_y=-py) en sus
+        // componentes X/Y (no hace falta intersección de plano ni la dirección
+        // del rayo): world_px = origin.x ; world_py = -origin.y.
+        const godot::Vector3 origin = cam3d->project_ray_origin(mb->get_position());
+        const float world_px = origin.x;
+        const float world_py = -origin.y;
+        const int64_t x_raw = static_cast<int64_t>((world_px / 4.0f) * 65536.0f);
+        const int64_t y_raw = static_cast<int64_t>((world_py / 4.0f) * 65536.0f);
+
+        std::lock_guard<std::mutex> lock(input_mutex);
+        for (uint32_t i = 0; i < cap; ++i) {
+            if (!is_selected[i]) continue;
+            if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;  // pudo morir
+            chunsa::RawCommand c;
+            std::memset(&c, 0, sizeof(c));
+            c.target_tick = 0;
+            c.emitter = 0;
+            c.type = chunsa::CommandType::MOVE_TO;
+            c.sequence = next_player_sequence++;
+            c.p.handle = chunsa::EntityHandle{i, 1u};
+            c.p.x_raw = x_raw;
+            c.p.y_raw = y_raw;
+            pending_player_commands.push_back(c);
+        }
+    }
+}
+
 // Cada frame: posición renderizada = lerp(prev, curr, alpha) por slot; el
 // slot recién spawneado usa curr directo; el slot muerto no se dibuja.
 void ChunsaSimNode::render_interpolated() {
@@ -210,13 +313,15 @@ void ChunsaSimNode::render_interpolated() {
                               godot::Vector3(0, 0, 1));
         mm->set_instance_transform(k, godot::Transform3D(
                                               sc, godot::Vector3(px, -py, py)));
-        // Color por bando + pánico (Sprint 0.3): se lee del snapshot actual
-        // (snap_curr, sin interpolar — solo la posición se interpola).
+        // Color por selección/bando + pánico (Sprint 0.3+): se lee del
+        // snapshot actual (snap_curr, sin interpolar — solo la posición se
+        // interpola). La selección tiene prioridad MÁXIMA sobre el resto.
         godot::Color c;
-        if (snap_curr.unit_class[i] == 3u)     c = godot::Color(0.9, 0.85, 0.2);   // ciudadano: amarillo
-        else if (snap_curr.fleeing[i] != 0u)   c = godot::Color(0.9, 0.9, 0.95);   // pánico: casi blanco
-        else if (snap_curr.owner[i] == 0u)     c = godot::Color(0.2, 0.6, 0.95);   // owner 0: azul
-        else                                    c = godot::Color(0.9, 0.3, 0.2);   // owner 1: rojo/naranja
+        if (is_selected[i])                     c = godot::Color(0.3, 1.0, 0.3);    // seleccionado: verde brillante
+        else if (snap_curr.unit_class[i] == 3u) c = godot::Color(0.9, 0.85, 0.2);   // ciudadano: amarillo
+        else if (snap_curr.fleeing[i] != 0u)    c = godot::Color(0.9, 0.9, 0.95);   // pánico: casi blanco
+        else if (snap_curr.owner[i] == 0u)      c = godot::Color(0.2, 0.6, 0.95);   // owner 0: azul
+        else                                     c = godot::Color(0.9, 0.3, 0.2);   // owner 1: rojo/naranja
         mm->set_instance_color(k, c);
         ++k;
     }

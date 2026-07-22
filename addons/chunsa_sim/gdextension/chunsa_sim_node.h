@@ -11,10 +11,14 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
+#include <godot_cpp/classes/input_event.hpp>
 #include <godot_cpp/classes/node2d.hpp>
+#include <godot_cpp/variant/vector2.hpp>
 
 #include <chunsa/game_state.hpp>
 #include <chunsa/snapshot_ring.hpp>
@@ -74,6 +78,18 @@ private:
     godot::MultiMeshInstance3D* mmi_wall3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
+    // Selección/órdenes del jugador (Sprint 0.3+): el input llega en el hilo
+    // principal (_input); sim_loop corre en su propio hilo. `pending_player_commands`
+    // es la única sección compartida entre hilos → protegida por `input_mutex`.
+    // `is_selected` SOLO la tocan el hilo principal (_input escribe, render lee):
+    // no necesita mutex.
+    std::mutex input_mutex;
+    std::vector<chunsa::RawCommand> pending_player_commands;
+    uint64_t next_player_sequence = 1000000ull;
+    bool is_selected[1024] = {};
+    bool dragging = false;
+    godot::Vector2 drag_start;
+
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
     void setup_3d();               // rig del modo (c), reutilizado del spike
@@ -99,5 +115,6 @@ public:
 
     void _ready() override;
     void _process(double delta) override;
+    void _input(const godot::Ref<godot::InputEvent>& event) override;
     void _exit_tree() override;
 };
