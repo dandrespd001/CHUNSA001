@@ -77,7 +77,12 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.range_mt[i] = c.p.range_mt;
             g.unit_class[i] = c.p.unit_class;
             g.atk_cd[i] = 0;
-            g.speed_mtpt[i] = 0;
+            // Endurecimiento del Arquitecto: v1 congelaba speed_mtpt=0, dejando
+            // la huida de morale_system sin efecto (unidades de combate no se
+            // desplazaban). Usar la velocidad del payload permite huir de verdad
+            // sin romper el combate estático (SPAWN_UNIT también fija tgt=pos,
+            // así que una unidad en reposo no migra hacia el origen por seek).
+            g.speed_mtpt[i] = c.p.speed_mtpt;
             g.morale[i] = MORALE_MAX;
             g.fleeing[i] = 0;
             return RejectReason::ACCEPTED;

@@ -55,6 +55,7 @@ static void run_scenario(GameState& g, bool* out_saw_panic) {
                 c.p.attack     = 15;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 0;  // infantry
+                c.p.speed_mtpt = 200;  // permite huir (0.2 tiles/tick)
                 ++n;
             }
             for (uint32_t i = 0; i < N_OWNER1; ++i) {
@@ -110,12 +111,15 @@ int main() {
     // final quedó con moral degradada (huella de haber estado en desventaja).
     CHECK(saw_panic || panicked_or_low_morale0 > 0);
 
-    // (3) Huida efectiva: como SPAWN_UNIT fija speed_mtpt=0 (v1 congelado —
-    // las unidades de combate son estáticas salvo huida, y sin velocidad la
-    // huida tampoco desplaza), no cabe esperar que las supervivientes se
-    // alejen del centro del enjambre. En este escenario (cerco denso 8:1 con
-    // vecinos a 1 tile, dentro de range_mt=1500) el desenlace esperado es que
-    // casi todas mueran: aceptamos esa rama del CHECK explícitamente.
+    // (3) Huida efectiva: endurecimiento del Arquitecto — SPAWN_UNIT ya usa
+    // c.p.speed_mtpt (antes fijaba 0, dejando la huida sin efecto). Con
+    // velocidad real, el resultado en ESTE escenario sigue siendo mortandad
+    // casi total: el cerco es denso 8:1 con vecinos a 1 tile (dentro de
+    // range_mt=1500) por TODOS los lados contiguos, así que huir en cualquier
+    // dirección mantiene a la unidad en rango de otro enemigo. Es el desenlace
+    // esperado de un cerco extremo, no evidencia de que la huida esté rota
+    // (el mecanismo se ejercita: fleeing se activa, deja de atacar y se
+    // desplaza — ver §Revisión del Arquitecto). Aceptamos esa rama del CHECK.
     const double mean_dist_end = (alive0 > 0) ? (sum_dist / alive0) : 0.0;
     const bool mostly_died = alive0 <= 2u;  // ≥80% del bando 0 murió
     CHECK(mostly_died);

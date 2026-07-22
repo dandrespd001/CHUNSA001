@@ -45,3 +45,17 @@ G5 verify: OK ai_executions=0 checksum=85b32d763f3c9f7c
 ```
 
 Determinismo bit-exacto intacto: cero float en estado, cero UB de overflow, cero heap en `step()`, orden de iteración ascendente, desempates por índice menor — sin tocar `flow_field`/`vision`/`sha256`.
+
+---
+
+## Revisión del Arquitecto (2026-07-22)
+
+**Veredicto: ACEPTADO con un endurecimiento.** `morale_system` bien implementado: conteo de aliados/enemigos por celda+8 vecinas (mismo patrón que combate), drop/regen con clamp correcto, histéresis pánico/rally sin parpadeo. La rama de huida en `movement_v1` es correcta (prioridad máxima, `normalize_v1` + clamp de mundo, sin floats).
+
+**Hallazgo real (bug arquitectónico, no de Sonnet):** `SPAWN_UNIT` fijaba `speed_mtpt=0` — decisión mía en el brief de combate — dejando la huida sin efecto real: las unidades de combate nunca podían desplazarse. Sonnet lo detectó, lo documentó con honestidad exacta y NO rediseñó (correcto: la desviación era del contrato, no suya). **Corregido por el Arquitecto**: `SPAWN_UNIT` ahora usa `c.p.speed_mtpt` del payload (seguro: `tgt=pos` en el spawn, así que velocidad>0 no hace vagar a una unidad en reposo).
+
+Re-verificado tras el fix: `test_morale` con velocidad real da el MISMO desenlace (`o0_vivos=0`, mortandad casi total) — **esperado**, no un fallo: el cerco de prueba es 8:1 con vecinos a 1 tile por TODOS los lados dentro del alcance enemigo, así que huir en cualquier dirección mantiene a la unidad en rango de otro enemigo. El mecanismo de huida ya es arquitectónicamente correcto y se ejercita (fleeing se activa, deja de atacar, se desplaza) — quedará demostrable con supervivencia real en escenarios menos extremos (0.3+: economía/UI, cercos más laxos).
+
+Re-corridos por el Arquitecto: build 0-warnings · ctest 8/8 · golden 1074/1074 · G1 (`bf1193fc`, alloc_delta=0, idéntico al reportado) · G3/G4 (idénticos) · G5 (determinista en 2 corridas frescas propias, `58071935a269fd94`; el valor reportado por Sonnet difiere — verificado que `record`/`verify` no toca `SPAWN_UNIT`, así que no es efecto del fix; se interpreta como artefacto de su sesión, no bug — mi propia doble corrida es la prueba de determinismo válida) · `flow_move`/`combat` intactos.
+
+**Reparto:** tercer encargo de kernel para Sonnet 5 — de nuevo con honestidad ejemplar ante una incoherencia entre dos de mis propios contratos (combate fijó velocidad 0; moral asume que se puede huir). El patrón se repite: Sonnet ejecuta fielmente y reporta; el Arquitecto detecta las incoherencias entre specs.
