@@ -22,7 +22,7 @@ map.schema.json  ai-profile.schema.json
 - epoch: integer 1..15; epoch_window: array exactamente 2 epochs.
 - year: integer distinto de 0.
 - resource: enum `A,B,P,W,Me,F,I,El`.
-- resource_costs: objeto cerrado con esas ocho propiedades opcionales, valores integer 0..1000000, maxProperties 8. Permite vacío; cada caller fija minProperties.
+- resource_costs: objeto cerrado con esas ocho propiedades opcionales, valores integer 0..1000000, maxProperties 8. Permite vacío; cuando un caller exige coste, al menos un valor debe ser >0.
 - material_cost: objeto cerrado requerido `material_id` record_id y `amount` integer 1..1000000. material_costs: array uniqueItems.
 - Todo set usa `uniqueItems:true`.
 
@@ -53,13 +53,13 @@ Stats es objeto cerrado con todos requeridos: hp 1..1000000; attack 0..1000000; 
 
 ## Building v1
 
-Objeto cerrado. Requeridos: schema_version const1; id/civ_id record_id; display_name_key/description_key localization; epoch_window; kind `economic|military|civic|infrastructure|dropoff|research|housing|wonder`; footprint cerrado width_cells,height_cells 1..32 y blocks_movement bool; stats cerrado hp 1..10000000; constructible bool; resource_costs; build_time_ticks; dropoff_resources set resource; trains/researches/required_capabilities/grants_capabilities sets record_id; recipes; disponibilidad; provenance. material_costs opcional.
+Objeto cerrado. Requeridos: schema_version const1; id/civ_id record_id; display_name_key/description_key localization; epoch_window; kind `economic|military|civic|infrastructure|dropoff|research|housing|wonder`; footprint cerrado width_cells,height_cells 1..32 y blocks_movement bool; stats cerrado hp 1..10000000; constructible bool; resource_costs; build_time_ticks; trains/researches/required_capabilities/grants_capabilities sets record_id; recipes; disponibilidad; provenance. material_costs y dropoff_resources son opcionales.
 
 Recipe es objeto cerrado requerido id, input_resource_costs, input_material_costs, output_material_id, output_amount 1..1000000, duration_ticks 1..10000000. Si dropoff, dropoff_resources minItems1. Si constructible=true: build time 1..10000000 y al menos un resource/material cost; si false: build time 0 y ambos costes vacíos.
 
 ## Tech v1
 
-Objeto cerrado. Requeridos salvo material_costs, regional_variant_group y label contrafactual: schema_version const1; id; display/description; available_to set no vacío record_id; epoch; branch `institution|E|C|S|M`; evidence H|C|P|X; resource_costs (minProperties1 salvo institution); material_costs maxItems2; required_capabilities; research_time_ticks 1..10000000; prerequisites/required_buildings/mutually_exclusive_with sets record_id; grants cerrado requerido units/buildings/capabilities sets record_id; regional_variant_group record_id; disponibilidad; provenance. Con `if/then`, top-level evidence debe igualar historical_claims.evidence.
+Objeto cerrado. Requeridos salvo material_costs, regional_variant_group y label contrafactual: schema_version const1; id; display/description; available_to set no vacío record_id; epoch; branch `institution|E|C|S|M`; evidence H|C|P|X; resource_costs (minProperties1 salvo institution); material_costs (el semantic pass limita a dos los que sean `strategic=true`); required_capabilities; research_time_ticks 1..10000000; prerequisites/required_buildings/mutually_exclusive_with sets record_id; grants cerrado requerido units/buildings/capabilities sets record_id; regional_variant_group record_id; disponibilidad; provenance. Con `if/then`, top-level evidence debe igualar historical_claims.evidence.
 
 ## Civ v1
 
