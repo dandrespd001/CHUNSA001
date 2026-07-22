@@ -29,7 +29,27 @@ int main() {
     CHECK(sha_hex_is("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
                      "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
 
-    // 2) Roundtrip save→load bit-exacto (con IA activa y job en vuelo natural)
+    // 2) Config del driver: jamás truncar los u32 persistidos por replay v2.
+    {
+        DriveOpts o{};
+        o.units = 0;
+        o.ticks = 0;
+        DriveOut out{};
+
+        o.human_input_delay_ticks = 65536u;
+        o.max_future_command_ticks = 20u;
+        CHECK(drive_fresh(o, out) == 2);
+
+        o.human_input_delay_ticks = 1u;
+        o.max_future_command_ticks = 65536u;
+        CHECK(drive_fresh(o, out) == 2);
+
+        o.human_input_delay_ticks = 65535u;
+        o.max_future_command_ticks = 65535u;
+        CHECK(drive_fresh(o, out) == 0);
+    }
+
+    // 3) Roundtrip save→load bit-exacto (con IA activa y job en vuelo natural)
     {
         MatchConfig01A cfg{};
         cfg.max_entities = 64; cfg.player_count = 2;
@@ -49,7 +69,7 @@ int main() {
         CHECK(load_game(*g2, b2, r2, "test_state.sav") == 0);
         CHECK(state_checksum_v1(*gs) == state_checksum_v1(*g2));
         CHECK(continuation_checksum(*gs, box, rt) == continuation_checksum(*g2, b2, r2));
-        // 3) Manipulación: un byte volteado debe rechazarse por digest
+        // 4) Manipulación: un byte volteado debe rechazarse por digest
         std::FILE* f = std::fopen("test_state.sav", "r+b");
         std::fseek(f, 200, SEEK_SET);
         int c = std::fgetc(f); std::fseek(f, 200, SEEK_SET); std::fputc(c ^ 0x40, f);
