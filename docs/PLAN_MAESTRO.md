@@ -35,7 +35,7 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 
 ### Deuda documentada (bloqueos externos, no de trabajo)
 
-- **Verificación factual de la ficha de Mali (36c)**: bloqueada por cuota de MiniMax (reset ~2026-07-22 15:11); re-delegación programada, brief en `game_data/research/BRIEF_VERIFICACION_MALI.md`. Las 3 fichas verificadas + Mali se corrigen y promueven en el Sprint 0.4.
+- **Corrección de las 4 fichas del slice**: las 4 quedan **verificadas** (`game_data/research/verificacion/VERIF_36{a,b,c,d}.md` + `VERIF_RESUMEN.md`); ninguna se promueve tal cual (veredicto Arquitecto ADR-014). Aplicar enmiendas + sanear bibliografía se agenda en el Sprint 0.4, donde alimentan el schema `civ`/`unit`.
 - **PERF-0 físico**: sin hardware de referencia (UHD 620); ADR-011 sigue TARGET. Conseguir acceso antes de Fase 2.
 - **Kimi K3 sin cuota el resto de 2026-07**: la UI/HUD de Fase 1 (Sprint 1.3) deberá reprogramarse o reasignarse (MiniMax/Sonnet) si persiste.
 
@@ -87,7 +87,7 @@ Documentos de diseño canónicos que alimentan cada SPEC (rutas en `/home/adquio
 ### FASE 0 — Fundación (cierre)
 
 #### Sprint 0.3-cierre — ✅ CERRADO (2026-07-22, `ad6c306`, reporte `docs/REPORTE_SPRINT_0.3.md`)
-> Cerrado con 3 de 4 fichas verificadas: replay v2, ADR-021 y PERF-0 completos; Mali (36c) queda como deuda por cuota de MiniMax (re-delegación programada). Ninguna de las 3 fichas verificadas se promueve tal cual (veredicto Arquitecto ADR-014): la corrección se agenda en 0.4.
+> Cerrado con los 4 entregables completos: replay v2, ADR-021, PERF-0 documentado y las **4 fichas del slice verificadas** (272 afirmaciones; 38 erróneas; bibliografía inventada cazada en 3 de 4). Ninguna ficha se promueve tal cual (veredicto Arquitecto ADR-014): la corrección se agenda en 0.4.
 - **Objetivo**: cerrar formalmente el Sprint 0.3 y saldar sus deudas.
 - **Entregables**:
   1. Replay con `effective_tick`: el recorder graba el tick efectivo de cada comando (tras el clamp de §6.2 de SPEC-001) y `verify` reproduce con esa agenda exacta — elimina la ambigüedad de re-clampear al reproducir.

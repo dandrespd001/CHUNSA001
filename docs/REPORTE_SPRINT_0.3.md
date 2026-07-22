@@ -1,6 +1,6 @@
 # REPORTE DE CIERRE — Sprint 0.3 (2026-07-22)
 
-**Estado: CERRADO** (con una deuda menor documentada: verificación factual de la 4ª ficha, bloqueada por cuota externa — §Deuda). El Sprint 0.3 dio a CHUNSA su **capa de combate y economía completas** y el **primer control del jugador**, y cerró la última deuda de robustez del núcleo determinista (replay auto-verificado). Repo: `github.com/dandrespd001/CHUNSA001`, main en `ad6c306`.
+**Estado: CERRADO.** El Sprint 0.3 dio a CHUNSA su **capa de combate y economía completas** y el **primer control del jugador**, y cerró la última deuda de robustez del núcleo determinista (replay auto-verificado). Las 4 fichas del slice quedan verificadas. Repo: `github.com/dandrespd001/CHUNSA001`, main en `ad6c306`.
 
 ## Qué es CHUNSA tras el Sprint 0.3
 
@@ -19,7 +19,7 @@ De una demo de navegación (0.2) a un **campo de batalla jugable**: dos ejércit
 | **Replay v2 con `effective_tick`** | ✅ agenda auto-verificada; config §6.2 persistida; `schedule_mismatches` | Arquitecto | `ad6c306` |
 | **Enmienda ADR-021** (MP = solo preparación) | ✅ aplicada a `SPEC_ARQUITECTURA_BASE.md` §3.9 / registro ADRs / §5.1 | Arquitecto | (doc fuera de repo) |
 | PERF-0 físico | 🔶 **documentado como bloqueado** (sin hardware de referencia UHD 620) — ADR-011 sigue TARGET | Arquitecto | — |
-| Verificación factual de fichas del slice | 🔶 **3/4 hechas** (Egipto/Roma/Tawantinsuyu); Mali pendiente por cuota | claude-minimax + Arq. | (staging) |
+| Verificación factual de fichas del slice | ✅ **4/4 verificadas** (Egipto/Roma/Mali/Tawantinsuyu); veredicto ADR-014 | claude-minimax + Arq. | (staging) |
 
 ## Determinismo (invariante sagrado, intacto)
 
@@ -33,21 +33,21 @@ Todos los gates verdes tras cada merge, con checksums evolucionando por el estad
 
 ## Verificación factual de las fichas (ADR-014) — resultado parcial
 
-`claude-minimax` (con web) verificó 3 de las 4 fichas del slice, afirmación por afirmación, con fuentes reales y honestidad («sin fuente localizada» cuando no halló). Informes en `game_data/research/verificacion/`:
+`claude-minimax` (con web) verificó las 4 fichas del slice (272 afirmaciones en total), afirmación por afirmación, con fuentes reales y honestidad («sin fuente localizada» cuando no halló). Informes en `game_data/research/verificacion/` (+ `VERIF_RESUMEN.md`):
 
 | Ficha | Veredicto | Hallazgo grave |
 |---|---|---|
 | Egipto (36a) | Requiere revisión mayor (20 erróneas/100) | Transliteraciones inventadas, calendario invertido (cosecha=Shemu, no Peret), «oro de Ofir» anacrónico |
 | Roma (36b) | Apta con correcciones (3 erróneas/47) | Revuelta panonia mal clasificada como de esclavos |
+| Mali (36c) | Requiere revisión mayor (7 erróneas/70) | Bibliografía inventada (Pauketat, Ryder); `sofa`=infantes no arqueros; `hogon` es dogon |
 | Tawantinsuyu (36d) | Requiere revisión mayor (8 erróneas/55) | **Referencia bibliográfica inventada** por M3 (cazada) |
-| Mali (36c) | **PENDIENTE** (cuota agotada) | — |
 
-**Veredicto del Arquitecto (ADR-014)**: ninguna de las 3 verificadas se promueve a canónica tal cual; la corrección (aplicar enmiendas + sanear bibliografía) se agenda en el **Sprint 0.4**, donde las fichas se convierten en datos (schema `civ`/`unit`). El valor confirmado de la verificación: cazó invenciones del generador que habrían contaminado el corpus.
+**Veredicto del Arquitecto (ADR-014)**: ninguna de las 4 se promueve a canónica tal cual; la corrección (aplicar enmiendas + sanear bibliografía) se agenda en el **Sprint 0.4**, donde las fichas se convierten en datos (schema `civ`/`unit`). El valor confirmado de la verificación: **cazó fabricación de citas académicas en 3 de las 4 fichas** — falsos que un pase de generación sin fuentes no puede evitar; el control staging + verificación + veredicto (ADR-014) queda validado.
 
 ## Deuda documentada (bloqueos externos, no de trabajo)
 
-1. **Verificación de Mali (36c)**: bloqueada por agotamiento de cuota de MiniMax (reset ~2026-07-22 15:11). Re-delegación programada; brief acotado en `game_data/research/BRIEF_VERIFICACION_MALI.md`. Al recibir `VERIF_36c.md` se actualiza `VERIF_RESUMEN.md` y este reporte.
-2. **PERF-0 físico**: sin acceso al tier mínimo de referencia (UHD 620). La máquina dev (i7-10700T + UHD 630) es más potente y daría números optimistas. ADR-011 permanece TARGET; el bench sintético del kernel (p95=265µs/tick vs 50ms de presupuesto) confirma holgura en la simulación pura (no en render). Conseguir hardware de referencia antes de Fase 2.
+1. **PERF-0 físico**: sin acceso al tier mínimo de referencia (UHD 620). La máquina dev (i7-10700T + UHD 630) es más potente y daría números optimistas. ADR-011 permanece TARGET; el bench sintético del kernel (p95=265µs/tick vs 50ms de presupuesto) confirma holgura en la simulación pura (no en render). Conseguir hardware de referencia antes de Fase 2.
+2. **Corrección de las 4 fichas del slice**: verificadas (ver arriba); ninguna promovida. Aplicar las enmiendas de los informes `VERIF_36*.md` y sanear la bibliografía es trabajo del **Sprint 0.4** (donde alimentan el schema `civ`/`unit`).
 
 ## Reparto de agentes (validado)
 
