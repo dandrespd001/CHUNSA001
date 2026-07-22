@@ -30,14 +30,14 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | 0.1A | ✅ COMPLETO | Toolchain pineado, kernel base (Fixed64\<16\>/Wide128, RNG por contador, GameState SoA, Commands, Step(), MovementSystemV1, spatial hash, checksum), golden 1074, gates G1/G2, CI 5 lanes (incl. windows-msvc). |
 | 0.1B | ✅ COMPLETO | Saves/envelope + fuzzing, replays, gates G3/G4/G5, ring de snapshots, `chunsa_data_compiler` + `unit.schema.json`. |
 | 0.2 | ✅ COMPLETO | Godot 4.7.1 + GDExtension (`ChunsaSimNode`, sim 20 Hz en hilo + ring), SPIKE-RENDER-0 → **ADR-009** (3D ortográfico + depth buffer), FlowField v1 integrado al movimiento, Visión/LoS v1, render de producción con interpolación 60 fps. |
-| 0.3 | 🔶 CASI | Combate RPS v1 · moral/pánico v1 · **aggro/persecución v1** (el combate llega a resolución) · economía mínima v1 (A/B/Me, ciudadanos SEEK/HARVEST/RETURN, 6 depósitos, dropoff) · demo showcase integrada · **selección y órdenes del jugador con clic** (hito de interactividad). Save v6, ctest 10/10, G1–G5 verdes. |
+| 0.3 | ✅ COMPLETO | Combate RPS v1 · moral/pánico v1 · **aggro/persecución v1** (el combate llega a resolución) · economía mínima v1 (A/B/Me, ciudadanos SEEK/HARVEST/RETURN, 6 depósitos, dropoff) · demo showcase integrada · **selección y órdenes del jugador con clic** (hito de interactividad). Save v6, ctest 10/10, G1–G5 verdes. |
+| 0.3-cierre | ✅ CERRADO (`ad6c306`) | **Replay v2 con `effective_tick`** (agenda auto-verificada, `schedule_mismatches`, ctest 11/11) · **ADR-021 aplicado** a SPEC base (MP = solo preparación) · **PERF-0 documentado como bloqueado** (sin hardware UHD 620) · **verificación de fichas 3/4** (Egipto/Roma/Tawantinsuyu; veredicto ADR-014: ninguna se promueve, corregir en 0.4) · `docs/REPORTE_SPRINT_0.3.md`. |
 
-### Pendiente del Sprint 0.3 (cierre en §4/Fase 0)
+### Deuda documentada (bloqueos externos, no de trabajo)
 
-- Verificación factual de las fichas históricas 36a–d (`game_data/research/`, estado `draft-unverified`).
-- Replay con `effective_tick` (robustez diferida desde 0.1B/0.2).
-- PERF-0 físico (bloqueado por hardware de referencia UHD 620; ADR-011 sigue en TARGET).
-- Reporte de cierre `docs/REPORTE_SPRINT_0.3.md`.
+- **Verificación factual de la ficha de Mali (36c)**: bloqueada por cuota de MiniMax (reset ~2026-07-22 15:11); re-delegación programada, brief en `game_data/research/BRIEF_VERIFICACION_MALI.md`. Las 3 fichas verificadas + Mali se corrigen y promueven en el Sprint 0.4.
+- **PERF-0 físico**: sin hardware de referencia (UHD 620); ADR-011 sigue TARGET. Conseguir acceso antes de Fase 2.
+- **Kimi K3 sin cuota el resto de 2026-07**: la UI/HUD de Fase 1 (Sprint 1.3) deberá reprogramarse o reasignarse (MiniMax/Sonnet) si persiste.
 
 ---
 
@@ -86,7 +86,8 @@ Documentos de diseño canónicos que alimentan cada SPEC (rutas en `/home/adquio
 
 ### FASE 0 — Fundación (cierre)
 
-#### Sprint 0.3-cierre
+#### Sprint 0.3-cierre — ✅ CERRADO (2026-07-22, `ad6c306`, reporte `docs/REPORTE_SPRINT_0.3.md`)
+> Cerrado con 3 de 4 fichas verificadas: replay v2, ADR-021 y PERF-0 completos; Mali (36c) queda como deuda por cuota de MiniMax (re-delegación programada). Ninguna de las 3 fichas verificadas se promueve tal cual (veredicto Arquitecto ADR-014): la corrección se agenda en 0.4.
 - **Objetivo**: cerrar formalmente el Sprint 0.3 y saldar sus deudas.
 - **Entregables**:
   1. Replay con `effective_tick`: el recorder graba el tick efectivo de cada comando (tras el clamp de §6.2 de SPEC-001) y `verify` reproduce con esa agenda exacta — elimina la ambigüedad de re-clampear al reproducir.
