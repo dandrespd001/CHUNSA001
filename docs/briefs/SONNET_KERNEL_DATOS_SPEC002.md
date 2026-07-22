@@ -3,7 +3,9 @@
 Fecha: 2026-07-22  
 Autoridad: Arquitecto Jefe de CHUNSA  
 Rama/worktree asignado: se indicará al invocar  
-Estado: preparado; no ejecutar hasta que el golden CHDB D1 esté integrado
+Estado: preparado; no ejecutar hasta que estén versionados el manifest, el
+fixture promovido Egipto+Roma, `data/compiled/chunsa_base.chdb`, su sidecar y el
+gate `data_compile` que los compara byte a byte
 
 ## 0. Fuente de verdad y orden de lectura
 
@@ -41,7 +43,11 @@ Implementa la parte C++ completa de SPEC-002 D1:
 - tests C++ del loader, corrupción, spawn, checksum, save y replay;
 - CTest `data_compile` y target `chunsa_test_data_blob`.
 
-No toques Godot/demo en esta tarea. El Arquitecto hará ese wiring después.
+No implementes el wiring de Godot/demo en esta tarea. El Arquitecto lo hará
+inmediatamente sobre la misma rama antes del merge. No conserves ni añadas el
+overload público legado `gs_init(GameState&, const MatchConfig01A&)`: todos los
+callers deben migrar al lifecycle con catálogo, y la GDExtension puede quedar
+temporalmente sin compilar entre ambas piezas, pero nunca se integrará así.
 No implementes D2/mods/patches. No actives `bonus_vs_bp` en combate.
 
 ## 2. API literal obligatoria
@@ -262,14 +268,21 @@ Origen/admisión:
 Implementa literalmente SPEC-002 §§5–7:
 
 - cap de archivo antes de reservar;
-- header de 64 bytes, flags conocidos y reserved cero;
-- 6 secciones exactas, orden canónico por kind y records por `record_id`;
+- header fijo de 40 bytes, flags conocidos y reserved cero;
+- `section_count==7`, directorio de 7×24 bytes, kinds 1..7 incluso vacíos y
+  primer offset exacto 208; orden canónico por kind y records por `record_id`;
 - offsets/tamaños/counts con aritmética checked y sin solapamiento/trailing;
 - CVE mínimo, UTF-8/NFC, límites de depth/nodes/string/collection;
 - validación schema/semántica tipada al reconstruir `UnitDefinitionV1`;
 - recomputar `SHA256("CHUNSA_CONTENT_V1\0" || complete_CHDB_bytes)`;
 - construir binding D1 exacto y lookup binario fuera de `Step()`;
-- convertir `bad_alloc`/fallos a código estable; ninguna excepción cruza API.
+- convertir `bad_alloc` exclusivamente en `Bounds` o `TooLarge`, sin ampliar
+  `CatalogLoadCode`; ninguna excepción cruza API.
+
+D1 rechaza `HAS_PATCHES`; `CatalogLoadProfile::Verified` exige `flags==0`.
+Prueba la matriz completa de perfil/policy/binding: `VerifiedRelease`,
+`DeterministicModded` y `Development`. El owner del catálogo no puede moverse,
+destruirse ni mutarse mientras un `GameState` conserve su puntero.
 
 El loader debe aceptar el golden del compilador integrado y rechazar, al menos:
 truncación, offsets solapados, overflow, sección duplicada/faltante, CVE no
@@ -300,6 +313,12 @@ debe fallar.
 limpian y preservan `unit_id` de manera explícita. La deserialización recibe el
 catálogo y solo publica un estado completamente validado.
 
+Los helpers únicos de command/payload son obligatorios también en
+`ai_serialize`/`ai_deserialize` para JOBS/AI. Añade un roundtrip de job
+`COMPLETED` con `origin` y `unit_id`. Un `command_type` desconocido conserva sus
+16 bits y llega a apply para producir `MALFORMED`; save/replay no lo filtran ni
+lo reinterpretan al deserializar.
+
 ## 7. Save v7 literal
 
 Usa exactamente:
@@ -319,6 +338,10 @@ Zstd: v1.5.7 vendorizado, nivel 3, frame checksum y content-size habilitados,
 un único frame, sin diccionario. Carga streaming a destino acotado, rechazo de
 multiframe/trailing y publicación transaccional.
 
+CMake debe compilar/enlazar `zstd.c` en un target real y propagar la dependencia
+a CLI y tests; `chunsa_sim_core` es hoy `INTERFACE`, por lo que incluir el header
+no basta. El Arquitecto enlazará después la misma dependencia a GDExtension.
+
 Payload descomprimido:
 
 ```text
@@ -333,6 +356,9 @@ SHA256("CHUNSA_SAVE_V1" || canonical_header || uncompressed_payload)
 
 v6 se rechaza de forma estable. Añade negativos de envelope, tamaños,
 reservados, binding, Zstd truncado/multiframe, digest, secciones y trailing.
+Para binding hay dos negativos distintos: byte mutado con digest inválido y
+binding mutado con digest SHA-256 recomputado, que debe superar integridad y
+fallar en identidad/policy.
 
 ## 8. Replay v3 literal
 
@@ -347,17 +373,38 @@ mismo `RejectReason` y para ACCEPTED inserta el `effective_tick` grabado solo
 después de verificarlo. IA debe cumplir literalmente
 `effective_tick==target_tick==capture_tick`. No ejecutes IA durante verify.
 
+Separa admisión en una validación pura y un commit. `Step()` produce, sin heap,
+un trace fijo preasignado y acotado por intento con `RejectReason` y
+`effective_tick`; el recorder lo consume fuera de `Step()`. Está prohibido
+mover un `ReplayWriter`/`std::vector` dentro de `Step()`. Verify usa el mismo
+validador puro y luego inserta el tick grabado; nunca vuelve a alimentar raws
+para que `step()` rederive la agenda.
+
 Trailer/digest/caps son exactamente §9.2. v2 se rechaza. Deben existir tests de
 mutación para effective tick, origin, admission result, cada campo del payload,
 binding, digest, counts extremos y truncación.
+Como en save, una prueba de binding debe recomputar el digest para demostrar
+que el fallo ocurre en identidad y no se oculta detrás de integridad.
 
 ## 9. CLI, tests y CMake
 
-- Añade `--data <path>` a `run`, `record`, `savetest` y `verify`.
+- `run`, `record`, `savetest` y `verify` fallan sin `--data <path>`; cargan el
+  catálogo y resuelven IDs textuales del fixture antes de `Step()`.
+- Con `allow_debug_stat_payload=0`, esos flujos no emiten `SPAWN_DEBUG`, payload
+  de stats ni `INVALID_UNIT_ID`.
 - Selftests que crean estado cargan el golden mínimo y usan el lifecycle único.
-- Tests de combate/moral/economía usan IDs resueltos por nombre; solo tests del
-  camino debug activan `allow_debug_stat_payload`.
+- Tests de combate, aggro, moral y economía usan IDs resueltos por nombre; solo
+  tests explícitos del camino debug activan `allow_debug_stat_payload`.
+- Un test recompila una copia del YAML con un stat cambiado y prueba cambio
+  observable/checksum sin recompilar C++.
+- IA, driver y replay derivan delay y periodo de `cfg`; todos los productores
+  asignan `origin` explícitamente. Valida capacidades D1 `128/4096/256/16384`,
+  máscara IA y límite de 128 comandos por tick/emisor: el 129.º es
+  `RATE_LIMITED`. Redistribuye tests antiguos que inyectan cientos en un tick o
+  verifica explícitamente sus rechazos.
 - CTest ejecuta `data_compile` y el nuevo `chunsa_test_data_blob`.
+- `data_compile` genera al build dir y compara bytes y sidecar contra el golden
+  versionado; nunca regenera ni sobrescribe el golden rastreado.
 - No dependas del cwd implícito: usa rutas CMake/source dir estables.
 - El golden se genera por el compilador Python; no escribas bytes CHDB a mano.
 
