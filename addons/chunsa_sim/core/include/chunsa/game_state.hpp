@@ -10,6 +10,7 @@
 #include "chunsa/commands.hpp"
 #include "chunsa/vision.hpp"
 #include "chunsa/flow_field.hpp"
+#include "chunsa/economy.hpp"
 
 // chunsa_sim_core — GameState (SoA, pools preasignados) y su configuración.
 // SPEC-001 §1.2/§3.2. Autor: Arquitecto.
@@ -90,6 +91,20 @@ struct GameState {
     int32_t morale[ENTITY_HARD_CAP];   // 0..MORALE_MAX; SPAWN_UNIT lo pone a MORALE_MAX
     uint8_t fleeing[ENTITY_HARD_CAP];  // 1 = en pánico (huye, no ataca)
 
+    // Economía mínima (Sprint 0.3, base §3.4). ESTADO: serializado + checksummeado.
+    // Módulo economy.hpp es autocontenido (sin GameState); el wiring vive aquí y
+    // en step.hpp. Depósitos: posiciones fijas deterministas (gs_init_deposits);
+    // remaining SÍ cambia en juego, por eso es estado, no derivada.
+    EcoDeposit deposits[ECO_MAX_DEPOSITS];
+    uint32_t   n_deposits;
+    int64_t    dropoff_x[MAX_EMITTERS];
+    int64_t    dropoff_y[MAX_EMITTERS];
+    int64_t    player_stock[MAX_EMITTERS][3];   // índice: 0=A, 1=B, 2=Me
+    EcoState   eco_state[ENTITY_HARD_CAP];
+    uint32_t   eco_assigned_deposit[ENTITY_HARD_CAP];
+    int32_t    eco_carry[ENTITY_HARD_CAP];
+    uint8_t    eco_carry_resource[ENTITY_HARD_CAP];
+
     // DestroyBatch del tick en curso (paso 6 de Step: se ordena ASC y se recicla).
     uint32_t destroy_batch[PENDING_CAP];
     uint32_t destroy_count;
@@ -108,6 +123,37 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.attack[i] = 0; g.range_mt[i] = 0;
     g.unit_class[i] = 0; g.atk_cd[i] = 0;
     g.morale[i] = 0; g.fleeing[i] = 0;
+    g.eco_state[i] = EcoState::SEEK;
+    g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
+    g.eco_carry[i] = 0;
+    g.eco_carry_resource[i] = 0;
+}
+
+// Patrón determinista fijo de depósitos (Sprint 0.3, economía mínima): 2 de
+// cada recurso (A/B/Me), posiciones fijas repartidas por el mapa 256×256.
+// El dropoff de cada jugador es un punto fijo por índice de emisor.
+inline void gs_init_economy(GameState& g) noexcept {
+    const int64_t T = FX_ONE_RAW;  // 1 tile en raw
+    struct { int64_t tx, ty; uint8_t res; } fixed[6] = {
+        {40, 40, 0}, {216, 216, 0},   // A
+        {40, 216, 1}, {216, 40, 1},   // B
+        {128, 40, 2}, {128, 216, 2},  // Me
+    };
+    g.n_deposits = 6;
+    for (uint32_t i = 0; i < 6; ++i) {
+        g.deposits[i].x_raw = fixed[i].tx * T + T / 2;
+        g.deposits[i].y_raw = fixed[i].ty * T + T / 2;
+        g.deposits[i].resource_idx = fixed[i].res;
+        g.deposits[i].remaining = 500;
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        const int64_t dtx = 20 + static_cast<int64_t>(e) * 28;
+        g.dropoff_x[e] = dtx * T + T / 2;
+        g.dropoff_y[e] = 128 * T + T / 2;
+        g.player_stock[e][0] = 0;
+        g.player_stock[e][1] = 0;
+        g.player_stock[e][2] = 0;
+    }
 }
 
 // Patrón determinista fijo del cost_grid de navegación (Sprint 0.2): todo
@@ -131,6 +177,7 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     et_init(g.entities, cfg.max_entities);
     sh_init(g.shash, cfg.map_tiles_x, cfg.map_tiles_y);
     vis_init(g.vision, cfg.map_tiles_x, cfg.map_tiles_y);
+    gs_init_economy(g);
     gs_init_cost_grid(g);
     g.flow_has_goal = 0;
     g.flow_dirty = 0;

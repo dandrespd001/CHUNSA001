@@ -238,6 +238,27 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.morale[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.fleeing[i]);
 
+    // (k) Economía (Sprint 0.3): depósitos (fijos, ECO_MAX_DEPOSITS slots),
+    // dropoffs+stock por emisor, y componentes por-ciudadano, mismo orden que checksum.
+    w.u32(g.n_deposits);
+    for (uint32_t i = 0; i < ECO_MAX_DEPOSITS; ++i) {
+        w.i64(g.deposits[i].x_raw);
+        w.i64(g.deposits[i].y_raw);
+        w.u8 (g.deposits[i].resource_idx);
+        w.i32(g.deposits[i].remaining);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        w.i64(g.dropoff_x[e]);
+        w.i64(g.dropoff_y[e]);
+        w.i64(g.player_stock[e][0]);
+        w.i64(g.player_stock[e][1]);
+        w.i64(g.player_stock[e][2]);
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8 (static_cast<uint8_t>(g.eco_state[i]));
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.eco_assigned_deposit[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.eco_carry[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.eco_carry_resource[i]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -344,7 +365,7 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.unit_class          = r.u8();
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        if (type_raw < 1 || type_raw > 5)    return false; // CommandType ∈ {1,2,3,4,5}
+        if (type_raw < 1 || type_raw > 6)    return false; // CommandType ∈ {1..6}
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -398,6 +419,45 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     // (j) Moral (Sprint 0.3): 2 arrays, mismo orden que gs_serialize.
     for (uint32_t i = 0; i < cap_e; ++i) g.morale[i]  = r.i32();
     for (uint32_t i = 0; i < cap_e; ++i) g.fleeing[i] = r.u8();
+    if (r.fail) return false;
+
+    // (k) Economía (Sprint 0.3): mismo orden que gs_serialize. Validación:
+    // resource_idx/eco_carry_resource < 3, eco_state <= 2 (RETURN), assigned_deposit
+    // < ECO_MAX_DEPOSITS o == ECO_NO_DEPOSIT.
+    g.n_deposits = r.u32();
+    if (r.fail || g.n_deposits > ECO_MAX_DEPOSITS) return false;
+    for (uint32_t i = 0; i < ECO_MAX_DEPOSITS; ++i) {
+        g.deposits[i].x_raw = r.i64();
+        g.deposits[i].y_raw = r.i64();
+        const uint8_t ridx = r.u8();
+        if (ridx > 2u) return false;
+        g.deposits[i].resource_idx = ridx;
+        g.deposits[i].remaining = r.i32();
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        g.dropoff_x[e] = r.i64();
+        g.dropoff_y[e] = r.i64();
+        g.player_stock[e][0] = r.i64();
+        g.player_stock[e][1] = r.i64();
+        g.player_stock[e][2] = r.i64();
+    }
+    if (r.fail) return false;
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint8_t st = r.u8();
+        if (st > static_cast<uint8_t>(EcoState::RETURN)) return false;
+        g.eco_state[i] = static_cast<EcoState>(st);
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint32_t ad = r.u32();
+        if (ad != ECO_NO_DEPOSIT && ad >= ECO_MAX_DEPOSITS) return false;
+        g.eco_assigned_deposit[i] = ad;
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) g.eco_carry[i] = r.i32();
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint8_t cr = r.u8();
+        if (cr > 2u) return false;
+        g.eco_carry_resource[i] = cr;
+    }
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes

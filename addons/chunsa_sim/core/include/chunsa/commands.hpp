@@ -15,6 +15,7 @@ enum class CommandType : uint16_t {
     DESTROY_DEBUG = 3,
     FLOW_MOVE = 4,
     SPAWN_UNIT = 5,
+    SPAWN_CITIZEN = 6,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

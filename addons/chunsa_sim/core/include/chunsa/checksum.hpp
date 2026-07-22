@@ -111,6 +111,26 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     // Moral (Sprint 0.3): componentes por índice ascendente, todos los slots.
     for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.morale[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.fleeing[i]);
+    // Economía (Sprint 0.3): depósitos (todos los slots fijos), dropoffs y stock
+    // por emisor, y componentes por-ciudadano por índice ascendente.
+    h.u32(g.n_deposits);
+    for (uint32_t i = 0; i < ECO_MAX_DEPOSITS; ++i) {
+        h.i64(g.deposits[i].x_raw);
+        h.i64(g.deposits[i].y_raw);
+        h.u8(g.deposits[i].resource_idx);
+        h.i32(g.deposits[i].remaining);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        h.i64(g.dropoff_x[e]);
+        h.i64(g.dropoff_y[e]);
+        h.i64(g.player_stock[e][0]);
+        h.i64(g.player_stock[e][1]);
+        h.i64(g.player_stock[e][2]);
+    }
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(static_cast<uint8_t>(g.eco_state[i]));
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.eco_assigned_deposit[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.eco_carry[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.eco_carry_resource[i]);
     return h.digest();
 }
 

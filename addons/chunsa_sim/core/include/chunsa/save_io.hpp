@@ -21,7 +21,7 @@
 namespace chunsa {
 
 inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 5;  // v5: +moral (morale/fleeing)
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 6;  // v6: +economía (deposits/stock/citizens)
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

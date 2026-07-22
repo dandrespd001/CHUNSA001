@@ -87,6 +87,35 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.fleeing[i] = 0;
             return RejectReason::ACCEPTED;
         }
+        case CommandType::SPAWN_CITIZEN: {
+            // Ciudadano económico: unit_class=3 lo excluye de combat_system (ambos
+            // lados: atacante y objetivo — ver el guard `> 2` allí). hp nominal, no
+            // se daña en v1 (nada apunta a class>2), pero se mantiene coherente con
+            // la EntityTable (vivo/muerto) por si el futuro añade amenazas.
+            const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            if (!world_contains(p) || c.p.speed_mtpt <= 0) {
+                return RejectReason::MALFORMED;
+            }
+            const EntityHandle h = et_spawn(g.entities);
+            if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
+            const uint32_t i = h.index;
+            g.pos_x[i] = c.p.x_raw; g.pos_y[i] = c.p.y_raw;
+            g.tgt_x[i] = c.p.x_raw; g.tgt_y[i] = c.p.y_raw;
+            g.vel_x[i] = 0; g.vel_y[i] = 0;
+            g.owner[i] = static_cast<uint8_t>(c.emitter);
+            g.hp[i] = g.max_hp[i] = 20;
+            g.attack[i] = 0; g.range_mt[i] = 0;
+            g.unit_class[i] = 3;  // citizen: excluido de combat_system
+            g.atk_cd[i] = 0;
+            g.speed_mtpt[i] = c.p.speed_mtpt;
+            g.morale[i] = MORALE_MAX;
+            g.fleeing[i] = 0;
+            g.eco_state[i] = EcoState::SEEK;
+            g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
+            g.eco_carry[i] = 0;
+            g.eco_carry_resource[i] = 0;
+            return RejectReason::ACCEPTED;
+        }
         case CommandType::MOVE_TO: {
             if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
             const uint32_t i = c.p.handle.index;
@@ -140,6 +169,14 @@ inline void movement_v1(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
+        // Endurecimiento del Arquitecto (Sprint 0.3, economía): los ciudadanos
+        // (unit_class==3) NO usan seek/flujo/huida — su movimiento es propiedad
+        // exclusiva de economy_system (que corre más tarde en el mismo tick).
+        // Sin este guard, tgt_x/tgt_y queda congelado en la posición de spawn y
+        // esta rama de seek "corrige" cada tick el avance de economy_system de
+        // vuelta hacia el spawn (efecto banda elástica) — bug real detectado
+        // en la verificación del contrato de economía, no parte de él.
+        if (g.unit_class[i] > 2) continue;
         if (g.fleeing[i]) {
             // Huir: moverse en dirección OPUESTA al enemigo vivo más cercano
             // (celda + 8 vecinas). Si no hay enemigo cerca, quedarse quieto.
@@ -276,6 +313,7 @@ inline void combat_system(GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.hp[i] <= 0) continue;
+        if (g.unit_class[i] > 2) continue;  // ciudadanos (Sprint 0.3): no atacan
         if (g.fleeing[i]) { if (g.atk_cd[i] > 0) --g.atk_cd[i]; continue; }
         if (g.atk_cd[i] > 0) { --g.atk_cd[i]; continue; }
 
@@ -305,6 +343,7 @@ inline void combat_system(GameState& g) noexcept {
                     if (!t.alive[j]) continue;
                     if (g.hp[j] <= 0) continue;
                     if (g.owner[j] == g.owner[i]) continue;
+                    if (g.unit_class[j] > 2) continue;  // ciudadanos: no son objetivo válido
 
                     FatalReason local_fatal = FatalReason::NONE;
                     const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
@@ -385,6 +424,46 @@ inline void morale_system(GameState& g) noexcept {
     }
 }
 
+// Economía mínima (Sprint 0.3): pump del módulo autocontenido economy.hpp para
+// cada ciudadano vivo (unit_class==3), en orden ascendente. economy.hpp NO muta
+// deposits[]/player_stock (devuelve deltas); esta función es el único punto que
+// los aplica, garantizando mutación en orden determinista y sin doble aplicación.
+inline void economy_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.unit_class[i] != 3) continue;  // solo ciudadanos
+
+        EcoCitizenIn in{};
+        in.pos_x = g.pos_x[i];
+        in.pos_y = g.pos_y[i];
+        in.state = g.eco_state[i];
+        in.assigned_deposit = g.eco_assigned_deposit[i];
+        in.carry = g.eco_carry[i];
+        in.carry_resource_idx = g.eco_carry_resource[i];
+        in.speed_mtpt = g.speed_mtpt[i];
+
+        const uint8_t owner_i = g.owner[i];
+        const EcoCitizenOut out = eco_step_citizen(
+                in, g.deposits, g.n_deposits,
+                g.dropoff_x[owner_i], g.dropoff_y[owner_i], g.fatal);
+
+        g.pos_x[i] = out.pos_x; g.pos_y[i] = out.pos_y;
+        g.vel_x[i] = out.vel_x; g.vel_y[i] = out.vel_y;
+        g.eco_state[i] = out.state;
+        g.eco_assigned_deposit[i] = out.assigned_deposit;
+        g.eco_carry[i] = out.carry;
+        g.eco_carry_resource[i] = out.carry_resource_idx;
+
+        if (out.did_harvest && out.assigned_deposit < g.n_deposits) {
+            g.deposits[out.assigned_deposit].remaining -= out.harvested_amount;
+        }
+        if (out.did_dropoff && out.dropoff_resource_idx < 3u) {
+            g.player_stock[owner_i][out.dropoff_resource_idx] += out.dropoff_amount;
+        }
+    }
+}
+
 }  // namespace detail
 
 // Ejecuta el tick t = g.tick con el corte de ingesta `batch` (RawCommands
@@ -452,6 +531,9 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // (5c) Moral (Sprint 0.3, doc 07 §7.6): tras el combate del tick,
         // para reaccionar a lo que pasó. Antes de DESTROY.
         detail::morale_system(g);
+
+        // (5c) Economía mínima (Sprint 0.3): cada tick, período 1. Antes de DESTROY.
+        detail::economy_system(g);
 
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.
         for (uint32_t a = 1; a < g.destroy_count; ++a) {
