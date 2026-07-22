@@ -57,7 +57,7 @@ Acumula cuando sea seguro y emite una línea estable por error: `ERROR <code> <k
 2. Todas las refs existen y son del kind correcto. Capabilities/behaviors/materials/variant groups deben estar declarados. `base:*` también requiere namespace owned.
 3. `civ_id`/`available_to` y listas civ unit/building/tech coinciden bidireccionalmente.
 4. Epoch windows ordenadas, dentro de civ y con solape. Todos los playable_period_ids existen en la civ. Periodos/años ordenados sin solape ni año 0. Counterfactual ya condicionado por schema.
-5. Unit: suppression tags incompatibles; reglas citizen/combat; D1 compila siege/naval pero no activa.
+5. Unit: suppression tags incompatibles; reglas citizen/combat; coste de recurso con al menos un valor `>0`; D1 compila siege/naval pero no activa. Building constructible y tech no-institution aplican el mismo requisito salvo que satisfagan literalmente la alternativa material permitida por sus schemas.
 6. Tech prerequisites DAG; mutually_exclusive simétrico; no self refs; regional group declarado. Material_costs cuenta solo declared material strategic=true y máximo 2.
 7. Materiales: IDs únicos. Spawn material solo kind deposit. Recipe output solo intermediate, no autoconsumo; grafo input-material→output acíclico. Refs/costes declarados.
 8. Map: width*height checked; terrain/cost RLE suma exacta y runs adyacentes iguales prohibidos. Row-major. Bounds half-open x<width*1000/y<height*1000 con checked; starts/deposits sobre cost!=255 y terrain!=water; cells únicas y no compartidas start/deposit. starting_positions se canoniza por slot. resource_spawns por `(y,x,kind_code,id UTF-8,amount)` con resource=0/material=1. Resource id debe ser A/B/P/W/Me/F/I/El; material record_id deposit.
@@ -118,7 +118,7 @@ Valida CHDB hostil con todos los caps. Sin `--json`, imprime versiones/flags/has
 Unittest, temp dirs, sin red/subprocess salvo invocar `main(argv)` directamente. Incluye fixtures sintéticos mínimos de los 7 schemas.
 
 - YAML adversarial: duplicado, alias/anchor, merge, tag, multidoc, yes/on/null/date/float/hex/octal/cero inicial, non-NFC, profundidad17, oversized.
-- Schema: un negativo representativo por kind y refs locales sin red.
+- Schema: un negativo representativo por kind, costes solo-cero para unit/building/tech no-institution y refs locales sin red.
 - Semantic: duplicate cross-kind, namespace, missing/wrong-kind refs, cycles, civ bidireccional, periods, materials/recipes, map RLE/bounds/cells, AI points, provenance release/dev.
 - Determinismo: filenames/map keys/sets/comments reordenados producen bytes/hash iguales; entero semántico cambia hash.
 - Assert header/directorio/sections/flags y sidecar bytes exactos.
