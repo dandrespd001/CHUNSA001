@@ -1,0 +1,48 @@
+schema_version: 1
+id: egipto:composite_bow_program
+display_name_key: egipto:tech.composite_bow_program
+description_key: egipto:tech.composite_bow_program.description
+available_to:
+  - egipto:dynastic_nile
+epoch: 4
+branch: M
+evidence: H
+resource_costs:
+  A: 60
+  Me: 40
+required_capabilities: []
+research_time_ticks: 800
+prerequisites: []
+required_buildings:
+  - egipto:chariotry_stable
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - egipto:composite_bow_craft
+playable_period_ids:
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Wikipedia, Composite bow"
+        locator: "Composite bow made from horn, wood, and sinew laminated with glue; spread to ancient Egypt from sedentary Bronze Age civilizations in Anatolia or Mesopotamia; several composite bows were found in the tomb of Tutankhamun, who died in 1324 BCE"
+        url: "https://en.wikipedia.org/wiki/Composite_bow"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: el arco compuesto (madera+cuerno+tendón) se difundió en Egipto hacia el Segundo Período Intermedio y fue central en la panoplia del Reino Nuevo; costes A=60 Me=40, 800 ticks, dependencia de la stable y el grants de egipto:composite_bow_craft son balance/diseño del slice."
+    reviewed_by:
+    - minimax

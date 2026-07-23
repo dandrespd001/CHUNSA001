@@ -1,0 +1,47 @@
+schema_version: 1
+id: egipto:corvee_logistics
+display_name_key: egipto:tech.corvee_logistics
+description_key: egipto:tech.corvee_logistics.description
+available_to:
+  - egipto:dynastic_nile
+epoch: 4
+branch: E
+evidence: H
+resource_costs:
+  A: 80
+required_capabilities: []
+research_time_ticks: 700
+prerequisites: []
+required_buildings: []
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - egipto:corvee_levy
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Wikipedia, Economy of ancient Egypt"
+        locator: "Farmers were also subject to a labor tax and were required to work on irrigation or construction projects in a corvée system; under the direction of the vizier, state officials collected taxes, coordinated irrigation projects to improve crop yield, and drafted peasants to work on construction projects"
+        url: "https://en.wikipedia.org/wiki/Economy_of_ancient_Egypt"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: la corvea (prestación laboral obligatoria para obras de irrigación y construcción) está documentada para el Reino Antiguo y persistió en el Nuevo; costes A=80, 700 ticks, sin edificio previo y el grants de egipto:corvee_levy son balance/diseño del slice."
+    reviewed_by:
+    - minimax

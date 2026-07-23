@@ -1,0 +1,52 @@
+schema_version: 1
+id: rome:castra_barracks
+civ_id: rome:republic_imperial
+display_name_key: rome:building.castra_barracks
+description_key: rome:building.castra_barracks.description
+epoch_window:
+  - 5
+  - 5
+kind: military
+footprint:
+  width_cells: 3
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 900
+constructible: true
+resource_costs:
+  B: 80
+build_time_ticks: 600
+trains:
+  - rome:legionary
+  - rome:ballista_crew
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Wikipedia, Castra"
+        locator: "Barracks were situated in the front and rear areas of the fortress; each cohort comprised six barrack blocks, positioned in parallel alignment, frequently arranged in facing pairs; buildings were rectangular in plan, measuring 30-100 x 7-15m, and divided into contubernia (usually 10-13 in number) with a front and rear room (probably for storage and sleeping respectively)"
+        url: "https://en.wikipedia.org/wiki/Castra"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: los castra romanos disponían de barracks organizados por cohortes con contubernia para 8 hombres; HP, coste B=80, tiempo 600, footprint 3x2 y el trains de rome:legionary/rome:ballista_crew son balance/diseño del slice."
+    reviewed_by:
+    - minimax

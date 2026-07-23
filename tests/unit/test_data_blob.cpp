@@ -219,8 +219,8 @@ int main() {
     const DataCatalogV1& cat = store.catalog();
     CHECK(cat.unit_count == 5);
     static constexpr uint8_t kExpectedHash[32] = {
-        0x0c, 0xda, 0x77, 0xee, 0x7d, 0xdb, 0xbb, 0x54, 0xb8, 0x93, 0x3b, 0x0e, 0x83, 0xe2, 0x2f, 0x1e,
-        0x6a, 0xe5, 0xf6, 0x0e, 0x1f, 0xe3, 0x7c, 0x4b, 0xfd, 0x68, 0x09, 0x28, 0x2f, 0xf6, 0x6e, 0xf0,
+        0xe1, 0x73, 0xbe, 0x0a, 0x3c, 0xb1, 0xc6, 0x8d, 0xac, 0xc0, 0x13, 0xc7, 0x81, 0x17, 0x81, 0x73,
+        0x6d, 0xaf, 0xe5, 0x5b, 0x3c, 0x4d, 0x77, 0x64, 0x42, 0xf1, 0xd6, 0xef, 0x97, 0x6f, 0x0f, 0xb1,
     };
     CHECK(std::memcmp(cat.content_hash.bytes, kExpectedHash, 32) == 0);
     CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 0);
@@ -558,12 +558,15 @@ int main() {
     // 12) Sprint 1.1 (SPEC-004 §2): catálogo tipado de edificios.
     {
         // 12a) Golden REAL (data/buildings/, ya compilado por MiniMax + cierre
-        // del Arquitecto): building_count==4, catalog_find_building resuelve
-        // los 4 record_id, y los campos tipados coinciden con los YAML —
-        // incluido egipto:settlement_center/rome:forum_center, que son
+        // del Arquitecto): catalog_find_building resuelve los record_id del
+        // Sprint 1.1 y los campos tipados coinciden con los YAML — incluido
+        // egipto:settlement_center/rome:forum_center, que son
         // constructible:false + build_time_ticks:0 (enmienda del Arquitecto
         // 2026-07-23, SPEC-004 §4.1.2/§4.3: el loader debe ACEPTAR T==0).
-        CHECK(cat.building_count == 4);
+        // Sprint 1.2 añade los cuarteles: el conteo crece con los datos (>= 4,
+        // exacto 6 desde mm/datos-tech-1.2); los checks por record_id de abajo
+        // son los que fijan el contrato, no el conteo.
+        CHECK(cat.building_count == 6);
 
         auto find = [&](const char* name) {
             return catalog_find_building(cat, name, std::strlen(name));

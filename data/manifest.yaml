@@ -8,6 +8,9 @@ owned_namespaces:
   - rome
 declared_capabilities:
   - egipto:coordinate_flood
+  - egipto:composite_bow_craft
+  - egipto:corvee_levy
+  - rome:legion_drill
   - rome:maintain_public_infrastructure
 declared_behaviors:
   - base:melee_line_v1

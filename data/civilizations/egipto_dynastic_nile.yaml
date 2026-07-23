@@ -39,7 +39,10 @@ unit_ids:
 building_ids:
   - egipto:settlement_center
   - egipto:shena_granary
-tech_ids: []
+  - egipto:chariotry_stable
+tech_ids:
+  - egipto:composite_bow_program
+  - egipto:corvee_logistics
 art_rule_keys:
   - egipto:art.period_and_provenance
   - egipto:art.responsible_labor
@@ -49,10 +52,10 @@ review_roles:
 provenance:
   status: promoted
   generator: human
-  task_id: T1-egipto-roma-m1
-  generated_on: "2026-07-22"
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
   reviewed_by:
-    - architect
+    - minimax
   historical_claims:
     evidence: H
     verification_reports:
@@ -64,7 +67,7 @@ provenance:
         url: "https://www.ucl.ac.uk/museums-static/digitalegypt/chronology/index.html"
         accessed_on: "2026-07-22"
   balance_design:
-    author: architect
-    rationale: "Ventanas y verbo derivados de la ficha promovida; efectos y números siguen siendo diseño calibrable."
+    author: minimax
+    rationale: "Sprint 1.2 añade la stable militar de chariotría y dos tech (composite_bow_program, corvee_logistics) a la ficha; la stable referencia la chariotría del Reino Nuevo y la corvea la prestación laboral documentada desde el Reino Antiguo; los grants y costes son diseño del slice, pendiente de promoción por el Arquitecto."
     reviewed_by:
-      - architect
+      - minimax

@@ -1,0 +1,49 @@
+schema_version: 1
+id: rome:marching_drill
+display_name_key: rome:tech.marching_drill
+description_key: rome:tech.marching_drill.description
+available_to:
+  - rome:republic_imperial
+epoch: 5
+branch: M
+evidence: H
+resource_costs:
+  A: 60
+  Me: 40
+required_capabilities: []
+research_time_ticks: 800
+prerequisites: []
+required_buildings:
+  - rome:castra_barracks
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - rome:legion_drill
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Wikipedia, Roman infantry tactics"
+        locator: "During the four-month initial training of a Roman legionary, marching skills were taught before recruits ever handled a weapon; recruits mastered the regular step or military pace (20 Roman miles in five summer hours with 20.5 kg), then the faster step or full pace (24 Roman miles in five summer hours loaded with 20.5 kg)"
+        url: "https://en.wikipedia.org/wiki/Roman_infantry_tactics"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: la instrucción legionaria romana hacía del march (paso regular y paso rápido) una de las cuatro habilidades enseñadas antes de tocar arma; costes A=60 Me=40, 800 ticks, dependencia de la castra y el grants de rome:legion_drill son balance/diseño del slice."
+    reviewed_by:
+    - minimax
