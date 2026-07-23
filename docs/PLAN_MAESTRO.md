@@ -31,7 +31,9 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | 0.1B | ✅ COMPLETO | Saves/envelope + fuzzing, replays, gates G3/G4/G5, ring de snapshots, `chunsa_data_compiler` + `unit.schema.json`. |
 | 0.2 | ✅ COMPLETO | Godot 4.7.1 + GDExtension (`ChunsaSimNode`, sim 20 Hz en hilo + ring), SPIKE-RENDER-0 → **ADR-009** (3D ortográfico + depth buffer), FlowField v1 integrado al movimiento, Visión/LoS v1, render de producción con interpolación 60 fps. |
 | 0.3 | ✅ COMPLETO | Combate RPS v1 · moral/pánico v1 · **aggro/persecución v1** (el combate llega a resolución) · economía mínima v1 (A/B/Me, ciudadanos SEEK/HARVEST/RETURN, 6 depósitos, dropoff) · demo showcase integrada · **selección y órdenes del jugador con clic** (hito de interactividad). Save v6, ctest 10/10, G1–G5 verdes. |
-| 0.3-cierre | ✅ CERRADO (`ad6c306`) | **Replay v2 con `effective_tick`** (agenda auto-verificada, `schedule_mismatches`, ctest 11/11) · **ADR-021 aplicado** a SPEC base (MP = solo preparación) · **PERF-0 documentado como bloqueado** (sin hardware UHD 620) · **verificación de fichas 3/4** (Egipto/Roma/Tawantinsuyu; veredicto ADR-014: ninguna se promueve, corregir en 0.4) · `docs/REPORTE_SPRINT_0.3.md`. |
+| 0.3-cierre | ✅ CERRADO (`ad6c306`) | **Replay v2 con `effective_tick`** (agenda auto-verificada, `schedule_mismatches`, ctest 11/11) · **ADR-021 aplicado** a SPEC base (MP = solo preparación) · **PERF-0 documentado como bloqueado** (sin hardware UHD 620) · **verificación de fichas 4/4** (fabricación de citas cazada en 3; veredicto ADR-014: corregir en 0.4) · `docs/REPORTE_SPRINT_0.3.md`. |
+| 0.4 | ✅ COMPLETO (`0995629`) | **Datos reales**: SPEC-002 (16 secciones), 8 schemas, compilador CHDB determinista (blob bit-exacto), fichas corregidas y promovidas, loader CHDB auditado (Opus, 2 P1 cerrados), SPAWN_UNIT/CITIZEN por `unit_id`, checksum v2, save v7, procedencia vendorizada (`E_PROVENANCE`), adaptador Godot data-driven. ctest 13/13. `docs/REPORTE_SPRINT_0.4.md`. |
+| **1.1** | ✅ COMPLETO (`9eb6c56`) | **Edificios y construcción**: SPEC-004 Parte I + exención de escenario · datos (4 edificios promovidos, blob building=4) · kernel (PLACE_BUILDING/ASSIGN_BUILD, construction_system, dropoff-edificio con fallback legacy bit-exacto, combate vs edificios, save v8/checksum v3; auditoría Opus SIN P0) · UI Godot (render footprint/progreso, ghost B/N, constructores, centros por comandos). ctest 14/14, demo entrega stock al centro. **Deuda ALTA → replay v3 en 1.2** (v2 no serializa `unit_id`). `docs/REPORTE_SPRINT_1.1.md`. |
 
 ### Deuda documentada (bloqueos externos, no de trabajo)
 
@@ -117,7 +119,11 @@ Documentos de diseño canónicos que alimentan cada SPEC (rutas en `/home/adquio
 
 **Meta de fase**: una partida COMPLETA y ganable de 30+ minutos, Egipto vs Roma (época M1), humano vs IA, con UI real — el primer momento en que CHUNSA es un juego y no una demo.
 
-#### Sprint 1.1 — edificios y construcción
+#### Sprint 1.1 — edificios y construcción ✅ COMPLETO (2026-07-23, ver §1 y REPORTE_SPRINT_1.1)
+Desviaciones del plan original: `CANCEL_BUILD` no se implementó (no lo exigía el DoD; el
+constructor se reasigna re-ordenándolo); el módulo constructor lo hizo Sonnet dentro del
+kernel (no MiniMax standalone — MiniMax hizo los datos); el render lo hizo Codex/Luna Max
+(Kimi sin cuota). El Sprint 1.2 debe abrir con **replay v3** (deuda ALTA, D8).
 - **Objetivo**: el mapa deja de ser plano — edificios con presencia física y ciudadanos que los construyen.
 - **Entregables**:
   1. **SPEC-004 (parte construcción)**: placement sobre cost_grid (celdas ocupadas = FF_WALL para el flowfield — reutiliza la integración existente), validación de solape/terreno, HP/destrucción de edificios (entran al combate como objetivos), comandos `PLACE_BUILDING`/`CANCEL_BUILD` (append-only al enum).
