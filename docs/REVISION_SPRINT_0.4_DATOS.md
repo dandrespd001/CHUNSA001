@@ -33,6 +33,15 @@ La corrección de Codex es **legítima y rigurosa**: retiró las citas fabricada
 ## Veredicto del revisor
 **Capa de datos: ACEPTABLE CON CORRECCIONES.** El determinismo (lo sagrado) es impecable y los datos/schemas/tests son sólidos. El único hallazgo de peso es P1-1 (procedencia auto-contenida en el repo), corregible sin tocar el diseño. Los P2 son menores.
 
+## Cierre de integración (Arquitecto, 2026-07-23)
+Las dos piezas pendientes se delegaron a **Sonnet** (worktrees aislados), se revisaron y se integraron en `arch/sprint-0.4-integration`:
+- **P1-1 procedencia** (`295f7b6`): evidencia vendorizada dentro del repo + `E_PROVENANCE` (existencia obligatoria) + reconoce `.yml`. Verificado: 30/30 tests, blob bit-idéntico (content_hash sin cambios).
+- **Kernel data-driven** (`merge` tras `dfe599f`): loader CHDB (auditado por Opus — sin OOB/overflow/no-determinismo; 2 P1 cerrados con ASan: fuga de `Impl` y NFC parcial), SPAWN_UNIT/CITIZEN por `unit_id`, checksum v2, save v7. Desviaciones del brief documentadas en `SONNET_KERNEL_DATOS_SPEC002_RESULT.md`.
+- **Reconciliación del Arquitecto**: el gate `data_compile` elige el Python que realmente importa las deps (unifica los enfoques venv/system de las dos ramas).
+- **Verificación de integración final** (P1-1 + kernel juntos, build limpio): golden 1074/1074 · G1 `45801aa2` `alloc_delta=0` · G3/G4 `8ebe4c09` · G5 `309cd496` schedule_mismatches=0 · **ctest 13/13**. Determinismo intacto; los checksums cambiaron solo por el checksum v2 (intencional).
+
+**Deuda que queda antes de main**: (1) migrar el adaptador Godot (`chunsa_sim_node.cpp`) al contrato data-driven — la demo no spawnea hasta entonces; (2) desviaciones del brief (save v7 envelope literal, replay v3, CLI `--data`, revalidación de `unit_id` en load); (3) P2 del loader ya resueltas.
+
 ## Estado del Sprint 0.4 y siguiente paso
 - ✅ Capa de datos (SPEC-002, schemas, compilador, blob, fichas) — aceptada con P1-1 pendiente.
 - ⏳ **Kernel data-driven** (SPAWN_UNIT por `unit_id`, save v7, replay v3) — brief cerrado listo en `docs/briefs/SONNET_KERNEL_DATOS_SPEC002.md`, NO ejecutado. Es la otra mitad del sprint.

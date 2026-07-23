@@ -87,18 +87,39 @@ add_test(NAME data_blob COMMAND chunsa_test_data_blob)
 
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
-# no parte de este sprint). Si existe un venv local `.venv` (gitignored; ver
-# nota abajo) con esas dependencias, se prefiere para no depender de paquetes
-# del sistema o de un intérprete "externally managed" (PEP 668/uv) que
-# rechace `pip install`. Fallback: descubrimiento estándar de CMake si no
-# existe `.venv` (comportamiento previo intacto).
+# no parte del juego: solo tooling de datos). El intérprete se elige por el
+# PRIMERO que REALMENTE pueda importar esas deps (verificado con un import real,
+# para no elegir un Python "externally managed"/uv que las tenga ausentes), en
+# orden: (1) venv local .venv (gitignored), (2) descubrimiento estándar de CMake,
+# (3) /usr/bin/python3 (system Python de Linux, que suele traerlas). Reconciliación
+# del Arquitecto: unifica los dos enfoques de las ramas de datos (venv vs system).
+set(_chunsa_pycandidates "")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3")
-    set(Python3_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3" CACHE FILEPATH
-        "Intérprete Python para el gate data_compile (venv local si existe)")
+    list(APPEND _chunsa_pycandidates "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3")
 endif()
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    list(APPEND _chunsa_pycandidates "${Python3_EXECUTABLE}")
+endif()
+if(EXISTS "/usr/bin/python3")
+    list(APPEND _chunsa_pycandidates "/usr/bin/python3")
+endif()
+set(CHUNSA_DATA_PY "")
+foreach(_py IN LISTS _chunsa_pycandidates)
+    execute_process(COMMAND "${_py}" -c "import jsonschema, yaml, referencing"
+        RESULT_VARIABLE _rc OUTPUT_QUIET ERROR_QUIET)
+    if(_rc EQUAL 0)
+        set(CHUNSA_DATA_PY "${_py}")
+        break()
+    endif()
+endforeach()
+if(CHUNSA_DATA_PY STREQUAL "")
+    message(WARNING "data_compile: ningún Python con jsonschema+yaml+referencing; "
+        "el gate fallará. Instala esas deps (pip) o crea un .venv en la raíz.")
+    set(CHUNSA_DATA_PY "${Python3_EXECUTABLE}")
+endif()
 add_test(NAME data_compile
-    COMMAND ${Python3_EXECUTABLE} -m unittest discover
+    COMMAND ${CHUNSA_DATA_PY} -m unittest discover
             -s ${CMAKE_CURRENT_SOURCE_DIR}/tools/data_compile
             -p test_*.py -v)
 set_tests_properties(data_compile PROPERTIES
