@@ -13,9 +13,9 @@ footprint:
   blocks_movement: true
 stats:
   hp: 1500
-constructible: true
+constructible: false
 resource_costs: {}
-build_time_ticks: 1
+build_time_ticks: 0
 dropoff_resources:
   - A
   - B
@@ -30,7 +30,7 @@ playable_period_ids:
   - rome:high_empire
 availability_mode: historical
 provenance:
-  status: draft_unverified
+  status: promoted
   generator: human
   task_id: Sprint-1.1-datos-edificios
   generated_on: "2026-07-23"
@@ -48,6 +48,6 @@ provenance:
         accessed_on: "2026-07-23"
   balance_design:
     author: minimax
-    rationale: "Identidad histórica: el Foro Romano funcionó como centro cívico/comercial/judicial de Roma desde la República; HP, coste cero, tiempo 1, footprint 3x3, dropoff universal A/B/Me y rol jugable son balance."
+    rationale: "Identidad histórica: el Foro Romano funcionó como centro cívico/comercial/judicial de Roma desde la República; HP, pre-colocado por escenario (no construible), footprint 3x3, dropoff universal A/B/Me y rol jugable son balance."
     reviewed_by:
       - architect
