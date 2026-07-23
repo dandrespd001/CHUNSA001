@@ -98,6 +98,31 @@ struct UnitNameIndexV1 {
     UnitId id;
 };
 
+// Sprint 1.1 (SPEC-004 §2): tabla tipada de edificios, API espejo de la de
+// unidades. `id` == índice en `DataCatalogV1::buildings[]`.
+using BuildingId = uint32_t;
+inline constexpr BuildingId INVALID_BUILDING_ID = 0xFFFFFFFFu;
+
+struct BuildingDefinitionV1 {
+    BuildingId id;                 // == índice
+    int32_t  hp;                   // > 0
+    uint8_t  footprint_w;          // tiles, 1..8
+    uint8_t  footprint_h;          // tiles, 1..8
+    uint32_t build_time_ticks;     // >= 0 (enmienda del Arquitecto 2026-07-23,
+                                   // SPEC-004 §4.1.2/§4.3: 0 = nace completo,
+                                   // reservado a `constructible:false` de escenario)
+    int32_t  cost_a, cost_b, cost_me;  // >= 0 (deducidos al aceptar PLACE_BUILDING)
+    uint8_t  dropoff_mask;         // bit0=A bit1=B bit2=Me (de dropoff_resources)
+    uint8_t  constructible;        // 0/1 (schema `constructible`)
+    // resto de campos del schema (trains/researches/recipes/...) NO tipados en Parte I
+};
+
+struct BuildingNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    BuildingId id;
+};
+
 struct DataCatalogV1 {
     ContentHashV1 content_hash;
     ContentHashAlgorithmId hash_algorithm;
@@ -113,6 +138,10 @@ struct DataCatalogV1 {
     uint32_t unit_count;
     const UnitDefinitionV1* units;
     const UnitNameIndexV1* unit_names;
+    // Sprint 1.1 (SPEC-004 §2): espejo de unit_count/units/unit_names.
+    uint32_t building_count;
+    const BuildingDefinitionV1* buildings;
+    const BuildingNameIndexV1* building_names;
 };
 
 enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
@@ -127,6 +156,7 @@ enum class CatalogLoadCode : uint8_t {
     Ok = 0, Io, TooLarge, BadMagic, UnsupportedVersion, UnknownFlags,
     UnverifiedForbidden, Bounds, NonCanonical, SchemaMismatch,
     InvalidUnit,
+    InvalidBuilding,  // Sprint 1.1 (SPEC-004 §2); append-only, no renumerar.
 };
 
 class DataCatalogStorageV1 {
@@ -511,6 +541,112 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
     return def;
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 1.1 (SPEC-004 §2): tabla tipada de edificios.
+// ---------------------------------------------------------------------------
+
+// Mapea una string del "resource enum" (SPEC-002 common.schema.json) al bit de
+// dropoff_mask que el kernel v1 rastrea (A=bit0, B=bit1, Me=bit2). Devuelve
+// `false` SOLO si la string no pertenece al enum (dato corrupto); recursos
+// fuera de A/B/Me (P/W/F/I/El) son válidos mas fuera de alcance en Parte I —
+// se reconocen (no fallan la carga) pero no marcan ningún bit (`tracked=false`).
+inline bool building_resource_bit_from_string(const std::string& s, uint8_t& bit, bool& tracked) noexcept {
+    static constexpr const char* KNOWN[] = {"A", "B", "P", "W", "Me", "F", "I", "El"};
+    bool valid = false;
+    for (const char* k : KNOWN) if (s == k) { valid = true; break; }
+    if (!valid) return false;
+    tracked = true;
+    if (s == "A") bit = 0;
+    else if (s == "B") bit = 1;
+    else if (s == "Me") bit = 2;
+    else tracked = false;
+    return true;
+}
+
+// Reconstruye y valida un BuildingDefinitionV1 desde su objeto CVE ya parseado
+// (SPEC-004 §2: rangos exactos; ver data/schemas/building.schema.json). Mismo
+// rigor que build_unit_definition, pero sin el gate "is_known_key" (la
+// validación semántica completa de campos no tipados en Parte I —
+// trains/researches/recipes/kind/civ_id/... — la sigue ejerciendo
+// chunsa_data_compiler.py, igual que documenta el resto de kinds no-unit de
+// este loader).
+inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, BuildingId id) {
+    if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+
+    const CveValue* footprint = obj.find("footprint");
+    if (!footprint || !footprint->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    const CveValue* w = footprint->find("width_cells");
+    const CveValue* h = footprint->find("height_cells");
+    if (!w || !w->is_int() || !h || !h->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    // SPEC-004 §2: footprint 1..8 tiles — más estricto que el 1..32 del schema
+    // de datos (el kernel v1 restringe further; ver RESULT, desviación §D1).
+    if (w->i < 1 || w->i > 8) fail(CatalogLoadCode::InvalidBuilding);
+    if (h->i < 1 || h->i > 8) fail(CatalogLoadCode::InvalidBuilding);
+
+    const CveValue* stats = obj.find("stats");
+    if (!stats || !stats->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    const CveValue* hpv = stats->find("hp");
+    if (!hpv || !hpv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    if (hpv->i < 1 || hpv->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
+
+    const CveValue* constructible_v = obj.find("constructible");
+    if (!constructible_v || !(constructible_v->tag == 0x01u || constructible_v->tag == 0x02u)) {
+        fail(CatalogLoadCode::SchemaMismatch);
+    }
+    const uint8_t constructible = static_cast<uint8_t>(constructible_v->tag == 0x02u ? 1u : 0u);
+
+    const CveValue* btv = obj.find("build_time_ticks");
+    if (!btv || !btv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    // Enmienda del Arquitecto 2026-07-23 (SPEC-004 §4.1.2/§4.3): >= 0, no >= 1.
+    // Los centros iniciales de escenario son `constructible:false` +
+    // `build_time_ticks:0` (nacen completos: progress 0 >= T 0); el schema de
+    // datos exige coste positivo solo para constructible:true, así que 0 es
+    // legítimo aquí y NO es un caso especial para el loader.
+    if (btv->i < 0 || btv->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
+
+    int64_t cost_a = 0, cost_b = 0, cost_me = 0;
+    if (const CveValue* costs = obj.find("resource_costs")) {
+        if (!costs->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+        for (const auto& kv : costs->obj) {
+            if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
+            if (kv.second.i < 0 || kv.second.i > 1000000) fail(CatalogLoadCode::InvalidBuilding);
+            if (kv.first == "A") cost_a = kv.second.i;
+            else if (kv.first == "B") cost_b = kv.second.i;
+            else if (kv.first == "Me") cost_me = kv.second.i;
+            // Otros recursos del schema (P/W/F/I/El): fuera de alcance en
+            // Parte I (economía kernel v1 solo rastrea A/B/Me); se aceptan
+            // sin tipar, igual que trains/researches/recipes.
+        }
+    }
+
+    uint8_t dropoff_mask = 0;
+    if (const CveValue* dr = obj.find("dropoff_resources")) {
+        if (!dr->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+        for (const auto& item : dr->arr) {
+            if (!item.is_str()) fail(CatalogLoadCode::SchemaMismatch);
+            uint8_t bit = 0;
+            bool tracked = false;
+            if (!building_resource_bit_from_string(item.s, bit, tracked)) {
+                fail(CatalogLoadCode::InvalidBuilding);
+            }
+            if (tracked) dropoff_mask = static_cast<uint8_t>(dropoff_mask | (1u << bit));
+        }
+    }
+
+    BuildingDefinitionV1 def{};
+    def.id = id;
+    def.hp = static_cast<int32_t>(hpv->i);
+    def.footprint_w = static_cast<uint8_t>(w->i);
+    def.footprint_h = static_cast<uint8_t>(h->i);
+    def.build_time_ticks = static_cast<uint32_t>(btv->i);
+    def.cost_a = static_cast<int32_t>(cost_a);
+    def.cost_b = static_cast<int32_t>(cost_b);
+    def.cost_me = static_cast<int32_t>(cost_me);
+    def.dropoff_mask = dropoff_mask;
+    def.constructible = constructible;
+    return def;
+}
+
 }  // namespace data_catalog_detail
 
 // ============================================================================
@@ -523,6 +659,10 @@ struct DataCatalogStorageV1::Impl {
     std::vector<std::string> unit_ids;         // storage estable (reserve exacto antes de llenar)
     std::vector<UnitDefinitionV1> units;
     std::vector<UnitNameIndexV1> unit_names;
+    // Sprint 1.1 (SPEC-004 §2): espejo de unit_ids/units/unit_names.
+    std::vector<std::string> building_ids;
+    std::vector<BuildingDefinitionV1> buildings;
+    std::vector<BuildingNameIndexV1> building_names;
     std::vector<uint8_t> binding_bytes;
     DataCatalogV1 cat{};
 };
@@ -663,6 +803,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->unit_ids.reserve(dir[1].count);
     impl->units.reserve(dir[1].count);
     impl->unit_names.reserve(dir[1].count);
+    // Sprint 1.1 (SPEC-004 §2): building_ids necesita direcciones estables,
+    // mismo motivo que unit_ids. dir[2] es la sección building (kind=3).
+    impl->building_ids.reserve(dir[2].count);
+    impl->buildings.reserve(dir[2].count);
+    impl->building_names.reserve(dir[2].count);
 
     bool have_package_id = false;
 
@@ -704,9 +849,17 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 UnitDefinitionV1 def = build_unit_definition(value, uid);
                 impl->unit_ids.push_back(record_id);
                 impl->units.push_back(def);
+            } else if (spec.kind == 3) {
+                // Sprint 1.1 (SPEC-004 §2): building, ahora tipado (antes solo
+                // estructural). Mismo patrón que kind==2.
+                if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
+                const BuildingId bid = static_cast<BuildingId>(impl->buildings.size());
+                BuildingDefinitionV1 def = build_building_definition(value, bid);
+                impl->building_ids.push_back(record_id);
+                impl->buildings.push_back(def);
             }
-            // building/tech/civ/map/ai-profile: validados estructural + orden
-            // (deviación documentada arriba); no se reconstruye tipo semántico.
+            // tech/civ/map/ai-profile: validados estructural + orden (deviación
+            // documentada arriba); no se reconstruye tipo semántico.
         }
         if (section.pos != section.len) fail(CatalogLoadCode::NonCanonical);  // trailing de sección
     }
@@ -720,6 +873,15 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         ni.record_id_bytes = static_cast<uint16_t>(impl->unit_ids[i].size());
         ni.id = impl->units[i].id;
         impl->unit_names.push_back(ni);
+    }
+
+    // ---- building_names: mismo orden que buildings (Sprint 1.1) ----
+    for (size_t i = 0; i < impl->buildings.size(); ++i) {
+        BuildingNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->building_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->building_ids[i].size());
+        ni.id = impl->buildings[i].id;
+        impl->building_names.push_back(ni);
     }
 
     // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
@@ -756,6 +918,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.unit_count = static_cast<uint32_t>(impl->units.size());
     cat.units = impl->units.data();
     cat.unit_names = impl->unit_names.data();
+    cat.building_count = static_cast<uint32_t>(impl->buildings.size());
+    cat.buildings = impl->buildings.data();
+    cat.building_names = impl->building_names.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier
     // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
@@ -826,6 +991,21 @@ inline UnitId catalog_find_unit(const DataCatalogV1& cat, const char* name, size
         else hi = mid;
     }
     return INVALID_UNIT_ID;
+}
+
+// Sprint 1.1 (SPEC-004 §2): espejo de catalog_find_unit para BuildingId.
+inline BuildingId catalog_find_building(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.building_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const BuildingNameIndexV1& e = cat.building_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_BUILDING_ID;
 }
 
 }  // namespace chunsa

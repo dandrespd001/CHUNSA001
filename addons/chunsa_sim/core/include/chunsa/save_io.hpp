@@ -27,7 +27,16 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // economía), pero el envelope/header siguen siendo el formato v6 simple —
 // NO se implementó el envelope de 80B + ContentBindingManifestV1 + Zstd
 // v1.5.7 literal de SPEC-002 §9.1 en este incremento (ver RESULT del sprint).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 7;
+// v8 (Sprint 1.1, SPEC-004 §8): +6 arrays de edificios (entity_kind,
+// building_id, build_progress, bld_anchor_tx/ty, build_target), añadidos al
+// final del stream STATE. Mismo patrón que v7: envelope/header sin cambios,
+// solo el payload STATE crece (bump de versión = el layout cambió de verdad).
+// v7 sigue siendo el mínimo aceptado por gs_deserialize a través del check de
+// versión exacta de este envelope (no hay migración v7→v8 en el sentido
+// literal de SPEC-002 §9.1: cargar un archivo v7 real con esta v8 de
+// gs_deserialize simplemente falla el check `SAVE_FORMAT_VERSION` del
+// envelope — ver RESULT, desviación de compatibilidad hacia atrás).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 8;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

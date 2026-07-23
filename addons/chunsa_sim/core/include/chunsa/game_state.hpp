@@ -20,6 +20,10 @@
 
 namespace chunsa {
 
+// Sprint 1.1 (SPEC-004 §3): centinela de "sin edificio objetivo" para
+// build_target, misma convención que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
+inline constexpr uint32_t BUILD_NO_TARGET = 0xFFFFFFFFu;
+
 struct MatchConfig01A {
     uint32_t max_entities;               // 1..ENTITY_HARD_CAP
     uint8_t  player_count;               // 1..8 (emisores humanos en 0.1A)
@@ -113,6 +117,17 @@ struct GameState {
     UnitId unit_id[ENTITY_HARD_CAP];
     const DataCatalogV1* catalog;
 
+    // Edificios (Sprint 1.1, SPEC-004 §3). ESTADO: serializado + checksummeado,
+    // misma convención "todos los slots hasta capacity" que unit_id (sin gate
+    // de alive[]). entity_kind: 0=unidad (default), 1=edificio.
+    uint8_t   entity_kind[ENTITY_HARD_CAP];
+    BuildingId building_id[ENTITY_HARD_CAP];   // INVALID_BUILDING_ID en unidades
+    uint32_t  build_progress[ENTITY_HARD_CAP]; // ticks acumulados; >= T ⇒ funcional
+    uint16_t  bld_anchor_tx[ENTITY_HARD_CAP];  // tile ancla (esquina superior-izq)
+    uint16_t  bld_anchor_ty[ENTITY_HARD_CAP];
+    uint32_t  build_target[ENTITY_HARD_CAP];   // índice del edificio objetivo del
+                                               // ciudadano constructor; BUILD_NO_TARGET si ninguno
+
     // Economía mínima (Sprint 0.3, base §3.4). ESTADO: serializado + checksummeado.
     // Módulo economy.hpp es autocontenido (sin GameState); el wiring vive aquí y
     // en step.hpp. Depósitos: posiciones fijas deterministas (gs_init_deposits);
@@ -150,6 +165,13 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.eco_carry[i] = 0;
     g.eco_carry_resource[i] = 0;
     g.unit_id[i] = INVALID_UNIT_ID;
+    // Sprint 1.1 (SPEC-004 §3): edificios, misma convención que unit_id.
+    g.entity_kind[i] = 0;
+    g.building_id[i] = INVALID_BUILDING_ID;
+    g.build_progress[i] = 0;
+    g.bld_anchor_tx[i] = 0;
+    g.bld_anchor_ty[i] = 0;
+    g.build_target[i] = BUILD_NO_TARGET;
 }
 
 // Patrón determinista fijo de depósitos (Sprint 0.3, economía mínima): 2 de
@@ -211,6 +233,15 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     // NO "sin catálogo" — hay que forzar INVALID_UNIT_ID explícitamente.
     for (uint32_t i = 0; i < g.entities.capacity; ++i) g.unit_id[i] = INVALID_UNIT_ID;
     g.catalog = nullptr;
+    // Sprint 1.1 (SPEC-004 §3): building_id/build_target siguen la MISMA
+    // convención que unit_id — memset ya dejó 0, que bajo la semántica de
+    // BuildingId/build_target significaría "edificio 0"/"objetivo = entidad 0",
+    // no "ninguno"; hay que forzar los centinelas explícitamente. entity_kind
+    // (0=unidad), build_progress y las anclas sí quedan bien en 0 por el memset.
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        g.building_id[i] = INVALID_BUILDING_ID;
+        g.build_target[i] = BUILD_NO_TARGET;
+    }
 }
 
 // Enlaza el catálogo de datos al GameState (Sprint 0.4). Binding runtime puro:

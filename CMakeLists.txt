@@ -85,6 +85,11 @@ target_compile_definitions(chunsa_test_data_blob PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME data_blob COMMAND chunsa_test_data_blob)
 
+# --- Test Sprint 1.1: edificios y construcción (SPEC-004 Parte I) ---------------
+add_executable(chunsa_test_buildings tests/unit/test_buildings.cpp)
+target_link_libraries(chunsa_test_buildings PRIVATE chunsa_sim_core)
+add_test(NAME buildings COMMAND chunsa_test_buildings)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el

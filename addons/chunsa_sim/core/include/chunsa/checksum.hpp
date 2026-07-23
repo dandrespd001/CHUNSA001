@@ -22,7 +22,15 @@ namespace chunsa {
 // mantiene el símbolo `state_checksum_v1` (no se añade un `state_checksum_v2`
 // separado) para no tocar los ~6 call sites existentes — el propio dominio
 // hasheado ya se identifica como "CHUNSA_STATE_V2" y CHECKSUM_ALGO_VERSION=2.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 2;
+//
+// Sprint 1.1 (SPEC-004 §8): bump a v3 — el stream gana los 6 arrays de
+// edificios (§3), añadidos AL FINAL tras todo lo existente (orden intencional,
+// nada reordenado). Cambio de dominio DELIBERADO: los checksums golden se
+// regeneran una vez (mismo procedimiento del bump v1→v2 de Sprint 0.4); ver
+// RESULT del sprint — la TRAYECTORIA de los escenarios previos no cambia, solo
+// el dominio hasheado. Se mantiene igual el símbolo `state_checksum_v1` por la
+// misma razón que en Sprint 0.4 (no tocar call sites).
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 3;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -49,7 +57,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V2", 15);
+    h.bytes("CHUNSA_STATE_V3", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -143,6 +151,15 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.eco_assigned_deposit[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.eco_carry[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.eco_carry_resource[i]);
+    // Edificios (Sprint 1.1, SPEC-004 §3/§8): AL FINAL, tras todo lo v7, en el
+    // mismo orden en que aparecen en §3. Todos los slots (misma convención que
+    // unit_id/combate/moral), sin gate de alive[].
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.entity_kind[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.building_id[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.build_progress[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_tx[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_ty[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.build_target[i]);
     return h.digest();
 }
 
