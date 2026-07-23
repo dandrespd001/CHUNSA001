@@ -10,6 +10,21 @@
 // effective_tick real de cada comando; verify usa la config del archivo y
 // ASEVERA que la agenda recomputada coincide con la grabada (fallo ruidoso,
 // no divergencia silenciosa del checksum). v1 se sigue cargando (compat).
+//
+// v3 (Sprint 1.2, SPEC-004 §10.1): registro = layout v2 + `u32 unit_id` AL
+// FINAL (tras effective_tick). Cierra el gap D8 (Sprint 1.1): `CmdPayload::
+// unit_id` — que transporta UnitId en SPAWN_UNIT/SPAWN_CITIZEN y BuildingId en
+// PLACE_BUILDING — no se serializaba en v1/v2; una partida real con esos ids
+// != 0 perdía fidelidad al reproducir (el valor se reconstruía como 0, que
+// SOLO coincide con el real si el escenario usaba deliberadamente el id 0 —
+// ver la nota de test_buildings.cpp de Sprint 1.1). El loader acepta v1/v2/v3;
+// en v1/v2 el campo se reconstruye como 0 y `ReplayData::legacy_payload_loss`
+// se marca en 1 si el stream contiene algún comando de un tipo que USE
+// unit_id (SPAWN_UNIT/SPAWN_CITIZEN/PLACE_BUILDING), sin importar si ese
+// comando concreto tenía unit_id==0 por casualidad — es una advertencia
+// CONTABLE de "posible infidelidad", no una detección exacta (no hay forma de
+// distinguir "era 0 de verdad" de "se truncó a 0" leyendo v1/v2). Grabación
+// SIEMPRE en v3 (REPLAY_WRITE_VERSION).
 
 #include "chunsa/commands.hpp"
 #include "chunsa/serialize.hpp"
@@ -57,7 +72,7 @@ inline void pb_i64(std::vector<uint8_t>& b, int64_t v) {
 }
 
 // Versión del formato que ESCRIBE el recorder (siempre la última).
-constexpr uint32_t REPLAY_WRITE_VERSION = 2u;
+constexpr uint32_t REPLAY_WRITE_VERSION = 3u;
 
 } // namespace replay_detail
 
@@ -91,7 +106,8 @@ struct ReplayWriter {
     // Añade un batch de n RawCommands correspondientes al tick `t`. Graba, por
     // comando, su effective_tick calculado con la MISMA función pura que usa el
     // kernel (command_effective_tick, §6.2) → la agenda queda explícita en el
-    // archivo y es verificable byte a byte al reproducir.
+    // archivo y es verificable byte a byte al reproducir. v3 (SPEC-004 §10.1):
+    // + `unit_id` AL FINAL del registro (tras effective_tick) — cierra D8.
     void tick_batch(const RawCommand* cmds, uint32_t n, uint32_t t) {
         replay_detail::pb_u32(buf, n);
         for (uint32_t i = 0; i < n; ++i) {
@@ -106,6 +122,7 @@ struct ReplayWriter {
             replay_detail::pb_i64(buf, c.p.y_raw);
             replay_detail::pb_i32(buf, c.p.speed_mtpt);
             replay_detail::pb_u32(buf, command_effective_tick(c.target_tick, t, delay));
+            replay_detail::pb_u32(buf, c.p.unit_id);  // v3 (SPEC-004 §10.1)
         }
     }
 
@@ -135,7 +152,7 @@ struct ReplayWriter {
 // ReplayData — estructura rellenada por replay_load
 // ============================================================================
 struct ReplayData {
-    uint32_t version{0};                            // 1 (legacy) o 2 (con agenda)
+    uint32_t version{0};                            // 1 (legacy), 2 (agenda) o 3 (+unit_id)
     uint64_t seed{0};
     uint32_t units{0};
     uint32_t ticks{0};
@@ -145,9 +162,15 @@ struct ReplayData {
     uint32_t human_input_delay_ticks{0};
     uint32_t max_future_command_ticks{0};
     std::vector<std::vector<RawCommand>> batches;   // batches[t]
-    // Agenda grabada (v2): eff_ticks[t][i] = effective_tick del comando i del
+    // Agenda grabada (v2+): eff_ticks[t][i] = effective_tick del comando i del
     // tick t. Vacío en v1. Paralelo a `batches` cuando presente.
     std::vector<std::vector<uint32_t>> eff_ticks;
+    // Sprint 1.2 (SPEC-004 §10.1): 1 si el stream es v1/v2 (unit_id NO
+    // serializado, reconstruido como 0) Y contiene al menos un comando de un
+    // tipo que USA unit_id (SPAWN_UNIT/SPAWN_CITIZEN/PLACE_BUILDING) —
+    // advertencia contable de "replay potencialmente infiel". Siempre 0 en v3
+    // (la agenda es fiel por construcción) y en v1/v2 sin esos tipos de comando.
+    uint32_t legacy_payload_loss{0};
     uint64_t final_checksum{0};
 };
 
@@ -202,7 +225,7 @@ inline int replay_load(const char* path, ReplayData& out) {
 
     const uint32_t version = rdr.u32();
     if (rdr.fail) return 1;
-    if (version != 1u && version != 2u) return 1;
+    if (version != 1u && version != 2u && version != 3u) return 1;
     out.version = version;
 
     out.seed           = rdr.u64();
@@ -211,8 +234,11 @@ inline int replay_load(const char* path, ReplayData& out) {
     out.checksum_every = rdr.u16();
     if (rdr.fail) return 1;
 
-    const bool v2 = (version == 2u);
-    if (v2) {
+    // Cabecera de config §6.2 (delay/max_future): presente desde v2 (v3 es el
+    // mismo layout v2 + unit_id por comando, la cabecera NO cambió).
+    const bool has_agenda = (version >= 2u);
+    const bool v3 = (version == 3u);
+    if (has_agenda) {
         out.human_input_delay_ticks = rdr.u32();
         out.max_future_command_ticks = rdr.u32();
         if (rdr.fail) return 1;
@@ -222,10 +248,16 @@ inline int replay_load(const char* path, ReplayData& out) {
     if (out.ticks > replay_detail::MAX_TICKS) return 1;
     out.batches.clear();
     out.batches.resize(out.ticks);
-    if (v2) out.eff_ticks.resize(out.ticks);
+    if (has_agenda) out.eff_ticks.resize(out.ticks);
 
     // --- cuerpo: un bloque por tick ---------------------------------------
     uint64_t total_cmds = 0;
+    // v1/v2 (SPEC-004 §10.1): unit_id se reconstruye como 0 (el value-init de
+    // `batch.resize(n)` ya lo deja en 0 — no se escribe explícitamente).
+    // Advertencia contable si el stream trae algún comando de un tipo que USA
+    // unit_id: la fidelidad de ESE comando es dudosa (no distinguible de un
+    // unit_id==0 real leyendo solo v1/v2).
+    bool any_unit_id_type = false;
 
     for (uint32_t t = 0; t < out.ticks; ++t) {
         const uint32_t n = rdr.u32();
@@ -235,7 +267,7 @@ inline int replay_load(const char* path, ReplayData& out) {
         std::vector<RawCommand> batch;
         batch.resize(n);
         std::vector<uint32_t> effs;
-        if (v2) effs.resize(n);
+        if (has_agenda) effs.resize(n);
         for (uint32_t i = 0; i < n; ++i) {
             RawCommand& c = batch[i];
             c.target_tick  = rdr.u32();
@@ -248,7 +280,14 @@ inline int replay_load(const char* path, ReplayData& out) {
             c.p.x_raw      = rdr.i64();
             c.p.y_raw      = rdr.i64();
             c.p.speed_mtpt = rdr.i32();
-            if (v2) effs[i] = rdr.u32();
+            if (has_agenda) effs[i] = rdr.u32();
+            if (v3) {
+                c.p.unit_id = rdr.u32();
+            } else if (c.type == CommandType::SPAWN_UNIT
+                    || c.type == CommandType::SPAWN_CITIZEN
+                    || c.type == CommandType::PLACE_BUILDING) {
+                any_unit_id_type = true;
+            }
         }
         if (rdr.fail) return 1;
 
@@ -256,8 +295,9 @@ inline int replay_load(const char* path, ReplayData& out) {
         if (total_cmds > replay_detail::MAX_TOTAL_CMDS) return 1;
 
         out.batches[t] = std::move(batch);
-        if (v2) out.eff_ticks[t] = std::move(effs);
+        if (has_agenda) out.eff_ticks[t] = std::move(effs);
     }
+    out.legacy_payload_loss = (!v3 && any_unit_id_type) ? 1u : 0u;
 
     // --- trailer: checksum final ------------------------------------------
     out.final_checksum = rdr.u64();
