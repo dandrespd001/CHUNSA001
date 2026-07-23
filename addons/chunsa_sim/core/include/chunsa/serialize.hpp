@@ -265,6 +265,15 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.eco_carry[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.eco_carry_resource[i]);
 
+    // (l) Edificios (Sprint 1.1, SPEC-004 §3/§8): 6 arrays, AL FINAL, tras todo
+    // lo v7, en el mismo orden que aparecen en §3 (== orden del checksum v3).
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.entity_kind[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.building_id[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.build_progress[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u16(g.bld_anchor_tx[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u16(g.bld_anchor_ty[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.build_target[i]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -372,7 +381,8 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.unit_class          = r.u8();
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        if (type_raw < 1 || type_raw > 6)    return false; // CommandType ∈ {1..6}
+        // CommandType ∈ {1..8} (Sprint 1.1, SPEC-004 §4: +PLACE_BUILDING/ASSIGN_BUILD).
+        if (type_raw < 1 || type_raw > 8)    return false;
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -474,6 +484,25 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         if (cr > 2u) return false;
         g.eco_carry_resource[i] = cr;
     }
+    if (r.fail) return false;
+
+    // (l) Edificios (Sprint 1.1, SPEC-004 §3/§8): mismo orden que gs_serialize.
+    // NOTA (deviación documentada, mismo espíritu que unit_id en Sprint 0.4):
+    // building_id/build_target no se revalidan aquí contra un catálogo/rango
+    // de entidades — aceptan cualquier valor u32; el binding real y los
+    // sistemas que los consumen (construction_system, dropoff) ya comprueban
+    // bounds/alive en caliente. entity_kind SÍ se valida (0/1: es un flag
+    // estructural barato de comprobar, no una referencia externa).
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint8_t ek = r.u8();
+        if (ek > 1u) return false;
+        g.entity_kind[i] = ek;
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) g.building_id[i]   = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.build_progress[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.bld_anchor_tx[i] = r.u16();
+    for (uint32_t i = 0; i < cap_e; ++i) g.bld_anchor_ty[i] = r.u16();
+    for (uint32_t i = 0; i < cap_e; ++i) g.build_target[i]  = r.u32();
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
