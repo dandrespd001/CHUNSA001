@@ -61,6 +61,8 @@ struct DriveOut {
 };
 
 // Checksum de continuación (SPEC-001 §10): state_checksum + serialización de IA.
+// Dominio bump a V2 en Sprint 0.4 junto con state_checksum_v1 (que ya hashea
+// CHECKSUM_ALGO_VERSION=2 internamente; ver checksum.hpp).
 inline uint64_t continuation_checksum(const GameState& g, const AiJobBox& box,
                                       const AiRuntimeV1& rt) noexcept {
     uint8_t ai_buf[8192];
@@ -68,7 +70,7 @@ inline uint64_t continuation_checksum(const GameState& g, const AiJobBox& box,
     ai_serialize(box, rt, w);
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_CONT_V1", 14);
+    h.bytes("CHUNSA_CONT_V2", 14);
     h.u64(state_checksum_v1(g));
     h.bytes(ai_buf, w.len);
     return h.digest();

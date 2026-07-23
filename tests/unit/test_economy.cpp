@@ -21,7 +21,10 @@ static constexpr uint32_t TOTAL_TICKS = 500;
 // Alimentos en (40,40) (ver gs_init_economy) y deben recolectar+entregar en el
 // dropoff del owner 0 (tile ~20). Con velocidad alta para converger rápido.
 static void run_scenario(GameState& g) {
-    MatchConfig01A cfg{256u, 2u, 1u, 20u, 20u, 256u, 256u, 5ull};
+    // Sprint 0.4: SPAWN_CITIZEN es data-driven por defecto; este test ejercita
+    // el camino debug legado (hp=20 hardcodeado), por lo que activa
+    // allow_debug_stat_payload y marca unit_id=INVALID en el comando.
+    MatchConfig01A cfg{256u, 2u, 1u, 20u, 20u, 256u, 256u, 5ull, 1u};
     gs_init(g, cfg);
 
     static RawCommand batch[N_CITIZENS];
@@ -43,6 +46,7 @@ static void run_scenario(GameState& g) {
                 c.p.x_raw      = static_cast<int64_t>(tile_x) * 65536 + 32768;
                 c.p.y_raw      = static_cast<int64_t>(tile_y) * 65536 + 32768;
                 c.p.speed_mtpt = 800;  // rápido: converge en pocos ticks
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
         }

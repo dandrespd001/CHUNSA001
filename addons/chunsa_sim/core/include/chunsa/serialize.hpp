@@ -141,6 +141,7 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     w.u32(g.cfg.map_tiles_x);
     w.u32(g.cfg.map_tiles_y);
     w.u64(g.cfg.seed);
+    w.u8 (g.cfg.allow_debug_stat_payload);  // Sprint 0.4 (SPEC-002 §8.3)
 
     // (b) tick + fatal
     w.u32(g.tick);
@@ -238,6 +239,11 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.i32(g.morale[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u8 (g.fleeing[i]);
 
+    // (j2) Catálogo (Sprint 0.4): unit_id, todos los slots (misma convención
+    // que combate/moral). `catalog` (puntero binding runtime) NUNCA se
+    // serializa — se re-enlaza fuera del lifecycle de save/load.
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.unit_id[i]);
+
     // (k) Economía (Sprint 0.3): depósitos (fijos, ECO_MAX_DEPOSITS slots),
     // dropoffs+stock por emisor, y componentes por-ciudadano, mismo orden que checksum.
     w.u32(g.n_deposits);
@@ -281,6 +287,7 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     cfg.map_tiles_x              = r.u32();
     cfg.map_tiles_y              = r.u32();
     cfg.seed                     = r.u64();
+    cfg.allow_debug_stat_payload = r.u8();  // Sprint 0.4 (SPEC-002 §8.3)
 
     if (r.fail) return false;
     if (!config_validate(cfg)) return false;
@@ -419,6 +426,15 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     // (j) Moral (Sprint 0.3): 2 arrays, mismo orden que gs_serialize.
     for (uint32_t i = 0; i < cap_e; ++i) g.morale[i]  = r.i32();
     for (uint32_t i = 0; i < cap_e; ++i) g.fleeing[i] = r.u8();
+    if (r.fail) return false;
+
+    // (j2) Catálogo (Sprint 0.4): unit_id, mismo orden que gs_serialize. NOTA
+    // (deviación documentada): esta versión no re-valida unit_id contra un
+    // catálogo en el momento del load (gs_deserialize no recibe
+    // `DataCatalogV1` — ver RESULT del sprint); acepta cualquier u32. El
+    // binding real (`g.catalog`) se re-enlaza aparte vía `gs_bind_catalog`
+    // antes de que el estado vuelva a correr Step() con SPAWN_UNIT pendiente.
+    for (uint32_t i = 0; i < cap_e; ++i) g.unit_id[i] = r.u32();
     if (r.fail) return false;
 
     // (k) Economía (Sprint 0.3): mismo orden que gs_serialize. Validación:

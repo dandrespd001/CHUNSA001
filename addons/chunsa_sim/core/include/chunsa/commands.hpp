@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include "chunsa/entity_table.hpp"
+#include "chunsa/data_catalog.hpp"  // UnitId/INVALID_UNIT_ID (Sprint 0.4, SPEC-002 §8.4)
 
 // chunsa_sim_core — Commands, PendingCommandState y mailbox de receipts.
 // SPEC-001 §6. Autor: Arquitecto.
@@ -32,15 +33,34 @@ enum class RejectReason : uint16_t {
 };
 
 // Payload plano de tamaño fijo (0.1A). Campos no usados por un tipo = 0.
+//
+// Sprint 0.4 (SPEC-002 §8.4): SPAWN_UNIT/SPAWN_CITIZEN se vuelven data-driven.
+// `unit_id` decide el camino:
+//   - unit_id != INVALID_UNIT_ID: camino normal. hp/attack/range_mt/unit_class
+//     del payload DEBEN ser cero (si no, MALFORMED); las stats se copian
+//     exclusivamente de DataCatalogV1::units[unit_id].
+//   - unit_id == INVALID_UNIT_ID: camino debug LEGADO, solo legal si
+//     cfg.allow_debug_stat_payload==1 (si no, MALFORMED); usa los campos de
+//     stats del payload como antes de este sprint.
+// NOTA: `unit_id` NO lleva default member initializer. Se probó (=
+// INVALID_UNIT_ID) y rompe -Wclass-memaccess/-Werror en TODOS los
+// `std::memset(&raw_command_o_game_state, 0, sizeof(...))` existentes del
+// kernel (gs_init, driver.hpp, cli_run.hpp) — GCC exige entonces asignación o
+// value-init explícitos en vez de memset porque el tipo deja de ser
+// trivialmente construible. Dado el alcance de este incremento, se optó por
+// el campo plano: TODO call site que arma un SPAWN_UNIT/SPAWN_CITIZEN debe
+// asignar `unit_id` explícitamente (ya se aplicó en los tests existentes que
+// ejercitan el camino debug y en el nuevo chunsa_test_data_blob).
 struct CmdPayload {
     EntityHandle handle;   // MOVE_TO / DESTROY_DEBUG
-    int64_t x_raw;         // SPAWN_DEBUG / MOVE_TO
+    int64_t x_raw;         // SPAWN_DEBUG / MOVE_TO / SPAWN_UNIT / SPAWN_CITIZEN
     int64_t y_raw;
-    int32_t speed_mtpt;    // SPAWN_DEBUG (mili-tiles por tick)
-    int32_t hp;            // SPAWN_UNIT
-    int32_t attack;        // SPAWN_UNIT
-    int32_t range_mt;      // SPAWN_UNIT (mili-tiles, 1000 = 1 tile)
-    uint8_t unit_class;    // SPAWN_UNIT (0=infantry 1=cavalry 2=artillery)
+    int32_t speed_mtpt;    // SPAWN_DEBUG (mili-tiles por tick); SPAWN_UNIT/CITIZEN camino debug
+    int32_t hp;            // SPAWN_UNIT camino debug (cero en camino normal)
+    int32_t attack;        // SPAWN_UNIT camino debug (cero en camino normal)
+    int32_t range_mt;      // SPAWN_UNIT camino debug, mili-tiles (cero en camino normal)
+    uint8_t unit_class;    // SPAWN_UNIT camino debug: 0=infantry 1=cavalry 2=artillery (cero en camino normal)
+    uint32_t unit_id;      // SPAWN_UNIT/SPAWN_CITIZEN: id del catálogo, o INVALID_UNIT_ID (camino debug)
 };
 
 struct RawCommand {
