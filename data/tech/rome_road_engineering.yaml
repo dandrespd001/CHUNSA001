@@ -1,0 +1,47 @@
+schema_version: 1
+id: rome:road_engineering
+display_name_key: rome:tech.road_engineering
+description_key: rome:tech.road_engineering.description
+available_to:
+  - rome:republic_imperial
+epoch: 5
+branch: E
+evidence: H
+resource_costs:
+  A: 80
+required_capabilities: []
+research_time_ticks: 700
+prerequisites: []
+required_buildings: []
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - rome:maintain_public_infrastructure
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: draft_unverified
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Wikipedia, Roman road"
+        locator: "Roman road constructed by filling the fossa with layered rock: statumen (foundation of flat stones), rudus (coarse concrete), nucleus (fine concrete), and the summa crusta of polygonal or square paving stones crowned for drainage; the Via Appia (312 BC) was one of Rome's earliest and most strategically important roads"
+        url: "https://en.wikipedia.org/wiki/Roman_road"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: la ingeniería viaria romana estandarizó el paquete statumen/rudus/nucleus/summum dorsum sobre la fossa, con la Via Appia (312 a.C.) como prototipo; costes A=80, 700 ticks, sin edificio previo y el grants de rome:maintain_public_infrastructure (ya declarada en el manifest) son balance/diseño del slice."
+    reviewed_by:
+    - minimax

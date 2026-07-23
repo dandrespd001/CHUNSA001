@@ -1,0 +1,51 @@
+schema_version: 1
+id: egipto:chariotry_stable
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.chariotry_stable
+description_key: egipto:building.chariotry_stable.description
+epoch_window:
+  - 3
+  - 4
+kind: military
+footprint:
+  width_cells: 3
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 800
+constructible: true
+resource_costs:
+  B: 80
+build_time_ticks: 600
+trains:
+  - egipto:chariot_warrior
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: draft_unverified
+  generator: human
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - minimax
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Wikipedia, Egyptian chariot"
+        locator: "chariotry stood as an independent unit in the king's military force; members of the chariot corps formed their own aristocratic class (maryannu); chariot warrior (seneny) paired with a defender (keijen/kedjen); chariots become increasingly integrated into military training especially during the regime of Amenhotep II"
+        url: "https://en.wikipedia.org/wiki/Egyptian_chariot"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: en el Reino Nuevo egipcio la chariotría se organizó como cuerpo independiente bajo el rey, con establos y zonas de adiestramiento en complejos militares y reales; HP, coste B=80, tiempo 600, footprint 3x2 y el trains de egipto:chariot_warrior son balance/diseño del slice."
+    reviewed_by:
+    - minimax

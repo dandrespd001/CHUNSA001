@@ -39,7 +39,10 @@ unit_ids:
 building_ids:
   - rome:forum_center
   - rome:horreum
-tech_ids: []
+  - rome:castra_barracks
+tech_ids:
+  - rome:marching_drill
+  - rome:road_engineering
 art_rule_keys:
   - rome:art.period_and_province
   - rome:art.responsible_labor
@@ -47,12 +50,12 @@ review_roles:
   - architect
   - roman_history_review
 provenance:
-  status: promoted
+  status: draft_unverified
   generator: human
-  task_id: T1-egipto-roma-m1
-  generated_on: "2026-07-22"
+  task_id: Sprint-1.2-datos-tech
+  generated_on: "2026-07-23"
   reviewed_by:
-    - architect
+    - minimax
   historical_claims:
     evidence: H
     verification_reports:
@@ -64,7 +67,7 @@ provenance:
         url: "https://www.cambridge.org/core/series/cambridge-ancient-history/010C506409EE858277F898C129759025"
         accessed_on: "2026-07-22"
   balance_design:
-    author: architect
-    rationale: "Ventanas y verbo derivados de la ficha promovida; efectos y números siguen siendo diseño calibrable."
+    author: minimax
+    rationale: "Sprint 1.2 añade la castra militaire y dos tech (marching_drill, road_engineering) a la ficha; la castra referencia los barracks por cohortes con contubernia y la road_engineering el paquete statumen/rudus/nucleus/summum dorsum con la Via Appia como prototipo; los grants y costes son diseño del slice, pendiente de promoción por el Arquitecto."
     reviewed_by:
-      - architect
+      - minimax
