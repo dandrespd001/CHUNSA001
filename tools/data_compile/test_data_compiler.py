@@ -312,7 +312,7 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual((rc, stderr), (0, ""), stderr)
             self.assertEqual(out.read_bytes(), golden.read_bytes())
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
-            self.assertIn("records unit=5 building=4 tech=0 civ=2 map=1 ai-profile=1", stdout)
+            self.assertIn("records unit=5 building=6 tech=4 civ=2 map=1 ai-profile=1", stdout)
             flags, records = compiler.parse_blob(out.read_bytes())
             self.assertEqual(flags, 0)
             self.assertEqual(

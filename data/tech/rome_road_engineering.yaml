@@ -24,7 +24,7 @@ playable_period_ids:
   - rome:high_empire
 availability_mode: historical
 provenance:
-  status: draft_unverified
+  status: promoted
   generator: human
   task_id: Sprint-1.2-datos-tech
   generated_on: "2026-07-23"

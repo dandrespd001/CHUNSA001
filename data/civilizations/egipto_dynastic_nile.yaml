@@ -50,7 +50,7 @@ review_roles:
   - architect
   - egyptology_review
 provenance:
-  status: draft_unverified
+  status: promoted
   generator: human
   task_id: Sprint-1.2-datos-tech
   generated_on: "2026-07-23"
