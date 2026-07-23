@@ -17,6 +17,11 @@ enum class CommandType : uint16_t {
     FLOW_MOVE = 4,
     SPAWN_UNIT = 5,
     SPAWN_CITIZEN = 6,
+    // Sprint 1.1 (SPEC-004 §4): edificios como entidades. El CmdPayload NO
+    // cambia de layout (compatibilidad replay v2/save): los campos existentes
+    // se reinterpretan por tipo (ver comentario de CmdPayload más abajo).
+    PLACE_BUILDING = 7,
+    ASSIGN_BUILD = 8,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 
