@@ -60,6 +60,13 @@ private:
     chunsa::SnapshotRing<DemoSnapshot>* ring = nullptr;
     chunsa::GameState* gs = nullptr;
 
+    // Sprint 0.4: catálogo de datos (CHDB). `catalog_storage` posee el catálogo
+    // (RAII) y vive tanto como el nodo; `gs->catalog` apunta a su interior. Los
+    // uid_* se resuelven una vez en _ready() (record_id → UnitId).
+    chunsa::DataCatalogStorageV1 catalog_storage;
+    chunsa::UnitId uid_cavalry = chunsa::INVALID_UNIT_ID;
+    chunsa::UnitId uid_citizen = chunsa::INVALID_UNIT_ID;
+    chunsa::UnitId uid_artillery = chunsa::INVALID_UNIT_ID;
     // Interpolación (contrato): dos snapshots + instante de llegada de curr.
     DemoSnapshot snap_prev{};
     DemoSnapshot snap_curr{};
