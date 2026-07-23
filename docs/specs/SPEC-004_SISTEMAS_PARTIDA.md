@@ -76,7 +76,15 @@ Payload: `p.unit_id` = **BuildingId** del catálogo · `p.x_raw`/`p.y_raw` = **t
 en unidades ENTERAS de tile** (no raw; elimina toda ambigüedad de redondeo).
 Validación, en este orden (primera que falle decide el receipt):
 1. `g.catalog != nullptr` y `p.unit_id < building_count`, si no **MALFORMED**.
-2. `def.constructible == 1`, si no **ILLEGAL_STATE**.
+2. `def.constructible == 1`, si no **ILLEGAL_STATE**. **Exención de escenario**: si
+   `effective_tick == 0` este paso y el 6 (costes) se OMITEN — es la ventana de setup
+   de partida (los comandos de jugador nunca ejecutan en el tick 0 porque
+   `human_input_delay_ticks >= 1` en producción; los edificios iniciales los encola el
+   driver/adaptador con `target_tick = 0` antes del primer Step, y quedan grabados en
+   el replay como cualquier comando). Motivación: el schema de SPEC-002 exige, con
+   razón, que todo `constructible: true` tenga coste positivo; los centros iniciales
+   son `constructible: false` + `build_time_ticks: 0` (nacen completos por la
+   definición de §3: `progress 0 >= T 0`), como edificio pre-colocado de escenario.
 3. Resto de campos de stats del payload (hp/attack/range_mt/unit_class/speed_mtpt/handle) == 0,
    si no **MALFORMED** (misma disciplina payload-limpio que SPAWN_UNIT).
 4. Footprint dentro del mapa: `x + w <= map_tiles_x` y `y + h <= map_tiles_y`, si no **MALFORMED**.
@@ -103,11 +111,12 @@ Efecto: `build_target[ciudadano] = índice del edificio`. Mientras `build_target
 activo el ciudadano queda **fuera** del pipeline económico (el sistema económico lo salta).
 
 ### §4.3 Edificios iniciales (arranque de partida)
-El **driver/adaptador** (fuera de Step) puede colocar edificios iniciales encolando
-PLACE_BUILDING con costes ya cubiertos (datos con coste 0 para el centro inicial) en el
-tick 0, seguido de ASSIGN_BUILD, o directamente los datos definen el centro con
-`build_time_ticks = 1`. No existe camino privilegiado dentro del kernel: **todo pasa por
-comandos** (SPEC-001 §6, sin excepciones).
+El **driver/adaptador** (fuera de Step) coloca los edificios iniciales encolando
+PLACE_BUILDING con `target_tick = 0` antes del primer Step (exención de escenario,
+§4.1.2): los centros (`egipto:settlement_center` / `rome:forum_center`, datos
+`constructible: false`, `build_time_ticks: 0`, sin coste) nacen completos y funcionan
+como dropoff desde el tick 0. No existe camino privilegiado dentro del kernel: **todo
+pasa por comandos** (SPEC-001 §6, sin excepciones) y queda grabado en el replay.
 
 ## §5 Sistema constructor (nueva fase de Step)
 Se inserta como fase propia **después de economía y antes del destroy batch**, iteración

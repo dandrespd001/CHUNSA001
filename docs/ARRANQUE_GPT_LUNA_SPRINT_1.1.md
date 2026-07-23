@@ -28,8 +28,10 @@ tú implementas la capa visual e interacción de este sprint. Trabaja en el repo
 3. **Asignar constructores**: con ciudadanos seleccionados, clic derecho sobre un sitio en
    construcción propio = `ASSIGN_BUILD` (§4.2). Feedback visual del ciudadano constructor.
 4. **Arranque de partida**: al iniciar la demo, encolar la colocación del centro inicial de
-   cada jugador (`egipto:settlement_center` / `rome:forum_center`, coste 0, build_time 1)
-   más un ASSIGN_BUILD de un ciudadano — todo por comandos, sin caminos privilegiados.
+   cada jugador (`egipto:settlement_center` / `rome:forum_center`) con `target_tick = 0`
+   ANTES del primer Step — la "exención de escenario" de SPEC-004 §4.1.2 los acepta pese a
+   ser `constructible: false` y nacen ya completos (no necesitan constructores). Todo por
+   comandos, sin caminos privilegiados.
 
 ## Reglas duras (no negociables — el proyecto entero depende de esto)
 - **JAMÁS toques `addons/chunsa_sim/core/`** (kernel determinista). Si crees que falta algo
