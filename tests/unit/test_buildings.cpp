@@ -175,14 +175,17 @@ static void test_place_building_validation() {
     static DataCatalogV1 cat = fixture::make_catalog();
 
     // 1a) Camino feliz: coloca "hut" (BuildingId 0) en (10,10), footprint 2x2.
+    // A target_tick=1 (NO 0): con eff>=1 se ejercita el camino NORMAL completo
+    // (constructible + stock + deducción), fuera de la exención de escenario.
     {
         auto g = std::make_unique<GameState>();
         gs_init(*g, make_cfg());
         gs_bind_catalog(*g, cat);
         g->player_stock[0][0] = 100;  // A suficiente
 
-        RawCommand cmd = place_building(0, 0, 1, 0, 10, 10);
-        const StepResult r = step(*g, &cmd, 1);
+        RawCommand cmd = place_building(1, 0, 1, 0, 10, 10);
+        step(*g, &cmd, 1);                           // t=0: agenda (eff=1)
+        const StepResult r = step(*g, nullptr, 0);   // t=1: aplica
         CHECK(r.accepted == 1 && r.rejected == 0);
         CHECK(g->entities.alive[0] == 1);
         CHECK(g->entity_kind[0] == 1);
@@ -368,6 +371,24 @@ static void test_scenario_exemption() {
         CHECK(r.accepted == 1 && r.rejected == 0);
         CHECK(g->entities.alive[0] == 1);
         CHECK(g->build_progress[0] >= g->catalog->buildings[1].build_time_ticks);  // completo
+    }
+
+    // 2a-bis) Exención con edificio CON COSTE (hut, A=10) y stock 0: aceptado
+    // Y el stock NO queda en negativo — la exención exime también la DEDUCCIÓN,
+    // no solo el chequeo (endurecimiento del Arquitecto en revisión).
+    {
+        auto g = std::make_unique<GameState>();
+        MatchConfig01A cfg = make_cfg();
+        cfg.human_input_delay_ticks = 0;
+        gs_init(*g, cfg);
+        gs_bind_catalog(*g, cat);
+        CHECK(g->player_stock[0][0] == 0);
+
+        RawCommand cmd = place_building(0, 0, 1, 0 /*hut, cost A=10*/, 30, 30);
+        const StepResult r = step(*g, &cmd, 1);
+        CHECK(r.accepted == 1 && r.rejected == 0);
+        CHECK(g->entities.alive[0] == 1);
+        CHECK(g->player_stock[0][0] == 0);  // sin deducción bajo exención
     }
 
     // 2b') Mismo comando, effective_tick >= 1 (delay=1, target_tick=0 -> eff=1)

@@ -309,13 +309,17 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
             const uint32_t i = h.index;
 
-            // Efecto (atómico): deducir costes (no-op si scenario_exempt, ya
-            // que el schema de datos exige resource_costs vacío para
-            // constructible:false — ver SPEC-004 §4.1.2), spawn de la entidad,
-            // marcar footprint en cost_grid.
-            g.player_stock[c.emitter][0] -= def.cost_a;
-            g.player_stock[c.emitter][1] -= def.cost_b;
-            g.player_stock[c.emitter][2] -= def.cost_me;
+            // Efecto (atómico): deducir costes, spawn de la entidad, marcar
+            // footprint en cost_grid. La exención de escenario (§4.1.2) exime
+            // TAMBIÉN la deducción, no solo el chequeo de stock: un escenario
+            // que pre-coloque en tick 0 un edificio con coste no debe dejar el
+            // stock del jugador en negativo (endurecimiento del Arquitecto en
+            // revisión; con los datos actuales —centros coste 0— es un no-op).
+            if (!scenario_exempt) {
+                g.player_stock[c.emitter][0] -= def.cost_a;
+                g.player_stock[c.emitter][1] -= def.cost_b;
+                g.player_stock[c.emitter][2] -= def.cost_me;
+            }
 
             // Posición = centro geométrico del footprint (SPEC-004 §3):
             // anchor*T + (w*T)/2, raw exacto en Q47.16 con T=FX_ONE_RAW.
