@@ -113,6 +113,10 @@ inline int run_synthetic(uint32_t units, uint32_t ticks, uint16_t checksum_every
 
         if (t == 0U) {
             // Tick 0: SPAWN_DEBUG, uno por unidad, todos con target_tick = 0.
+            // CONTRATO DEL HOST (SPEC-004 §10.3, comentario — sin cambio de
+            // lógica): este batch de t==0 es de SETUP de escenario, nunca
+            // input de jugador; command_effective_tick le da eff=0 sin sumar
+            // human_input_delay_ticks (ver step.hpp).
             for (uint32_t i = 0; i < units; ++i) {
                 ++sequence_counter;
                 RawCommand& cmd = batch[n];

@@ -127,6 +127,15 @@ inline uint32_t build_human_batch(std::vector<RawCommand>& batch, uint32_t t,
 
 // Bucle principal. `gs/box/rt` los aporta el caller: recién inicializados
 // (partida nueva desde tick 0) o recién cargados de un save (continuación).
+//
+// CONTRATO DEL HOST (SPEC-004 §10.3, comentario — sin cambio de lógica): el
+// batch que este driver mete en la PRIMERA llamada a step() (t==0, dentro de
+// build_human_batch) es, por contrato, EXCLUSIVAMENTE de setup de escenario
+// (spawns iniciales), nunca input real de un jugador — command_effective_tick
+// explota esto para dar eff=0 a los comandos con target_tick==0 de ese primer
+// batch, sin importar human_input_delay_ticks. Este driver ya lo respeta
+// (build_human_batch solo emite comandos de jugador — MOVE_TO — a partir de
+// t>0); ver command_effective_tick en step.hpp para la regla completa.
 inline int drive(const DriveOpts& o, GameState& gs, AiJobBox& box, AiRuntimeV1& rt,
                  DriveOut& out) {
     std::vector<RawCommand> batch(static_cast<size_t>(o.units) + AI_MAX_COMMANDS);

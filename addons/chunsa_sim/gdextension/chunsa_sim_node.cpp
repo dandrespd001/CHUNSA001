@@ -87,11 +87,17 @@ void ChunsaSimNode::_ready() {
     // max_entities, player_count, human_input_delay_ticks,
     // max_future_command_ticks, checksum_every_ticks, map_tiles_x,
     // map_tiles_y, seed, allow_debug_stat_payload (0 = data-driven, Sprint 0.4)
-    // Delay 0 es deliberado en el escenario: permite que los comandos
-    // PLACE_BUILDING de setup con target_tick=0 lleguen al kernel con
-    // effective_tick=0 y activen la exención de SPEC-004 §4.1.2. La UI sigue
-    // usando exactamente el mismo command stream; no hay camino privilegiado.
-    const chunsa::MatchConfig01A cfg{demo_units + 16, 2, 0, 20, 20, 256, 256,
+    // Sprint 1.2 (SPEC-004 §10.3): delay vuelve a 1 (valor de PRODUCCIÓN). Ya
+    // no hace falta el hack delay=0 de Sprint 1.1: command_effective_tick
+    // ahora da eff=0 a cualquier comando con target_tick==0 ingerido en el
+    // PRIMER Step (t==0) SIN importar el delay — los PLACE_BUILDING de setup
+    // (los dos centros del showcase, build_showcase_batch en t==0) siguen
+    // entrando con target_tick=0 y activando la exención de SPEC-004 §4.1.2/
+    // §4.3 exactamente igual que antes. La UI sigue usando el mismo command
+    // stream; no hay camino privilegiado (el contrato del host es: NUNCA
+    // ingerir input de jugador en la llamada a step() de t==0 — ver
+    // command_effective_tick en step.hpp).
+    const chunsa::MatchConfig01A cfg{demo_units + 16, 2, 1, 20, 20, 256, 256,
                                      DEMO_SEED, 0};
     gs = new chunsa::GameState();
     chunsa::gs_init(*gs, cfg);

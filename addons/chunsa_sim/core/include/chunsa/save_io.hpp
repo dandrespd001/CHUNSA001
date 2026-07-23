@@ -36,7 +36,16 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // literal de SPEC-002 §9.1: cargar un archivo v7 real con esta v8 de
 // gs_deserialize simplemente falla el check `SAVE_FORMAT_VERSION` del
 // envelope — ver RESULT, desviación de compatibilidad hacia atrás).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 8;
+// v9 (Sprint 1.2, SPEC-004 §10.2): la agenda pendiente (ScheduledCommand de
+// PendingCommandState) gana `u32 unit_id` tras `unit_class` — cierra el gap
+// gemelo de D8 (Sprint 1.1): un SPAWN_UNIT/SPAWN_CITIZEN/PLACE_BUILDING con
+// unit_id != 0 aún PENDIENTE (no aplicado) en el momento del save perdía esa
+// identidad al recargar. Sin migración v8→v9 (mismo precedente D7 que v7→v8):
+// cargar un save v8 real falla el check `SAVE_FORMAT_VERSION` de abajo, no hay
+// ruta de compatibilidad hacia atrás. Envelope/header sin cambios (mismo
+// patrón que v7/v8): solo el payload STATE crece (el nuevo campo de la
+// agenda).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 9;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B
