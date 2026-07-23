@@ -30,7 +30,24 @@ namespace chunsa {
 // RESULT del sprint — la TRAYECTORIA de los escenarios previos no cambia, solo
 // el dominio hasheado. Se mantiene igual el símbolo `state_checksum_v1` por la
 // misma razón que en Sprint 0.4 (no tocar call sites).
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 3;
+//
+// Sprint 1.2 (SPEC-004 §10.2): bump a v4 — VERIFICADO que el dominio v3 NO
+// cubría `pending.items[].p.unit_id` (el bucle de la agenda solo hasheaba
+// effective_tick/emitter/type/sequence/handle/x_raw/y_raw/speed_mtpt; nunca
+// unit_id, aun cuando el resto de CmdPayload — hp/attack/range_mt/unit_class —
+// tampoco se hasheaba y sigue fuera de alcance de este bump, que se limita
+// estrictamente al gap contratado). Un SPAWN_UNIT/SPAWN_CITIZEN/PLACE_BUILDING
+// con unit_id != 0 aún PENDIENTE (no aplicado) no se distinguía por checksum
+// de uno con unit_id == 0 — gap gemelo del D8 de Sprint 1.1 pero en la agenda
+// del ESTADO EN MEMORIA, no en un formato de archivo. Se añade `h.u32(unit_id)`
+// al final de cada ítem de la agenda (mismo patrón append que el resto de este
+// bucle). No hay golden-checksum de estado persistido en este repo (a
+// diferencia de los vectores Fixed64 de tests/determinism/golden, que son
+// puramente aritméticos y no tocan GameState) — todos los tests de estado
+// comparan dos corridas EN VIVO entre sí, así que "regenerar" el golden no
+// requiere tocar ningún archivo aparte de este bump de versión/dominio (ver
+// RESULT del sprint, punto 2).
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 4;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -57,7 +74,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V3", 15);
+    h.bytes("CHUNSA_STATE_V4", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -92,6 +109,7 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         h.u32(c.p.handle.index); h.u32(c.p.handle.generation);
         h.i64(c.p.x_raw); h.i64(c.p.y_raw);
         h.i32(c.p.speed_mtpt);
+        h.u32(c.p.unit_id);  // Sprint 1.2 (SPEC-004 §10.2): gap cerrado, ver bump v4 arriba.
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         h.u64(g.last_seq[e]);

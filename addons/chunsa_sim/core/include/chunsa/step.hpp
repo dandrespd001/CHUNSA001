@@ -34,8 +34,28 @@ inline constexpr int64_t BUILD_ARRIVE_RADIUS_RAW = ECO_ARRIVE_RADIUS_RAW;
 // recorder de replays calcule EXACTAMENTE el mismo effective_tick que el kernel
 // (agenda auto-verificada, sin duplicar la fórmula). No aplica el rechazo
 // OUT_OF_WINDOW (eso depende de max_future y lo decide step); solo el piso.
+//
+// Ventana de setup (Sprint 1.2, SPEC-004 §10.3, refina la enmienda §4.1.2):
+// caso explícito `target_tick == 0 && t == 0` -> `eff = 0`, SIN sumar `delay`.
+// Con delay >= 1 (valor de producción) `eff = max(target, t+delay) >= 1`
+// siempre, así que `effective_tick == 0` era INALCANZABLE (hallazgo Sprint
+// 1.1) y forzaba a los escenarios que necesitaban la exención de §4.1.2/§4.3
+// (p.ej. PLACE_BUILDING de los centros iniciales) a correr con delay=0 — un
+// valor que NUNCA se usa en producción. Este caso lo hace alcanzable sin
+// tocar delay: los comandos con target_tick=0 ingeridos en el PRIMER Step()
+// (t==0) ejecutan en el tick 0 sin retardo. Para t>0 o target_tick!=0 la
+// fórmula es EXACTAMENTE la de antes (casos existentes intactos).
+//
+// CONTRATO DEL HOST (driver/adaptador, no logic aquí — ver driver.hpp/
+// cli_run.hpp/chunsa_sim_node.cpp): el host NUNCA debe ingerir input de
+// JUGADOR en la llamada a step() de t==0 (la primera). Los comandos que un
+// host meta en ese primer batch son, por definición de este contrato,
+// EXCLUSIVAMENTE comandos de setup de escenario (spawns/edificios iniciales
+// generados por el propio escenario, nunca por un humano) — de modo que la
+// exención de tick 0 no abre una vía de escape para input real de jugador.
 inline uint32_t command_effective_tick(uint32_t target_tick, uint32_t t,
                                        uint32_t delay) noexcept {
+    if (target_tick == 0u && t == 0u) return 0u;  // §10.3: ventana de setup
     const uint32_t min_eff = t + delay;
     return target_tick < min_eff ? min_eff : target_tick;
 }

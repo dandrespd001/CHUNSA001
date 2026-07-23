@@ -178,7 +178,10 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         }
     }
 
-    // (e) PendingCommandState
+    // (e) PendingCommandState — save v9 (Sprint 1.2, SPEC-004 §10.2): +u32
+    // unit_id TRAS unit_class, append-only, mismo patrón que v7/v8. Sin
+    // migración v8→v9 (precedente D7): un save v8 real ya falla antes de
+    // llegar aquí, en el check SAVE_FORMAT_VERSION del envelope (save_io.hpp).
     const uint32_t pcount = g.pending.count;
     w.u32(pcount);
     for (uint32_t k = 0; k < pcount; ++k) {
@@ -196,6 +199,7 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         w.i32(it.p.attack);
         w.i32(it.p.range_mt);
         w.u8 (it.p.unit_class);
+        w.u32(it.p.unit_id);  // v9 (SPEC-004 §10.2)
     }
 
     // (f) Por emisor (0..15): last_seq, mailbox count/dropped, ring en orden lógico
@@ -359,7 +363,11 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         if (r.fail) return false;
     }
 
-    // (e) pending
+    // (e) pending — save v9 (Sprint 1.2, SPEC-004 §10.2): +u32 unit_id tras
+    // unit_class, espejo exacto de gs_serialize. NOTA (deviación documentada,
+    // mismo espíritu que unit_id de entidad/building_id/build_target en este
+    // archivo): no se revalida aquí contra el catálogo (acepta cualquier u32;
+    // apply_command ya comprueba bounds en caliente al aplicarse el comando).
     const uint32_t pcount = r.u32();
     if (r.fail) return false;
     if (pcount > PENDING_CAP) return false;
@@ -379,6 +387,7 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.attack              = r.i32();
         it.p.range_mt            = r.i32();
         it.p.unit_class          = r.u8();
+        it.p.unit_id             = r.u32();  // v9 (SPEC-004 §10.2)
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
         // CommandType ∈ {1..8} (Sprint 1.1, SPEC-004 §4: +PLACE_BUILDING/ASSIGN_BUILD).
