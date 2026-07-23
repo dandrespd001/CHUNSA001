@@ -219,11 +219,14 @@ static void test_replay_v3_roundtrip_place_building_nonzero_id() {
 
     ReplayWriter rec;
     rec.begin(20260716ull, 0u, 10u, 1u, 0u, 20u);
-    GameState ref{};
-    const uint64_t rec_ck = run_scenario(cat, 10u, &rec, &ref);
+    // GameState pesa varios MB: SIEMPRE en heap (regla del kernel, ver
+    // game_state.hpp). En pila cabía de milagro según el entorno y ctest
+    // segfaulteaba (endurecimiento del Arquitecto en integración).
+    auto ref = std::make_unique<GameState>();
+    const uint64_t rec_ck = run_scenario(cat, 10u, &rec, ref.get());
     CHECK(rec.finish(rec_ck, path) == 0);
-    CHECK(ref.entities.alive[0] == 1 && ref.entity_kind[0] == 1);
-    CHECK(ref.building_id[0] == 1u);  // el outpost, NO el filler
+    CHECK(ref->entities.alive[0] == 1 && ref->entity_kind[0] == 1);
+    CHECK(ref->building_id[0] == 1u);  // el outpost, NO el filler
 
     ReplayData data;
     CHECK(replay_load(path, data) == 0);
