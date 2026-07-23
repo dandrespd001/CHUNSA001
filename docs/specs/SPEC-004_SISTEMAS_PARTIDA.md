@@ -1,8 +1,11 @@
-# SPEC-004 — Sistemas de partida · Parte I: Construcción (Sprint 1.1)
+# SPEC-004 — Sistemas de partida · Partes I–II
 
-Versión 0.1 (DRAFT ejecutable) · 2026-07-23 · Autor: Arquitecto (Claude)
+Versión 0.2 (Parte I EJECUTADA en Sprint 1.1; Parte II DRAFT ejecutable para Sprint 1.2) · 2026-07-23 · Autor: Arquitecto (Claude)
 Jerarquía: INDICE_MAESTRO → SPEC_ARQUITECTURA_BASE v1.1.1 → SPEC-001 v1.1 → SPEC-002 → **este documento**.
-Partes futuras (II producción/colas, III tech/epoch-up ADR-015, IV win-conditions) se añadirán en los sprints 1.2+ **append-only**.
+Partes futuras (III win-conditions y efectos de stats por tech, IV+) se añadirán en sprints posteriores **append-only**.
+
+---
+# PARTE I — Construcción (Sprint 1.1, EJECUTADA — ver REPORTE_SPRINT_1.1)
 
 ## §1 Objetivo y alcance del incremento
 Los edificios entran al kernel como **entidades** de la misma `EntityTable` (comparten
@@ -184,8 +187,146 @@ sin conocer GameState: se le pasa el punto de dropoff resuelto, como hoy).
    rechazado (hp 0, footprint 9).
 4. ctest completo verde, `-Werror`, sin floats/heap en Step (grep + contador CI).
 
-## §10 Reparto (doctrina DELEGACION_MODELOS)
-- **Arquitecto**: este contrato, revisión de todo, integración.
-- **Sonnet**: §2–§8 completos en el kernel (juicio requerido: fases de Step, save v8, regen).
-- **MiniMax**: datos YAML de edificios del slice (brief cerrado aparte) + verificación factual.
-- **ChatGPT (Luna Max)**: render de edificios + UI de colocación en Godot (arranque aparte).
+## §9b Reparto Parte I (ejecutado)
+Arquitecto: contrato/revisión/integración · Sonnet: kernel · MiniMax: datos · Codex/Luna Max: UI.
+
+---
+# PARTE II — Fidelidad de comandos, producción, tecnología y épocas (Sprint 1.2)
+
+## §10 Fidelidad de comandos: replay v3 + save v9 (PRIMERA pieza del sprint, bloqueante)
+Cierra los dos gaps de identidad de datos (D8 del Sprint 1.1 + gap gemelo del save):
+`CmdPayload::unit_id` — que transporta UnitId en SPAWN_UNIT/SPAWN_CITIZEN y BuildingId en
+PLACE_BUILDING — **no se serializa** ni en el replay (v2) ni en la agenda pendiente del
+save. Cualquier partida real con ids != 0 pierde fidelidad al recargar/reproducir.
+
+### §10.1 Replay v3
+- `REPLAY_WRITE_VERSION = 3`. Registro por comando = el layout v2 **+ `u32 unit_id` al
+  final**. Cabecera y semántica de `effective_tick`/`schedule_mismatches` sin cambios.
+- El loader acepta v1/v2/v3. En v1/v2 el campo se reconstruye como 0 con una advertencia
+  contable en `ReplayData` (`legacy_payload_loss = 1` si el stream contiene algún comando
+  de un tipo que use unit_id) — el verificador puede así distinguir "replay antiguo
+  potencialmente infiel" de "replay v3 fiel". Grabación siempre en v3.
+
+### §10.2 Save v9 (agenda con unit_id)
+- `SAVE_FORMAT_VERSION = 9`: la serialización de cada `ScheduledCommand` de la agenda
+  pendiente gana `u32 unit_id` (tras `unit_class`, mismo patrón append). El resto del
+  stream v8 no cambia. Sin migración v8→v9 (precedente D7).
+- El checksum NO cambia de dominio por esto (la agenda ya estaba en el dominio y el
+  dominio hashea los structs en memoria, no el stream — verificar que efectivamente el
+  checksum de la agenda incluye unit_id; si no lo incluye, añadirlo = bump a
+  `CHUNSA_STATE_V4` con regen, mismo procedimiento).
+
+### §10.3 Ventana de setup alcanzable con delay ≥ 1 (refina la enmienda §4.1.2)
+Hallazgo del Sprint 1.1: con `human_input_delay_ticks >= 1`, `effective_tick == 0` es
+inalcanzable (`eff = max(target, t+delay) >= 1`) y la exención de escenario obligaba a
+la demo a usar delay=0. Refinamiento contractual:
+- `command_effective_tick` gana un caso explícito de setup: **si `target_tick == 0` y
+  `t == 0`, `eff = 0`** (los comandos con destino "antes de que el mundo empiece",
+  ingeridos en el primer Step, ejecutan en el tick 0 sin sumar delay).
+- Contrato del host (driver/adaptador, documentado en el header): NO ingerir input de
+  jugador antes del primer Step; los comandos pre-Step son exclusivamente de setup.
+- El replay no necesita nada nuevo: v2+ persiste `effective_tick` por comando.
+- La demo vuelve a `human_input_delay_ticks = 1` (el valor de producción).
+
+## §11 Producción (colas de entrenamiento)
+### §11.1 Datos (extiende la tabla tipada §2)
+`UnitDefinitionV1` gana campos tipados desde el schema unit existente: `cost_a/cost_b/
+cost_me` (de resource_costs; ausente = 0), `build_time_ticks` (de stats, >= 1),
+`pop_cost = 1` (constante v1, no viene de datos). `BuildingDefinitionV1` gana
+`trains[PROD_TRAINS_MAX=8]` (UnitId resueltos desde los record_id del campo `trains`
+del schema en carga; referencia no resoluble ⇒ error de carga, catálogo rechazado) y
+`train_count`, más `researches[PROD_TECHS_MAX=8]`/`research_count` (TechId, §12).
+### §11.2 Estado nuevo en GameState (ESTADO: serializado + checksummeado)
+```cpp
+inline constexpr uint32_t PROD_QUEUE_CAP = 5;
+uint32_t prod_queue[ENTITY_HARD_CAP][PROD_QUEUE_CAP]; // UnitId; slots >= count = INVALID_UNIT_ID
+uint8_t  prod_count[ENTITY_HARD_CAP];
+uint32_t prod_progress[ENTITY_HARD_CAP];  // ticks del ítem en cabeza
+int64_t  rally_x[ENTITY_HARD_CAP], rally_y[ENTITY_HARD_CAP]; // raw; 0,0 = sin rally
+uint8_t  rally_set[ENTITY_HARD_CAP];
+int32_t  pop_used[MAX_EMITTERS];          // pop_cap fijo v1: POP_CAP_V1 = 200
+```
+### §11.3 Comandos (append-only)
+- **TRAIN_UNIT = 9**: `p.handle` = edificio propio COMPLETO; `p.unit_id` = UnitId.
+  Validación en orden: handle vivo/propio (**INVALID_ENTITY/NOT_OWNER**) · es edificio
+  completo (**ILLEGAL_STATE**) · catálogo y unit_id válidos y `unit_id ∈ trains` del
+  edificio (**MALFORMED**) · época: `player_epoch[emitter] ∈ epoch_window` de la unidad
+  (**ILLEGAL_STATE**) · cola no llena (**ILLEGAL_STATE**) · `pop_used + pop_cost <=
+  POP_CAP_V1` (**ILLEGAL_STATE**) · stock cubre costes (**ILLEGAL_STATE**). Efecto:
+  deducir costes, encolar, `pop_used += pop_cost` (la población se reserva al encolar;
+  se libera al morir la unidad o nunca si se entrena — sin cancel en Parte II,
+  desviación documentada).
+- **SET_RALLY = 10**: `p.handle` = edificio propio (completo o no); `p.x_raw/p.y_raw` =
+  punto raw dentro de la cota del mundo. Efecto: rally_x/y + rally_set=1.
+### §11.4 production_system (fase de Step, tras construction_system, antes de DESTROY)
+Iteración ascendente sobre edificios vivos completos con `prod_count > 0`:
+`prod_progress += 1`; al alcanzar `build_time_ticks` de la unidad en cabeza: spawn
+determinista de la unidad (misma inicialización que SPAWN_UNIT data-driven; posición =
+punto medio del lado inferior del footprint + medio tile, exacto en raw), `tgt` = rally
+si `rally_set` (la unidad camina con movement_v1), desplazar la cola una posición,
+`prod_progress = 0`. Si no hay slot de entidad libre: el ítem espera (reintenta cada
+tick, sin perder progreso — determinista). La muerte de una unidad reduce `pop_used`
+(en el reciclaje del destroy batch, por owner).
+La muerte del edificio pierde su cola (los costes ya pagados se pierden; pop reservada
+de los ítems no entrenados se libera en el reciclaje).
+
+## §12 Tecnología y épocas (ADR-015)
+### §12.1 Datos
+Tabla tipada `TechDefinitionV1`: `id`, `cost_a/b/me`, `research_time_ticks (>=1)`,
+`epoch` (1..15), `prerequisites[4]`/`prereq_count` (TechId), `grants[4]`/`grant_count`
+(CapabilityId = índice en la tabla de capacidades declaradas del blob),
+`mutually_exclusive_with[4]`/`mutex_count` (TechId). Referencias no resolubles ⇒ error
+de carga. **Las techs son paquetes de capacidad (base v1.1): NO modifican stats en
+Parte II** — los efectos sobre stats llegan en Parte III; en 1.2 las capacidades
+gatean contenido (units/buildings/techs con `required_capabilities`) y el epoch-up.
+### §12.2 Estado
+```cpp
+uint64_t player_techs[MAX_EMITTERS][TECH_WORDS];   // bitmask TechId investigadas
+uint64_t player_caps[MAX_EMITTERS][CAP_WORDS];     // bitmask capacidades adquiridas
+uint8_t  player_epoch[MAX_EMITTERS];               // época actual (init: época del slice)
+uint32_t research_tech[ENTITY_HARD_CAP];           // INVALID_TECH_ID = ocioso
+uint32_t research_progress[ENTITY_HARD_CAP];
+```
+### §12.3 Comandos
+- **RESEARCH_TECH = 11**: `p.handle` = edificio propio completo con `tech ∈ researches`;
+  `p.unit_id` = TechId. Validación: análoga a TRAIN (handle/completo/catálogo/lista) ·
+  no investigada ya ni en curso por este jugador (**ILLEGAL_STATE**) · prerequisites
+  cumplidos y ningún mutex investigado (**ILLEGAL_STATE**) · `tech.epoch <=
+  player_epoch` (**ILLEGAL_STATE**) · edificio ocioso de investigación (**ILLEGAL_STATE**)
+  · stock (**ILLEGAL_STATE**). Efecto: deducir, `research_tech/progress`.
+  Al completar (research_system, misma fase que production): set bit en player_techs,
+  OR de grants en player_caps.
+- **EPOCH_UP = 12**: `p.handle` = 0 (comando de jugador, no de entidad). Doble gate
+  ADR-015: (a) el jugador posee >= 2 edificios COMPLETOS cuya `epoch_window` incluye su
+  época actual; (b) `g.tick >= EPOCH_MIN_TICKS * (player_epoch - época_inicial + 1)`
+  (constante v1: 20 ticks/s * 300 s = 6000). Además coste fijo v1 (EPOCH_COST_A/B/ME,
+  constantes) y `player_epoch < EPOCH_MAX_V1` (época máxima del slice, de los datos del
+  match — v1: constante 7). Efecto: deducir, `player_epoch += 1`. Rechazos: ILLEGAL_STATE.
+### §12.4 Gating por época y capacidades (retro-aplica a Parte I)
+PLACE_BUILDING (camino normal, no exento) y TRAIN_UNIT validan además:
+`player_epoch ∈ epoch_window` del def y `required_capabilities ⊆ player_caps`
+(**ILLEGAL_STATE**). Los defs iniciales del slice no requieren capacidades (compat).
+
+## §13 Persistencia, checksum y gates (Parte II)
+- Save v9 (§10.2) y, tras §11–§12, **save v10** con los arrays nuevos (§11.2, §12.2) al
+  final; dominio de checksum → `CHUNSA_STATE_V4` (o V5 si §10.2 ya lo bumpeó) con regen
+  golden por el procedimiento establecido; trayectoria de escenarios previos bit-idéntica
+  (dump pre/post obligatorio, mismo estándar que §9.1).
+- Replay v3 desde §10.1; los comandos 9–12 viajan como cualquier CommandType.
+- Tests mínimos: replay v3 round-trip con PLACE_BUILDING de id != 0 (el caso que v2
+  pierde — DEBE fallar con v2 forzado y pasar con v3) · save v9 con SPAWN_UNIT pendiente
+  en agenda · setup window con delay=1 (target 0 en t=0 ⇒ eff 0; target 0 en t=1 ⇒
+  eff 2) · TRAIN feliz + cada rechazo · cola llena/pop llena · producción multi-ítem con
+  slot exhausto intermedio · rally · RESEARCH con prereq/mutex/época · EPOCH_UP doble
+  gate (falla por edificios, falla por tiempo, pasa) · gating de época en TRAIN/PLACE.
+- ctest completo + golden + G1/G3/G4/G5 verdes, `-Werror`, cero float/heap en Step.
+
+## §14 Reparto Parte II
+- **Arquitecto**: este contrato, revisión, integración, enmiendas.
+- **Sonnet K1**: §10 completo (replay v3 + save v9 + setup window) — PRIMERO, se integra
+  antes de empezar K2.
+- **Sonnet K2**: §11 + §12 + §13 (producción, tech, épocas, save v10) sobre el main que
+  ya incluye K1.
+- **MiniMax**: datos YAML (cuarteles con `trains`, techs M1 de Egipto/Roma con
+  procedencia ADR-014) — en paralelo, validados por el gate `data_compile`.
+- **Codex/Luna Max**: UI de producción/tech/época — al final, contra main con K2.
