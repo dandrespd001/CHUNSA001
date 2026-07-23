@@ -132,7 +132,12 @@ def _read_sources(root, errors):
     for kind, directory, _, _ in KIND_INFO[1:]:
         d = root / directory
         if d.exists() and not d.is_dir(): _err(errors, "E_IO", kind, "", "", "category is not directory")
-        if d.is_dir(): paths.extend((kind, p) for p in sorted(d.glob("*.yaml"), key=lambda p: _utf8_key(p.name)))
+        # P2-4: *.yaml y *.yml son ambos YAML válido; se reconocen los dos en
+        # lugar de ignorar *.yml en silencio. El orden se mantiene determinista
+        # (sorted por clave UTF-8 del nombre) sobre la unión de ambos patrones.
+        if d.is_dir():
+            paths.extend((kind, p) for p in sorted(
+                (*d.glob("*.yaml"), *d.glob("*.yml")), key=lambda p: _utf8_key(p.name)))
     validators = _schemas(root)
     for kind, path in paths:
         if not path.exists():
@@ -165,7 +170,7 @@ def _date(s):
     try: _dt.date.fromisoformat(s); return True
     except (TypeError, ValueError): return False
 
-def _semantic(records, profile, errors):
+def _semantic(records, profile, errors, source_root=None):
     if len(records["manifest"]) != 1:
         _err(errors, "E_SCHEMA", "manifest", "", "", "exactly one manifest required")
         return
@@ -219,6 +224,13 @@ def _semantic(records, profile, errors):
                         or re.match(r"^[A-Za-z]:", report)):
                     _err(errors, "E_PROVENANCE", kind, ident,
                          f"/provenance/historical_claims/verification_reports/{pos}", "report path is not portable relative POSIX")
+                elif source_root is not None and not (source_root / pure).is_file():
+                    # P1-1: procedencia auto-contenida — la ruta debe existir dentro del
+                    # repo, relativa al source_root, o un clon limpio no puede resolver
+                    # la evidencia y la cadena "promoted" (ADR-014) queda rota.
+                    _err(errors, "E_PROVENANCE", kind, ident,
+                         f"/provenance/historical_claims/verification_reports/{pos}",
+                         f"report path does not exist under source_root: {report}")
 
     def ref(kind, owner, target, expected, pointer):
         got = ids.get(target)
@@ -671,7 +683,7 @@ def validate(root, profile):
     # Fases dependientes no corren sobre un índice incompleto: un fallo de
     # parse/schema excluiría records y produciría referencias secundarias falsas.
     if not errors:
-        _semantic(records,profile,errors)
+        _semantic(records,profile,errors,source_root=Path(root))
     if errors:
         for x in sorted(errors,key=lambda x:x[:4]): print(x[4],file=sys.stderr)
         if any(item[3] == "E_IO" for item in errors): raise ValidationIoError
