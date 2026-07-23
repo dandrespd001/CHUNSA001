@@ -391,8 +391,34 @@ static void test_scenario_exemption() {
         CHECK(g->player_stock[0][0] == 0);  // sin deducción bajo exención
     }
 
-    // 2b') Mismo comando, effective_tick >= 1 (delay=1, target_tick=0 -> eff=1)
-    // -> ILLEGAL_STATE, NO POOL_EXHAUSTED ni MALFORMED: el paso 2 SÍ aplica.
+    // 2b') Sprint 1.2 (SPEC-004 §10.3): mismo comando (target_tick=0) pero con
+    // delay=1 (valor de PRODUCCIÓN, ya no delay=0) ingerido en el PRIMER Step
+    // (t=0) -> effective_tick SIGUE siendo 0 (ventana de setup, no aplica el
+    // delay) -> ACCEPTED bajo la exención de escenario, exactamente igual que
+    // 2a. Esto es lo que permite que la demo (chunsa_sim_node.cpp) vuelva a
+    // delay=1 sin dejar de colocar sus centros iniciales.
+    {
+        auto g = std::make_unique<GameState>();
+        MatchConfig01A cfg = make_cfg();
+        cfg.human_input_delay_ticks = 1;
+        gs_init(*g, cfg);
+        gs_bind_catalog(*g, cat);
+        CHECK(g->player_stock[0][0] == 0);  // sin stock: la exención también exime costes
+
+        RawCommand cmd = place_building(0, 0, 1, 1 /*center*/, 10, 10);
+        // target_tick==0 && t==0 -> eff=0, SIN sumar delay (§10.3).
+        CHECK(command_effective_tick(cmd.target_tick, 0u, cfg.human_input_delay_ticks) == 0u);
+        const StepResult r = step(*g, &cmd, 1);  // t=0: eff==0 -> debido en el MISMO step
+        CHECK(r.accepted == 1 && r.rejected == 0);
+        CHECK(g->entities.alive[0] == 1);
+        CHECK(g->build_progress[0] >= g->catalog->buildings[1].build_time_ticks);
+    }
+
+    // 2b'') Fuera de la ventana de setup con delay=1: target_tick=1 (NO 0) en
+    // t=0 -> eff=max(1, 0+1)=1 != 0 (la regla nueva NO aplica si target!=0) ->
+    // NO exento -> ILLEGAL_STATE al aplicarse en t=1 (mismo comportamiento de
+    // "fuera de la exención" que antes de este sprint, solo que ahora se
+    // alcanza con target_tick=1 en vez de con target_tick=0+delay=1).
     {
         auto g = std::make_unique<GameState>();
         MatchConfig01A cfg = make_cfg();
@@ -400,12 +426,10 @@ static void test_scenario_exemption() {
         gs_init(*g, cfg);
         gs_bind_catalog(*g, cat);
 
-        RawCommand cmd = place_building(0, 0, 1, 1 /*center*/, 10, 10);
-        // effective_tick = max(target_tick=0, t+delay=0+1) = 1 != 0.
+        RawCommand cmd = place_building(1, 0, 1, 1 /*center*/, 10, 10);
         CHECK(command_effective_tick(cmd.target_tick, 0u, cfg.human_input_delay_ticks) == 1u);
-        // El comando se agenda en t=0 y se aplica en t=1 (step 2 veces).
-        step(*g, &cmd, 1);   // t=0: agenda, no debido aún
-        const StepResult r2 = step(*g, nullptr, 0);  // t=1: debido
+        step(*g, &cmd, 1);                           // t=0: agenda, no debido aún
+        const StepResult r2 = step(*g, nullptr, 0);  // t=1: debido, eff=1 != 0 -> no exento
         CHECK(r2.rejected == 1);
         CHECK(last_result(g->mailbox[0]) == RejectReason::ILLEGAL_STATE);
         CHECK(g->entities.alive_count == 0);
@@ -779,10 +803,15 @@ static void test_gate_equivalents() {
     }
 
     // 8c) G5-estilo: grabar con ReplayWriter y reproducir con replay_load,
-    // incluyendo PLACE_BUILDING+ASSIGN_BUILD. Ver nota de cabecera: BuildingId
-    // 0 y UnitId 0 hacen que la NO-serialización de CmdPayload::unit_id en
-    // replay v2 (gap heredado, no tocado en este sprint) no afecte el
-    // resultado — el valor truncado a 0 coincide con el valor real.
+    // incluyendo PLACE_BUILDING+ASSIGN_BUILD. Nota histórica (Sprint 1.1): el
+    // escenario usa deliberadamente BuildingId=0 y UnitId=0 para que la
+    // NO-serialización de CmdPayload::unit_id en replay v2 no afectara el
+    // resultado (gap heredado, no tocado en ESE sprint). Sprint 1.2
+    // (SPEC-004 §10.1) cierra ese gap: ReplayWriter graba SIEMPRE v3 desde
+    // ahora, así que el truco de índice 0 ya no es necesario para que este
+    // test pase — se conserva solo porque sigue siendo un escenario válido
+    // (ver test_replay_v3.cpp para la cobertura dedicada de un BuildingId/
+    // UnitId != 0 bajo v3, incluida la comparación explícita contra v2).
     {
         ReplayWriter rec;
         rec.begin(777ull, 0u, 20u, 1u, 0u, 20u);
@@ -791,7 +820,8 @@ static void test_gate_equivalents() {
 
         ReplayData data;
         CHECK(replay_load("test_buildings_gate.curp", data) == 0);
-        CHECK(data.version == 2u);
+        CHECK(data.version == 3u);
+        CHECK(data.legacy_payload_loss == 0u);
 
         static DataCatalogV1 cat = fixture::make_catalog();
         auto g = std::make_unique<GameState>();

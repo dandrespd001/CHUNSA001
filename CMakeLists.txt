@@ -90,6 +90,11 @@ add_executable(chunsa_test_buildings tests/unit/test_buildings.cpp)
 target_link_libraries(chunsa_test_buildings PRIVATE chunsa_sim_core)
 add_test(NAME buildings COMMAND chunsa_test_buildings)
 
+# --- Test Sprint 1.2 (K1): replay v3 + save v9 + ventana de setup (SPEC-004 §10) -
+add_executable(chunsa_test_replay_v3 tests/unit/test_replay_v3.cpp)
+target_link_libraries(chunsa_test_replay_v3 PRIVATE chunsa_sim_core)
+add_test(NAME replay_v3 COMMAND chunsa_test_replay_v3)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
