@@ -60,6 +60,39 @@ inline void receipt(GameState& g, uint16_t emitter, uint64_t seq, RejectReason r
     }
 }
 
+// Sprint 0.4 (SPEC-002 §8.4): inicializa los componentes de una unidad de
+// combate (infantry/cavalry/artillery) EXCLUSIVAMENTE desde el catálogo. Sin
+// heap/lookup textual — `def` ya es un puntero validado fuera de Step().
+inline void init_combat_unit_from_catalog(GameState& g, uint32_t i,
+                                          const UnitDefinitionV1& def) noexcept {
+    g.hp[i] = def.hp; g.max_hp[i] = def.hp;
+    g.attack[i] = def.attack;
+    g.range_mt[i] = def.range_millitiles;
+    g.unit_class[i] = static_cast<uint8_t>(def.unit_class);
+    g.atk_cd[i] = 0;
+    g.speed_mtpt[i] = def.speed_millitile_tick;
+    g.morale[i] = def.morale;
+    g.fleeing[i] = 0;
+}
+
+// Misma state machine económica que el SPAWN_CITIZEN histórico, pero con hp
+// y velocidad tomados del catálogo (no hardcodeados). Compartida por
+// SPAWN_UNIT(class=Citizen) y SPAWN_CITIZEN data-driven (SPEC-002 §8.4).
+inline void init_citizen_from_catalog(GameState& g, uint32_t i,
+                                      const UnitDefinitionV1& def) noexcept {
+    g.hp[i] = def.hp; g.max_hp[i] = def.hp;
+    g.attack[i] = 0; g.range_mt[i] = 0;
+    g.unit_class[i] = 3;  // citizen: excluido de combat_system
+    g.atk_cd[i] = 0;
+    g.speed_mtpt[i] = def.speed_millitile_tick;
+    g.morale[i] = def.morale;
+    g.fleeing[i] = 0;
+    g.eco_state[i] = EcoState::SEEK;
+    g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
+    g.eco_carry[i] = 0;
+    g.eco_carry_resource[i] = 0;
+}
+
 // Validación y aplicación de UN comando debido (función pura de estado+comando).
 inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexcept {
     switch (c.type) {
@@ -79,12 +112,48 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             return RejectReason::ACCEPTED;
         }
         case CommandType::SPAWN_UNIT: {
+            // Sprint 0.4 (SPEC-002 §8.4): data-driven por defecto. `unit_id`
+            // decide el camino; jamás se hace lookup textual aquí (el binding
+            // ya resolvió record_id → UnitId fuera de Step()).
             const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            if (!world_contains(p)) return RejectReason::MALFORMED;
+
+            if (c.p.unit_id != INVALID_UNIT_ID) {
+                if (g.catalog == nullptr || c.p.unit_id >= g.catalog->unit_count) {
+                    return RejectReason::MALFORMED;
+                }
+                // Camino normal: TODOS los campos de stats del payload deben
+                // ser cero (SPEC-002 §8.4) — las stats vienen solo del dato.
+                const bool payload_clean = c.p.hp == 0 && c.p.attack == 0
+                                        && c.p.range_mt == 0 && c.p.unit_class == 0
+                                        && c.p.speed_mtpt == 0;
+                if (!payload_clean) return RejectReason::MALFORMED;
+                const UnitDefinitionV1& def = g.catalog->units[c.p.unit_id];
+                if (def.unit_class == UnitClassV1::Siege
+                    || def.unit_class == UnitClassV1::NavalLight) {
+                    return RejectReason::ILLEGAL_STATE;  // compilados, spawn aún no soportado
+                }
+                const EntityHandle h = et_spawn(g.entities);
+                if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
+                const uint32_t i = h.index;
+                g.pos_x[i] = c.p.x_raw; g.pos_y[i] = c.p.y_raw;
+                g.tgt_x[i] = c.p.x_raw; g.tgt_y[i] = c.p.y_raw;
+                g.vel_x[i] = 0; g.vel_y[i] = 0;
+                g.owner[i] = static_cast<uint8_t>(c.emitter);
+                g.unit_id[i] = c.p.unit_id;
+                if (def.unit_class == UnitClassV1::Citizen) {
+                    detail::init_citizen_from_catalog(g, i, def);
+                } else {
+                    detail::init_combat_unit_from_catalog(g, i, def);
+                }
+                return RejectReason::ACCEPTED;
+            }
+
+            // Camino debug LEGADO: solo si el match lo habilita explícitamente.
+            if (g.cfg.allow_debug_stat_payload != 1u) return RejectReason::MALFORMED;
             const bool combat_ok = c.p.hp > 0 && c.p.attack >= 0
                                  && c.p.range_mt >= 0 && c.p.unit_class <= 2;
-            if (!world_contains(p) || !combat_ok) {
-                return RejectReason::MALFORMED;
-            }
+            if (!combat_ok) return RejectReason::MALFORMED;
             const EntityHandle h = et_spawn(g.entities);
             if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
             const uint32_t i = h.index;
@@ -105,17 +174,46 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.speed_mtpt[i] = c.p.speed_mtpt;
             g.morale[i] = MORALE_MAX;
             g.fleeing[i] = 0;
+            g.unit_id[i] = INVALID_UNIT_ID;
             return RejectReason::ACCEPTED;
         }
         case CommandType::SPAWN_CITIZEN: {
             // Ciudadano económico: unit_class=3 lo excluye de combat_system (ambos
-            // lados: atacante y objetivo — ver el guard `> 2` allí). hp nominal, no
-            // se daña en v1 (nada apunta a class>2), pero se mantiene coherente con
-            // la EntityTable (vivo/muerto) por si el futuro añade amenazas.
+            // lados: atacante y objetivo — ver el guard `> 2` allí). Alias
+            // restringido a clase Citizen del mismo camino data-driven que
+            // SPAWN_UNIT (SPEC-002 §8.4).
             const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
-            if (!world_contains(p) || c.p.speed_mtpt <= 0) {
-                return RejectReason::MALFORMED;
+            if (!world_contains(p)) return RejectReason::MALFORMED;
+
+            if (c.p.unit_id != INVALID_UNIT_ID) {
+                if (g.catalog == nullptr || c.p.unit_id >= g.catalog->unit_count) {
+                    return RejectReason::MALFORMED;
+                }
+                const bool payload_clean = c.p.hp == 0 && c.p.attack == 0
+                                        && c.p.range_mt == 0 && c.p.unit_class == 0
+                                        && c.p.speed_mtpt == 0;
+                if (!payload_clean) return RejectReason::MALFORMED;
+                const UnitDefinitionV1& def = g.catalog->units[c.p.unit_id];
+                if (def.unit_class != UnitClassV1::Citizen) return RejectReason::ILLEGAL_STATE;
+                const EntityHandle h = et_spawn(g.entities);
+                if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
+                const uint32_t i = h.index;
+                g.pos_x[i] = c.p.x_raw; g.pos_y[i] = c.p.y_raw;
+                g.tgt_x[i] = c.p.x_raw; g.tgt_y[i] = c.p.y_raw;
+                g.vel_x[i] = 0; g.vel_y[i] = 0;
+                g.owner[i] = static_cast<uint8_t>(c.emitter);
+                g.unit_id[i] = c.p.unit_id;
+                detail::init_citizen_from_catalog(g, i, def);
+                return RejectReason::ACCEPTED;
             }
+
+            // Camino debug LEGADO (deviación documentada frente a SPEC-002
+            // §8.4: se conserva hp=20 hardcodeado del comportamiento previo a
+            // este sprint en lugar de exigir hp>0 del payload, para no
+            // perturbar los supuestos numéricos de test_economy.cpp; ver
+            // RESULT del sprint).
+            if (g.cfg.allow_debug_stat_payload != 1u) return RejectReason::MALFORMED;
+            if (c.p.speed_mtpt <= 0) return RejectReason::MALFORMED;
             const EntityHandle h = et_spawn(g.entities);
             if (handle_eq(h, NULL_HANDLE)) return RejectReason::POOL_EXHAUSTED;
             const uint32_t i = h.index;
@@ -130,6 +228,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.speed_mtpt[i] = c.p.speed_mtpt;
             g.morale[i] = MORALE_MAX;
             g.fleeing[i] = 0;
+            g.unit_id[i] = INVALID_UNIT_ID;
             g.eco_state[i] = EcoState::SEEK;
             g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
             g.eco_carry[i] = 0;

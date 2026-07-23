@@ -2,6 +2,7 @@ build/
 build-*/
 .cache/
 __pycache__/
+.venv/
 *.o
 *.obj
 *.exe

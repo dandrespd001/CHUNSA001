@@ -76,7 +76,26 @@ add_executable(chunsa_test_replay_v2 tests/unit/test_replay_v2.cpp)
 target_link_libraries(chunsa_test_replay_v2 PRIVATE chunsa_sim_core)
 add_test(NAME replay_v2 COMMAND chunsa_test_replay_v2)
 
+# --- Test Sprint 0.4: kernel data-driven (loader CHDB v1 + SPAWN_UNIT/CITIZEN) ---
+add_executable(chunsa_test_data_blob tests/unit/test_data_blob.cpp)
+target_link_libraries(chunsa_test_data_blob PRIVATE chunsa_sim_core)
+# Ruta absoluta al golden versionado: el test NO depende del cwd implícito de
+# ctest (brief SONNET_KERNEL_DATOS_SPEC002 §9).
+target_compile_definitions(chunsa_test_data_blob PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME data_blob COMMAND chunsa_test_data_blob)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
+# tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
+# no parte de este sprint). Si existe un venv local `.venv` (gitignored; ver
+# nota abajo) con esas dependencias, se prefiere para no depender de paquetes
+# del sistema o de un intérprete "externally managed" (PEP 668/uv) que
+# rechace `pip install`. Fallback: descubrimiento estándar de CMake si no
+# existe `.venv` (comportamiento previo intacto).
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3")
+    set(Python3_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3" CACHE FILEPATH
+        "Intérprete Python para el gate data_compile (venv local si existe)")
+endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME data_compile
     COMMAND ${Python3_EXECUTABLE} -m unittest discover
