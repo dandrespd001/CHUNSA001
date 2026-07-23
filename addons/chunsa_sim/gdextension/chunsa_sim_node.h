@@ -44,9 +44,16 @@ public:
         float x[1024];
         float y[1024];
         uint8_t alive[1024];    // 1 = slot vivo este snapshot
+        uint32_t generation[1024]; // generación del handle del slot
         uint8_t owner[1024];    // 0..7
         uint8_t unit_class[1024]; // 0=infantry 1=cavalry 2=artillery 3=citizen
         uint8_t fleeing[1024];  // 1 = en pánico
+        uint8_t entity_kind[1024]; // 0=unidad, 1=edificio
+        uint32_t building_id[1024];
+        uint32_t build_progress[1024];
+        uint16_t bld_anchor_tx[1024];
+        uint16_t bld_anchor_ty[1024];
+        uint32_t build_target[1024]; // BUILD_NO_TARGET si el ciudadano está libre
     };
 
 private:
@@ -67,6 +74,9 @@ private:
     chunsa::UnitId uid_cavalry = chunsa::INVALID_UNIT_ID;
     chunsa::UnitId uid_citizen = chunsa::INVALID_UNIT_ID;
     chunsa::UnitId uid_artillery = chunsa::INVALID_UNIT_ID;
+    chunsa::BuildingId bid_settlement_center = chunsa::INVALID_BUILDING_ID;
+    chunsa::BuildingId bid_forum_center = chunsa::INVALID_BUILDING_ID;
+    chunsa::BuildingId bid_buildable = chunsa::INVALID_BUILDING_ID;
     // Interpolación (contrato): dos snapshots + instante de llegada de curr.
     DemoSnapshot snap_prev{};
     DemoSnapshot snap_curr{};
@@ -82,6 +92,8 @@ private:
     bool shot_f600_done = false;
 
     godot::MultiMeshInstance3D* mmi_units3d = nullptr;
+    godot::MultiMeshInstance3D* mmi_buildings3d = nullptr;
+    godot::MultiMeshInstance3D* mmi_ghost3d = nullptr;
     godot::MultiMeshInstance3D* mmi_wall3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
@@ -96,12 +108,24 @@ private:
     bool is_selected[1024] = {};
     bool dragging = false;
     godot::Vector2 drag_start;
+    godot::Vector2 cursor_screen;
+    bool have_cursor = false;
+    bool placement_mode = false;
+    bool placement_input_captured = false;
 
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
     void setup_3d();               // rig del modo (c), reutilizado del spike
     void render_interpolated();    // cada frame: lerp(prev, curr, alpha)
     void maybe_screenshot();
+    bool screen_to_tile(const godot::Vector2& screen, int64_t& tx,
+                        int64_t& ty) const;
+    bool is_static_wall(int64_t tx, int64_t ty) const;
+    bool placement_valid(chunsa::BuildingId building_id, int64_t tx,
+                         int64_t ty) const;
+    void enqueue_place_building(int64_t tx, int64_t ty);
+    uint32_t enqueue_build_assignments(int64_t tx, int64_t ty);
+    void cycle_buildable_building();
 
 protected:
     static void _bind_methods();

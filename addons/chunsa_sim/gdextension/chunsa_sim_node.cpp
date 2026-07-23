@@ -26,14 +26,18 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <iterator>
 #include <vector>
 
+#include <godot_cpp/classes/box_mesh.hpp>
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/input_event_key.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
+#include <godot_cpp/classes/input_event_mouse_motion.hpp>
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/multi_mesh_instance3d.hpp>
 #include <godot_cpp/classes/os.hpp>
@@ -51,6 +55,7 @@
 namespace {
 constexpr uint64_t DEMO_SEED = 20260716ull;
 constexpr auto TICK_PERIOD = std::chrono::milliseconds(50);  // 20 Hz
+constexpr int64_t MAP_TILES = 256;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 }  // namespace
@@ -82,7 +87,11 @@ void ChunsaSimNode::_ready() {
     // max_entities, player_count, human_input_delay_ticks,
     // max_future_command_ticks, checksum_every_ticks, map_tiles_x,
     // map_tiles_y, seed, allow_debug_stat_payload (0 = data-driven, Sprint 0.4)
-    const chunsa::MatchConfig01A cfg{demo_units + 16, 1, 1, 20, 20, 256, 256,
+    // Delay 0 es deliberado en el escenario: permite que los comandos
+    // PLACE_BUILDING de setup con target_tick=0 lleguen al kernel con
+    // effective_tick=0 y activen la exención de SPEC-004 §4.1.2. La UI sigue
+    // usando exactamente el mismo command stream; no hay camino privilegiado.
+    const chunsa::MatchConfig01A cfg{demo_units + 16, 2, 0, 20, 20, 256, 256,
                                      DEMO_SEED, 0};
     gs = new chunsa::GameState();
     chunsa::gs_init(*gs, cfg);
@@ -109,10 +118,37 @@ void ChunsaSimNode::_ready() {
             *gs->catalog, "egipto:work_crew", std::strlen("egipto:work_crew"));
         uid_artillery = chunsa::catalog_find_unit(
             *gs->catalog, "rome:ballista_crew", std::strlen("rome:ballista_crew"));
+        bid_settlement_center = chunsa::catalog_find_building(
+            *gs->catalog, "egipto:settlement_center",
+            std::strlen("egipto:settlement_center"));
+        bid_forum_center = chunsa::catalog_find_building(
+            *gs->catalog, "rome:forum_center", std::strlen("rome:forum_center"));
+        bid_buildable = chunsa::catalog_find_building(
+            *gs->catalog, "egipto:shena_granary",
+            std::strlen("egipto:shena_granary"));
+        if (bid_buildable == chunsa::INVALID_BUILDING_ID) {
+            for (uint32_t i = 0; i < gs->catalog->building_count; ++i) {
+                if (gs->catalog->buildings[i].constructible != 0u) {
+                    bid_buildable = i;
+                    break;
+                }
+            }
+        }
         godot::UtilityFunctions::print(
             "CHUNSA catálogo OK: cav_id=", static_cast<int64_t>(uid_cavalry),
             " cit_id=", static_cast<int64_t>(uid_citizen),
-            " art_id=", static_cast<int64_t>(uid_artillery));
+            " art_id=", static_cast<int64_t>(uid_artillery),
+            " building_count=", static_cast<int64_t>(gs->catalog->building_count),
+            " settlement_id=", static_cast<int64_t>(bid_settlement_center),
+            " forum_id=", static_cast<int64_t>(bid_forum_center),
+            " buildable_id=", static_cast<int64_t>(bid_buildable));
+        if (bid_settlement_center == chunsa::INVALID_BUILDING_ID ||
+            bid_forum_center == chunsa::INVALID_BUILDING_ID ||
+            bid_buildable == chunsa::INVALID_BUILDING_ID) {
+            godot::UtilityFunctions::print(
+                "CHUNSA ERROR: catálogo sin centros iniciales o edificio construible");
+            return;
+        }
     }
     ring = new chunsa::SnapshotRing<DemoSnapshot>();
     ring->init();
@@ -153,11 +189,18 @@ void ChunsaSimNode::sim_loop() {
             s->capacity = cap;
             for (uint32_t i = 0; i < cap; ++i) {
                 s->alive[i] = gs->entities.alive[i];
+                s->generation[i] = gs->entities.generation[i];
                 s->x[i] = static_cast<float>(gs->pos_x[i]) / 65536.0f;
                 s->y[i] = static_cast<float>(gs->pos_y[i]) / 65536.0f;
                 s->owner[i] = gs->owner[i];
                 s->unit_class[i] = gs->unit_class[i];
                 s->fleeing[i] = gs->fleeing[i];
+                s->entity_kind[i] = gs->entity_kind[i];
+                s->building_id[i] = gs->building_id[i];
+                s->build_progress[i] = gs->build_progress[i];
+                s->bld_anchor_tx[i] = gs->bld_anchor_tx[i];
+                s->bld_anchor_ty[i] = gs->bld_anchor_ty[i];
+                s->build_target[i] = gs->build_target[i];
             }
             ring->publish();
         }
@@ -165,16 +208,19 @@ void ChunsaSimNode::sim_loop() {
         // Diagnóstico del showcase (Sprint 0.3) cada 100 ticks, desde el hilo
         // de simulación: vivos por clase + stock de Alimentos del owner 0.
         if (t % 100u == 0u) {
-            uint32_t n_cav_alive = 0, n_art_alive = 0, n_cit_alive = 0;
+            uint32_t n_cav_alive = 0, n_art_alive = 0, n_cit_alive = 0,
+                     n_buildings_alive = 0;
             for (uint32_t i = 0; i < gs->entities.capacity; ++i) {
                 if (gs->entities.alive[i] == 0u) continue;
-                if (gs->unit_class[i] == 1u) ++n_cav_alive;
+                if (gs->entity_kind[i] == 1u) ++n_buildings_alive;
+                else if (gs->unit_class[i] == 1u) ++n_cav_alive;
                 else if (gs->unit_class[i] == 2u) ++n_art_alive;
                 else if (gs->unit_class[i] == 3u) ++n_cit_alive;
             }
             godot::UtilityFunctions::print("CHUNSA cav=", n_cav_alive,
                                            " art=", n_art_alive,
                                            " citizens=", n_cit_alive,
+                                           " buildings=", n_buildings_alive,
                                            " stock_A=", gs->player_stock[0][0]);
         }
 
@@ -218,21 +264,78 @@ void ChunsaSimNode::_process(double /*delta*/) {
     maybe_screenshot();
 }
 
-// Selección y órdenes del jugador (Sprint 0.3+): clic/arrastre izquierdo
-// selecciona caballería propia; clic derecho ordena MOVE_TO a lo seleccionado.
-// Corre en el hilo principal; encola en pending_player_commands (protegida por
-// input_mutex) y sim_loop los drena en el siguiente tick.
+// Selección, colocación y órdenes del jugador (Sprint 1.1). Todo lo que sale
+// de aquí es un RawCommand: la validación real y la mutación siguen siendo del
+// kernel. El ghost solo hace una validación local de mapa/muros/solape para
+// feedback inmediato.
 void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     if (cam3d == nullptr) return;
+
+    godot::Ref<godot::InputEventKey> key = event;
+    if (!key.is_null() && key->is_pressed() && !key->is_echo()) {
+        const godot::Key physical = key->get_physical_keycode();
+        const godot::Key logical = key->get_keycode();
+        const godot::Key code = physical != godot::KEY_NONE ? physical : logical;
+        if (code == godot::KEY_B) {
+            placement_mode = !placement_mode;
+            placement_input_captured = false;
+            godot::UtilityFunctions::print(
+                placement_mode ? "CHUNSA construir: ghost activo"
+                               : "CHUNSA construir: ghost cancelado");
+            return;
+        }
+        if (code == godot::KEY_ESCAPE && placement_mode) {
+            placement_mode = false;
+            placement_input_captured = false;
+            godot::UtilityFunctions::print("CHUNSA construir: ghost cancelado");
+            return;
+        }
+        if (code == godot::KEY_N && placement_mode) {
+            cycle_buildable_building();
+            return;
+        }
+    }
+
+    godot::Ref<godot::InputEventMouseMotion> motion = event;
+    if (!motion.is_null()) {
+        cursor_screen = motion->get_position();
+        have_cursor = true;
+        return;
+    }
+
     godot::Ref<godot::InputEventMouseButton> mb = event;
     if (mb.is_null()) return;
+    cursor_screen = mb->get_position();
+    have_cursor = true;
 
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
 
     if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_LEFT) {
         if (mb->is_pressed()) {
+            if (placement_mode) {
+                placement_input_captured = true;
+                int64_t tx = 0;
+                int64_t ty = 0;
+                const bool local_valid = screen_to_tile(mb->get_position(), tx, ty) &&
+                        placement_valid(bid_buildable, tx, ty);
+                if (local_valid) {
+                    enqueue_place_building(tx, ty);
+                    placement_mode = false;
+                    godot::UtilityFunctions::print(
+                        "CHUNSA PLACE_BUILDING enqueued tile=", tx, ",", ty,
+                        " building_id=", static_cast<int64_t>(bid_buildable));
+                } else {
+                    godot::UtilityFunctions::print(
+                        "CHUNSA PLACE_BUILDING local reject tile=", tx, ",", ty);
+                }
+                return;
+            }
             dragging = true;
             drag_start = mb->get_position();
+            return;
+        }
+        if (placement_input_captured) {
+            placement_input_captured = false;
             return;
         }
         // Soltar botón izquierdo: cerrar selección.
@@ -247,14 +350,25 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         uint32_t best_i = UINT32_MAX;
         float best_d2 = 1.0e30f;
         for (uint32_t i = 0; i < cap; ++i) {
-            // Solo caballería propia (owner 0, unit_class 1) es seleccionable:
-            // los ciudadanos tienen IA autónoma y la artillería es del rival.
             if (snap_curr.alive[i] == 0u) continue;
             if (snap_curr.owner[i] != 0u) continue;
-            if (snap_curr.unit_class[i] != 1u) continue;
+            if (snap_curr.entity_kind[i] == 0u && snap_curr.unit_class[i] > 3u) continue;
 
-            const float px = snap_curr.x[i] * 4.0f;
-            const float py = snap_curr.y[i] * 4.0f;
+            float px = snap_curr.x[i] * 4.0f;
+            float py = snap_curr.y[i] * 4.0f;
+            float hit_radius = 20.0f;
+            if (snap_curr.entity_kind[i] == 1u &&
+                snap_curr.building_id[i] < catalog_storage.catalog().building_count) {
+                const chunsa::BuildingDefinitionV1& def =
+                        catalog_storage.catalog().buildings[snap_curr.building_id[i]];
+                px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                      static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+                py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                      static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+                hit_radius = std::max(hit_radius,
+                                      static_cast<float>(std::max(def.footprint_w,
+                                                                  def.footprint_h)) * 2.0f);
+            }
             const godot::Vector3 world_pos(px, -py, py);
             const godot::Vector2 screen_pos = cam3d->unproject_position(world_pos);
 
@@ -262,7 +376,7 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
                 const float dx = screen_pos.x - drag_end.x;
                 const float dy = screen_pos.y - drag_end.y;
                 const float d2 = dx * dx + dy * dy;
-                if (d2 < 20.0f * 20.0f && d2 < best_d2) {
+                if (d2 < hit_radius * hit_radius && d2 < best_d2) {
                     best_d2 = d2;
                     best_i = i;
                 }
@@ -280,6 +394,13 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     }
 
     if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
+        int64_t tile_x = 0;
+        int64_t tile_y = 0;
+        if (screen_to_tile(mb->get_position(), tile_x, tile_y) &&
+            enqueue_build_assignments(tile_x, tile_y) > 0u) {
+            return;
+        }
+
         // Screen → mundo: cámara ortográfica SIN rotación mirando -Z, con el
         // mapeo world=(px,-py,py) ya usado en render_interpolated. El origen
         // del rayo en cada píxel YA da directamente (px, world_y=-py) en sus
@@ -295,13 +416,14 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         for (uint32_t i = 0; i < cap; ++i) {
             if (!is_selected[i]) continue;
             if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;  // pudo morir
+            if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] > 2u) continue;
             chunsa::RawCommand c;
             std::memset(&c, 0, sizeof(c));
             c.target_tick = 0;
             c.emitter = 0;
             c.type = chunsa::CommandType::MOVE_TO;
             c.sequence = next_player_sequence++;
-            c.p.handle = chunsa::EntityHandle{i, 1u};
+            c.p.handle = chunsa::EntityHandle{i, snap_curr.generation[i]};
             c.p.x_raw = x_raw;
             c.p.y_raw = y_raw;
             pending_player_commands.push_back(c);
@@ -327,12 +449,13 @@ void ChunsaSimNode::render_interpolated() {
     const godot::Ref<godot::MultiMesh> mm = mmi_units3d->get_multimesh();
     int32_t k = 0;
     for (uint32_t i = 0; i < cap; ++i) {
-        if (snap_curr.alive[i] == 0u) {
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 0u) {
             continue;
         }
         float fx = snap_curr.x[i];
         float fy = snap_curr.y[i];
-        if (have_prev && i < pcap && snap_prev.alive[i] != 0u) {
+        if (have_prev && i < pcap && snap_prev.alive[i] != 0u &&
+            snap_prev.entity_kind[i] == 0u) {
             fx = snap_prev.x[i] + (snap_curr.x[i] - snap_prev.x[i]) * alpha;
             fy = snap_prev.y[i] + (snap_curr.y[i] - snap_prev.y[i]) * alpha;
         }
@@ -347,6 +470,9 @@ void ChunsaSimNode::render_interpolated() {
         // interpola). La selección tiene prioridad MÁXIMA sobre el resto.
         godot::Color c;
         if (is_selected[i])                     c = godot::Color(0.3, 1.0, 0.3);    // seleccionado: verde brillante
+        else if (snap_curr.unit_class[i] == 3u &&
+                 snap_curr.build_target[i] != chunsa::BUILD_NO_TARGET)
+                                                    c = godot::Color(1.0, 0.55, 0.1); // constructor: naranja
         else if (snap_curr.unit_class[i] == 3u) c = godot::Color(0.9, 0.85, 0.2);   // ciudadano: amarillo
         else if (snap_curr.fleeing[i] != 0u)    c = godot::Color(0.9, 0.9, 0.95);   // pánico: casi blanco
         else if (snap_curr.owner[i] == 0u)      c = godot::Color(0.2, 0.6, 0.95);   // owner 0: azul
@@ -355,6 +481,85 @@ void ChunsaSimNode::render_interpolated() {
         ++k;
     }
     mm->set_visible_instance_count(k);
+
+    // Edificios: cajas con footprint real. La altura y alpha distinguen un
+    // sitio en construcción de uno completo; las posiciones/anclas vienen del
+    // snapshot y el catálogo aporta únicamente geometría estática.
+    if (mmi_buildings3d != nullptr) {
+        const godot::Ref<godot::MultiMesh> mm_buildings =
+                mmi_buildings3d->get_multimesh();
+        const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+        int32_t building_k = 0;
+        for (uint32_t i = 0; i < cap; ++i) {
+            if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u) continue;
+            if (snap_curr.building_id[i] >= catalog.building_count) continue;
+            const chunsa::BuildingDefinitionV1& def =
+                    catalog.buildings[snap_curr.building_id[i]];
+            const float progress = def.build_time_ticks == 0u
+                    ? 1.0f
+                    : std::clamp(static_cast<float>(snap_curr.build_progress[i]) /
+                                         static_cast<float>(def.build_time_ticks),
+                                 0.0f, 1.0f);
+            const float width = static_cast<float>(def.footprint_w) * 4.0f;
+            const float height = static_cast<float>(def.footprint_h) * 4.0f;
+            const float box_depth = 2.0f + 8.0f * progress;
+            const float px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                              static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+            const float py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                              static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+            const godot::Basis sc(godot::Vector3(width, 0, 0),
+                                  godot::Vector3(0, height, 0),
+                                  godot::Vector3(0, 0, box_depth));
+            mm_buildings->set_instance_transform(
+                    building_k, godot::Transform3D(
+                                       sc, godot::Vector3(px, -py, py + box_depth * 0.5f)));
+
+            godot::Color color;
+            if (is_selected[i]) {
+                color = godot::Color(0.3, 1.0, 0.3, 0.95);
+            } else if (progress < 1.0f) {
+                color = godot::Color(1.0, 0.68, 0.12, 0.68);
+            } else if (snap_curr.owner[i] == 0u) {
+                color = godot::Color(0.15, 0.55, 0.95, 1.0);
+            } else {
+                color = godot::Color(0.9, 0.25, 0.16, 1.0);
+            }
+            mm_buildings->set_instance_color(building_k, color);
+            ++building_k;
+        }
+        mm_buildings->set_visible_instance_count(building_k);
+    }
+
+    // Ghost de colocación: solo feedback local, nunca muta GameState.
+    if (mmi_ghost3d != nullptr) {
+        const godot::Ref<godot::MultiMesh> mm_ghost = mmi_ghost3d->get_multimesh();
+        int32_t visible = 0;
+        int64_t tx = 0;
+        int64_t ty = 0;
+        if (placement_mode && have_cursor && bid_buildable != chunsa::INVALID_BUILDING_ID &&
+            screen_to_tile(cursor_screen, tx, ty) &&
+            bid_buildable < catalog_storage.catalog().building_count) {
+            const chunsa::BuildingDefinitionV1& def =
+                    catalog_storage.catalog().buildings[bid_buildable];
+            const bool valid = placement_valid(bid_buildable, tx, ty);
+            const float width = static_cast<float>(def.footprint_w) * 4.0f;
+            const float height = static_cast<float>(def.footprint_h) * 4.0f;
+            const godot::Basis sc(godot::Vector3(width, 0, 0),
+                                  godot::Vector3(0, height, 0),
+                                  godot::Vector3(0, 0, 3.0f));
+            const float px = (static_cast<float>(tx) +
+                              static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+            const float py = (static_cast<float>(ty) +
+                              static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+            mm_ghost->set_instance_transform(
+                    0, godot::Transform3D(sc, godot::Vector3(px, -py, py + 2.0f)));
+            mm_ghost->set_instance_color(
+                    0, valid ? godot::Color(0.2, 1.0, 0.35, 0.45)
+                             : godot::Color(1.0, 0.15, 0.1, 0.45));
+            visible = 1;
+        }
+        mm_ghost->set_visible_instance_count(visible);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -401,14 +606,17 @@ uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) 
 // Escenario showcase Sprint 0.3: combate + moral + economía visibles
 // ---------------------------------------------------------------------------
 
-// t==0: spawns — 40% caballería (owner 0), 40% artillería (owner 1), 20%
-// ciudadanos (owner 0). Orden de emisión = orden canónico de aplicación en
-// tick 1 (emitter asc, sequence asc), así la tabla queda determinista:
+// t==0: PLACE_BUILDING de los dos centros iniciales + spawns — 40% caballería
+// (owner 0), 40% artillería (owner 1), 20% ciudadanos (owner 0). Los centros
+// usan la exención de escenario de SPEC-004 y nacen completos. Orden de
+// emisión = orden canónico de aplicación (emitter asc, sequence asc), así la
+// tabla queda determinista:
 // cav en slots [0,n_cav), ciudadanos [n_cav,n_cav+n_cit), artillería
-// [n_cav+n_cit,demo_units) — todos con generación 1.
+// [n_cav+n_cit,demo_units), centros en los dos slots siguientes — todos con
+// generación 1.
 // t==1: UN MOVE_TO por unidad de combate hacia (128,128) con los handles
-// analíticos de arriba (los spawns se aplican dentro de step() del tick 1,
-// así que en t==1 aún no son visibles en gs; la cuenta de slots es exacta).
+// analíticos de arriba (con delay 0 los spawns y centros ya están vivos tras
+// el primer Step; la cuenta de slots sigue siendo exacta).
 // Resto: batch vacío — combate, moral y economía corren autónomos en el kernel.
 //
 // DESVIACIÓN documentada en docs/briefs/KIMI_DEMO_SHOWCASE_RESULT.md: cajas de
@@ -465,9 +673,33 @@ uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t
             c.p.unit_id = uid_artillery;  // stats del catálogo (payload en 0 por el memset)
             ++n;
         }
+        // Setup por comandos: la coordenada es el tile ancla ENTERO, no raw.
+        {
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 0;
+            c.type = CommandType::PLACE_BUILDING;
+            c.sequence = seq0++;
+            c.p.x_raw = 20;
+            c.p.y_raw = 128;
+            c.p.unit_id = bid_settlement_center;
+            ++n;
+        }
+        {
+            RawCommand& c = batch[n];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0; c.emitter = 1;
+            c.type = CommandType::PLACE_BUILDING;
+            c.sequence = seq1++;
+            c.p.x_raw = 233;
+            c.p.y_raw = 128;
+            c.p.unit_id = bid_forum_center;
+            ++n;
+        }
     } else if (t == 1u) {
-        uint64_t seq0 = static_cast<uint64_t>(n_cav + n_cit) + 1u;
-        uint64_t seq1 = static_cast<uint64_t>(n_art) + 1u;
+        // Cada emisor ya consumió una secuencia adicional para su centro.
+        uint64_t seq0 = static_cast<uint64_t>(n_cav + n_cit) + 2u;
+        uint64_t seq1 = static_cast<uint64_t>(n_art) + 2u;
         const int64_t cx = static_cast<int64_t>(128) * 65536 + 32768;
         const int64_t cy = static_cast<int64_t>(128) * 65536 + 32768;
         for (uint32_t i = 0; i < n_cav; ++i) {  // caballería → (128,128)
@@ -484,7 +716,7 @@ uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t
             std::memset(&c, 0, sizeof(RawCommand));
             c.target_tick = 1; c.emitter = 1; c.type = CommandType::MOVE_TO;
             c.sequence = seq1++;
-            c.p.handle = EntityHandle{n_cav + n_cit + i, 1u};  // slots finales, gen 1
+            c.p.handle = EntityHandle{n_cav + n_cit + 1u + i, 1u};  // tras centro egipcio, gen 1
             c.p.x_raw = cx; c.p.y_raw = cy;
             ++n;
         }
@@ -540,6 +772,44 @@ void ChunsaSimNode::setup_3d() {
     mmi_units3d->set_multimesh(mm_units);
     add_child(mmi_units3d);
 
+    // Edificios y ghost: una caja unidad se escala por footprint en cada
+    // instancia. El material acepta alpha para que los sitios en construcción
+    // y el ghost sean legibles sobre el mapa.
+    godot::Ref<godot::StandardMaterial3D> building_mat;
+    building_mat.instantiate();
+    building_mat->set_shading_mode(godot::BaseMaterial3D::SHADING_MODE_UNSHADED);
+    building_mat->set_flag(godot::BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+    building_mat->set_albedo(godot::Color(1, 1, 1));
+    building_mat->set_cull_mode(godot::BaseMaterial3D::CULL_DISABLED);
+    building_mat->set_transparency(godot::BaseMaterial3D::TRANSPARENCY_ALPHA);
+
+    godot::Ref<godot::BoxMesh> building_box;
+    building_box.instantiate();
+    building_box->set_size(godot::Vector3(1, 1, 1));
+    building_box->set_material(building_mat);
+
+    godot::Ref<godot::MultiMesh> mm_buildings;
+    mm_buildings.instantiate();
+    mm_buildings->set_transform_format(godot::MultiMesh::TRANSFORM_3D);
+    mm_buildings->set_use_colors(true);
+    mm_buildings->set_mesh(building_box);
+    mm_buildings->set_instance_count(static_cast<int32_t>(cap));
+    mm_buildings->set_visible_instance_count(0);
+    mmi_buildings3d = memnew(godot::MultiMeshInstance3D);
+    mmi_buildings3d->set_multimesh(mm_buildings);
+    add_child(mmi_buildings3d);
+
+    godot::Ref<godot::MultiMesh> mm_ghost;
+    mm_ghost.instantiate();
+    mm_ghost->set_transform_format(godot::MultiMesh::TRANSFORM_3D);
+    mm_ghost->set_use_colors(true);
+    mm_ghost->set_mesh(building_box);
+    mm_ghost->set_instance_count(1);
+    mm_ghost->set_visible_instance_count(0);
+    mmi_ghost3d = memnew(godot::MultiMeshInstance3D);
+    mmi_ghost3d->set_multimesh(mm_ghost);
+    add_child(mmi_ghost3d);
+
     // Muro visible: celdas FF_WALL del cost_grid (el obstáculo que el FlowField
     // hace rodear). Quads de 1 tile (4 px), gris, mismo plano; z ligeramente
     // atrás para que las unidades pasen por delante.
@@ -568,6 +838,139 @@ void ChunsaSimNode::setup_3d() {
         mmi_wall3d = memnew(godot::MultiMeshInstance3D);
         mmi_wall3d->set_multimesh(mm_wall);
         add_child(mmi_wall3d);
+    }
+}
+
+bool ChunsaSimNode::screen_to_tile(const godot::Vector2& screen, int64_t& tx,
+                                   int64_t& ty) const {
+    if (cam3d == nullptr) return false;
+    const godot::Vector3 origin = cam3d->project_ray_origin(screen);
+    const float world_px = origin.x;
+    const float world_py = -origin.y;
+    if (!std::isfinite(world_px) || !std::isfinite(world_py)) return false;
+    tx = static_cast<int64_t>(std::floor(world_px / 4.0f));
+    ty = static_cast<int64_t>(std::floor(world_py / 4.0f));
+    return true;
+}
+
+bool ChunsaSimNode::is_static_wall(int64_t tx, int64_t ty) const {
+    // Es el patrón de gs_init_cost_grid() del escenario actual. Los edificios
+    // vivos se comprueban aparte desde el snapshot para no leer GameState
+    // concurrentemente desde el hilo de presentación.
+    return tx == 128 && ty >= 32 && ty < 224 && !(ty >= 124 && ty < 132);
+}
+
+bool ChunsaSimNode::placement_valid(chunsa::BuildingId building_id, int64_t tx,
+                                    int64_t ty) const {
+    if (!have_curr || building_id == chunsa::INVALID_BUILDING_ID) return false;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (building_id >= catalog.building_count) return false;
+    const chunsa::BuildingDefinitionV1& def = catalog.buildings[building_id];
+    const int64_t fw = static_cast<int64_t>(def.footprint_w);
+    const int64_t fh = static_cast<int64_t>(def.footprint_h);
+    if (tx < 0 || ty < 0 || tx + fw > MAP_TILES || ty + fh > MAP_TILES) {
+        return false;
+    }
+    for (int64_t y = ty; y < ty + fh; ++y) {
+        for (int64_t x = tx; x < tx + fw; ++x) {
+            if (is_static_wall(x, y)) return false;
+        }
+    }
+
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u) continue;
+        if (snap_curr.building_id[i] >= catalog.building_count) continue;
+        const chunsa::BuildingDefinitionV1& other =
+                catalog.buildings[snap_curr.building_id[i]];
+        const int64_t ox = static_cast<int64_t>(snap_curr.bld_anchor_tx[i]);
+        const int64_t oy = static_cast<int64_t>(snap_curr.bld_anchor_ty[i]);
+        const int64_t ow = static_cast<int64_t>(other.footprint_w);
+        const int64_t oh = static_cast<int64_t>(other.footprint_h);
+        if (tx < ox + ow && ox < tx + fw && ty < oy + oh && oy < ty + fh) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void ChunsaSimNode::enqueue_place_building(int64_t tx, int64_t ty) {
+    std::lock_guard<std::mutex> lock(input_mutex);
+    chunsa::RawCommand c;
+    std::memset(&c, 0, sizeof(c));
+    c.target_tick = 0;
+    c.emitter = 0;
+    c.type = chunsa::CommandType::PLACE_BUILDING;
+    c.sequence = next_player_sequence++;
+    c.p.x_raw = tx; // SPEC-004 §4.1: tile ancla ENTERO, no raw Q47.16.
+    c.p.y_raw = ty;
+    c.p.unit_id = bid_buildable;
+    pending_player_commands.push_back(c);
+}
+
+uint32_t ChunsaSimNode::enqueue_build_assignments(int64_t tx, int64_t ty) {
+    if (!have_curr) return 0;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    bool has_site = false;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u) continue;
+        if (snap_curr.owner[i] != 0u || snap_curr.building_id[i] >= catalog.building_count) continue;
+        const chunsa::BuildingDefinitionV1& def =
+                catalog.buildings[snap_curr.building_id[i]];
+        const int64_t bx = static_cast<int64_t>(snap_curr.bld_anchor_tx[i]);
+        const int64_t by = static_cast<int64_t>(snap_curr.bld_anchor_ty[i]);
+        if (snap_curr.build_progress[i] < def.build_time_ticks &&
+            tx >= bx && tx < bx + static_cast<int64_t>(def.footprint_w) &&
+            ty >= by && ty < by + static_cast<int64_t>(def.footprint_h)) {
+            has_site = true;
+            break;
+        }
+    }
+    if (!has_site) return 0;
+
+    uint32_t count = 0;
+    std::lock_guard<std::mutex> lock(input_mutex);
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!is_selected[i] || snap_curr.alive[i] == 0u ||
+            snap_curr.owner[i] != 0u || snap_curr.entity_kind[i] != 0u ||
+            snap_curr.unit_class[i] != 3u) {
+            continue;
+        }
+        chunsa::RawCommand c;
+        std::memset(&c, 0, sizeof(c));
+        c.target_tick = 0;
+        c.emitter = 0;
+        c.type = chunsa::CommandType::ASSIGN_BUILD;
+        c.sequence = next_player_sequence++;
+        c.p.handle = chunsa::EntityHandle{i, snap_curr.generation[i]};
+        c.p.x_raw = tx; // SPEC-004 §4.2: tile ENTERO contenido en el footprint.
+        c.p.y_raw = ty;
+        pending_player_commands.push_back(c);
+        ++count;
+    }
+    if (count > 0u) {
+        godot::UtilityFunctions::print("CHUNSA ASSIGN_BUILD enqueued citizens=", count,
+                                       " tile=", tx, ",", ty);
+    }
+    return count;
+}
+
+void ChunsaSimNode::cycle_buildable_building() {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (catalog.building_count == 0u) return;
+    const uint32_t start = bid_buildable == chunsa::INVALID_BUILDING_ID ||
+                                   bid_buildable >= catalog.building_count
+            ? 0u
+            : (bid_buildable + 1u) % catalog.building_count;
+    for (uint32_t offset = 0; offset < catalog.building_count; ++offset) {
+        const uint32_t candidate = (start + offset) % catalog.building_count;
+        if (catalog.buildings[candidate].constructible != 0u) {
+            bid_buildable = candidate;
+            godot::UtilityFunctions::print(
+                "CHUNSA construir: building_id=", static_cast<int64_t>(bid_buildable));
+            return;
+        }
     }
 }
 
