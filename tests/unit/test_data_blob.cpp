@@ -50,6 +50,157 @@ static std::unique_ptr<GameState> make_state(const MatchConfig01A& cfg) {
     return g;
 }
 
+// ============================================================================
+// Sprint 1.1 (SPEC-004 §2/§9.3): constructor de un CHDB v1 MÍNIMO hecho a mano
+// (no generado por chunsa_data_compiler.py) para ejercitar el rechazo del
+// loader ante un building inválido (hp=0, footprint=9). El brief pide
+// extender "el fixture de test_data_blob" sin tocar los datos reales de
+// data/ (de eso se ocupa la tarea paralela de datos) — como no existe un
+// pipeline Python que genere un fixture C++ aparte del golden real, se
+// construye aquí el blob byte a byte (mismo formato CVE1/directorio que
+// valida data_catalog.hpp), con manifest(1) + building(1) + el resto de
+// secciones vacías (0 records; el loader no exige mínimo salvo manifest==1).
+// ============================================================================
+namespace mini_chdb {
+
+inline void w_u8(std::vector<uint8_t>& b, uint8_t v) { b.push_back(v); }
+inline void w_u16(std::vector<uint8_t>& b, uint16_t v) {
+    b.push_back(static_cast<uint8_t>(v & 0xFFu));
+    b.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+}
+inline void w_u32(std::vector<uint8_t>& b, uint32_t v) {
+    for (int i = 0; i < 4; ++i) b.push_back(static_cast<uint8_t>((v >> (8 * i)) & 0xFFu));
+}
+inline void w_u64(std::vector<uint8_t>& b, uint64_t v) {
+    for (int i = 0; i < 8; ++i) b.push_back(static_cast<uint8_t>((v >> (8 * i)) & 0xFFu));
+}
+inline void w_bytes(std::vector<uint8_t>& b, const void* p, size_t n) {
+    const uint8_t* s = static_cast<const uint8_t*>(p);
+    for (size_t i = 0; i < n; ++i) b.push_back(s[i]);
+}
+inline void append(std::vector<uint8_t>& b, const std::vector<uint8_t>& tail) {
+    b.insert(b.end(), tail.begin(), tail.end());
+}
+
+inline std::vector<uint8_t> cve_int(int64_t v) {
+    std::vector<uint8_t> b;
+    w_u8(b, 0x10u);
+    w_u64(b, static_cast<uint64_t>(v));
+    return b;
+}
+inline std::vector<uint8_t> cve_bool(bool v) { return { static_cast<uint8_t>(v ? 0x02u : 0x01u) }; }
+inline std::vector<uint8_t> cve_str(const std::string& s) {
+    std::vector<uint8_t> b;
+    w_u8(b, 0x20u);
+    w_u32(b, static_cast<uint32_t>(s.size()));
+    w_bytes(b, s.data(), s.size());
+    return b;
+}
+inline std::vector<uint8_t> cve_str_arr(const std::vector<std::string>& items) {
+    std::vector<uint8_t> b;
+    w_u8(b, 0x30u);
+    w_u32(b, static_cast<uint32_t>(items.size()));
+    for (const auto& s : items) append(b, cve_str(s));
+    return b;
+}
+// `kvs` DEBE venir ya en orden ascendente estricto por clave (responsabilidad
+// del caller, igual que exige cve_parse al leerlo).
+inline std::vector<uint8_t> cve_obj(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& kvs) {
+    std::vector<uint8_t> b;
+    w_u8(b, 0x40u);
+    w_u32(b, static_cast<uint32_t>(kvs.size()));
+    for (const auto& kv : kvs) {
+        w_u32(b, static_cast<uint32_t>(kv.first.size()));
+        w_bytes(b, kv.first.data(), kv.first.size());
+        append(b, kv.second);
+    }
+    return b;
+}
+
+struct BuildingSpec {
+    std::string id = "test:bldg";
+    int64_t hp = 500;
+    int64_t width = 3, height = 2;
+    int64_t build_time = 30;
+    bool constructible = true;
+    int64_t cost_a = 100, cost_b = 0, cost_me = 20;
+};
+
+inline std::vector<uint8_t> build(const BuildingSpec& spec) {
+    // Objeto building — claves en orden ASCENDENTE estricto (build_time_ticks
+    // < constructible < dropoff_resources < footprint < id < resource_costs < stats).
+    auto footprint = cve_obj({
+        {"height_cells", cve_int(spec.height)},
+        {"width_cells", cve_int(spec.width)},
+    });
+    auto stats = cve_obj({ {"hp", cve_int(spec.hp)} });
+    auto costs = cve_obj({
+        {"A", cve_int(spec.cost_a)},
+        {"B", cve_int(spec.cost_b)},
+        {"Me", cve_int(spec.cost_me)},
+    });
+    auto dropoff = cve_str_arr({"A"});
+    auto building_obj = cve_obj({
+        {"build_time_ticks", cve_int(spec.build_time)},
+        {"constructible", cve_bool(spec.constructible)},
+        {"dropoff_resources", dropoff},
+        {"footprint", footprint},
+        {"id", cve_str(spec.id)},
+        {"resource_costs", costs},
+        {"stats", stats},
+    });
+    auto manifest_obj = cve_obj({ {"package_id", cve_str(std::string("test.fixture"))} });
+
+    std::vector<uint8_t> manifest_record;
+    w_u32(manifest_record, static_cast<uint32_t>(manifest_obj.size()));
+    append(manifest_record, manifest_obj);
+
+    std::vector<uint8_t> building_record;
+    w_u32(building_record, static_cast<uint32_t>(building_obj.size()));
+    append(building_record, building_obj);
+
+    // Orden kKindTable (data_catalog.hpp): manifest, unit, building, tech,
+    // civ, map, ai-profile. Solo manifest(1) y building(1) llevan contenido;
+    // el resto quedan vacías (0 records — el loader no exige mínimo salvo
+    // manifest==1).
+    std::vector<uint8_t> sections[7];
+    sections[0] = manifest_record;
+    sections[2] = building_record;
+
+    struct KindRow { uint16_t kind, version; uint32_t count; };
+    static constexpr KindRow ROWS[7] = {
+        {1, 1, 1}, {2, 2, 0}, {3, 1, 1}, {4, 1, 0}, {5, 1, 0}, {6, 1, 0}, {7, 1, 0},
+    };
+
+    const uint64_t directory_end = 40 + 7u * 24u;
+    uint64_t cursor = directory_end;
+    uint64_t offsets[7];
+    for (int k = 0; k < 7; ++k) { offsets[k] = cursor; cursor += sections[k].size(); }
+    const uint64_t file_size = cursor;
+
+    std::vector<uint8_t> blob;
+    static constexpr char kMagic[8] = {'C', 'H', 'N', 'S', 'D', 'B', '1', '\0'};
+    w_bytes(blob, kMagic, 8);
+    w_u16(blob, 1u); w_u16(blob, 0u);   // fmt_major/minor
+    w_u32(blob, 1u);                     // schema_set_version
+    w_u32(blob, 0u);                     // flags (release: sin UNVERIFIED/HAS_PATCHES)
+    w_u32(blob, 7u);                     // section_count
+    w_u32(blob, 24u);                    // entry_size
+    w_u32(blob, 0u);                     // reserved
+    w_u64(blob, file_size);
+    for (int k = 0; k < 7; ++k) {
+        w_u16(blob, ROWS[k].kind);
+        w_u16(blob, ROWS[k].version);
+        w_u32(blob, ROWS[k].count);
+        w_u64(blob, offsets[k]);
+        w_u64(blob, sections[k].size());
+    }
+    for (int k = 0; k < 7; ++k) append(blob, sections[k]);
+    return blob;
+}
+
+}  // namespace mini_chdb
+
 int main() {
     // 1) Loader: golden aceptado, content_hash coincide con el sidecar
     //    publicado (data/compiled/chunsa_base.chdb.content.json). El hash NO
@@ -403,6 +554,119 @@ int main() {
     // (gate `data_compile`, registrado en CMakeLists.txt). No se duplicó
     // aquí para no acoplar este target C++ a invocar un intérprete Python en
     // tiempo de ctest.
+
+    // 12) Sprint 1.1 (SPEC-004 §2): catálogo tipado de edificios.
+    {
+        // 12a) Golden REAL (data/buildings/, ya compilado por MiniMax + cierre
+        // del Arquitecto): building_count==4, catalog_find_building resuelve
+        // los 4 record_id, y los campos tipados coinciden con los YAML —
+        // incluido egipto:settlement_center/rome:forum_center, que son
+        // constructible:false + build_time_ticks:0 (enmienda del Arquitecto
+        // 2026-07-23, SPEC-004 §4.1.2/§4.3: el loader debe ACEPTAR T==0).
+        CHECK(cat.building_count == 4);
+
+        auto find = [&](const char* name) {
+            return catalog_find_building(cat, name, std::strlen(name));
+        };
+        const BuildingId settlement = find("egipto:settlement_center");
+        const BuildingId shena = find("egipto:shena_granary");
+        const BuildingId forum = find("rome:forum_center");
+        const BuildingId horreum = find("rome:horreum");
+        CHECK(settlement != INVALID_BUILDING_ID);
+        CHECK(shena != INVALID_BUILDING_ID);
+        CHECK(forum != INVALID_BUILDING_ID);
+        CHECK(horreum != INVALID_BUILDING_ID);
+        CHECK(find("nope:nope") == INVALID_BUILDING_ID);
+
+        if (settlement != INVALID_BUILDING_ID) {
+            const BuildingDefinitionV1& d = cat.buildings[settlement];
+            CHECK(d.hp == 1500);
+            CHECK(d.footprint_w == 3 && d.footprint_h == 3);
+            CHECK(d.build_time_ticks == 0);   // nace completo (progress 0 >= T 0)
+            CHECK(d.constructible == 0);
+            CHECK(d.cost_a == 0 && d.cost_b == 0 && d.cost_me == 0);
+            CHECK(d.dropoff_mask == 0x7u);    // A|B|Me
+        }
+        if (shena != INVALID_BUILDING_ID) {
+            const BuildingDefinitionV1& d = cat.buildings[shena];
+            CHECK(d.hp == 600);
+            CHECK(d.footprint_w == 2 && d.footprint_h == 2);
+            CHECK(d.build_time_ticks == 500);
+            CHECK(d.constructible == 1);
+            CHECK(d.cost_a == 0 && d.cost_b == 60 && d.cost_me == 0);
+            CHECK(d.dropoff_mask == 0x1u);    // A
+        }
+
+        // 12b) Fixture propio (SPEC-004 §9.3): edificio válido carga y sus
+        // campos tipados coinciden exactamente con el spec de entrada.
+        {
+            mini_chdb::BuildingSpec spec;
+            const auto blob = mini_chdb::build(spec);
+            DataCatalogStorageV1 s;
+            const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
+            CHECK(c == CatalogLoadCode::Ok);
+            if (c == CatalogLoadCode::Ok && s.valid()) {
+                const DataCatalogV1& mc = s.catalog();
+                CHECK(mc.building_count == 1);
+                const BuildingId bid = catalog_find_building(mc, "test:bldg", std::strlen("test:bldg"));
+                CHECK(bid == 0);
+                if (bid != INVALID_BUILDING_ID) {
+                    const BuildingDefinitionV1& d = mc.buildings[bid];
+                    CHECK(d.hp == 500);
+                    CHECK(d.footprint_w == 3 && d.footprint_h == 2);
+                    CHECK(d.build_time_ticks == 30);
+                    CHECK(d.constructible == 1);
+                    CHECK(d.cost_a == 100 && d.cost_b == 0 && d.cost_me == 20);
+                    CHECK(d.dropoff_mask == 0x1u);  // solo A
+                }
+            }
+        }
+
+        // 12c) Rechazo (SPEC-004 §9.3): hp==0 → InvalidBuilding.
+        {
+            mini_chdb::BuildingSpec spec;
+            spec.hp = 0;
+            const auto blob = mini_chdb::build(spec);
+            DataCatalogStorageV1 s;
+            const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
+            CHECK(c == CatalogLoadCode::InvalidBuilding);
+            CHECK(!s.valid());
+        }
+
+        // 12d) Rechazo (SPEC-004 §9.3): footprint width=9 (fuera de 1..8) →
+        // InvalidBuilding.
+        {
+            mini_chdb::BuildingSpec spec;
+            spec.width = 9;
+            const auto blob = mini_chdb::build(spec);
+            DataCatalogStorageV1 s;
+            const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
+            CHECK(c == CatalogLoadCode::InvalidBuilding);
+            CHECK(!s.valid());
+        }
+
+        // 12e) Control positivo del build_time_ticks==0 vía el fixture propio
+        // (no solo el golden real): constructible:false + T==0 debe ACEPTARSE
+        // (enmienda §4.1.2), no confundirse con un rechazo de hp/footprint.
+        {
+            mini_chdb::BuildingSpec spec;
+            spec.constructible = false;
+            spec.build_time = 0;
+            spec.cost_a = 0; spec.cost_b = 0; spec.cost_me = 0;
+            const auto blob = mini_chdb::build(spec);
+            DataCatalogStorageV1 s;
+            const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
+            CHECK(c == CatalogLoadCode::Ok);
+            if (c == CatalogLoadCode::Ok && s.valid()) {
+                const BuildingId bid = catalog_find_building(s.catalog(), "test:bldg", std::strlen("test:bldg"));
+                CHECK(bid != INVALID_BUILDING_ID);
+                if (bid != INVALID_BUILDING_ID) {
+                    CHECK(s.catalog().buildings[bid].build_time_ticks == 0);
+                    CHECK(s.catalog().buildings[bid].constructible == 0);
+                }
+            }
+        }
+    }
 
     if (g_fails == 0) { std::printf("data_blob: OK\n"); return 0; }
     std::printf("data_blob: %d fallos\n", g_fails);
