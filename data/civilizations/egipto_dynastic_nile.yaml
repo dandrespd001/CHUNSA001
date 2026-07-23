@@ -36,7 +36,9 @@ social_tensions:
 unit_ids:
   - egipto:chariot_warrior
   - egipto:work_crew
-building_ids: []
+building_ids:
+  - egipto:settlement_center
+  - egipto:shena_granary
 tech_ids: []
 art_rule_keys:
   - egipto:art.period_and_provenance

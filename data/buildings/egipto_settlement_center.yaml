@@ -1,0 +1,53 @@
+schema_version: 1
+id: egipto:settlement_center
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.settlement_center
+description_key: egipto:building.settlement_center.description
+epoch_window:
+  - 3
+  - 4
+kind: civic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 1500
+constructible: false
+resource_costs: {}
+build_time_ticks: 0
+dropoff_resources:
+  - A
+  - B
+  - Me
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.1-datos-edificios
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Wikipedia, Economy of ancient Egypt"
+        locator: "Temples as backbone of the economy; granaries and treasuries administered by overseers who redistributed grain and goods"
+        url: "https://en.wikipedia.org/wiki/Economy_of_ancient_Egypt"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: el centro cívico/religioso (templo, complejo palaciego, capital de nomo) era el nodo de acopio y redistribución en el Egipto dinástico; HP, pre-colocado por escenario (no construible), footprint 3x3, dropoff universal A/B/Me y jugabilidad son balance."
+    reviewed_by:
+      - architect

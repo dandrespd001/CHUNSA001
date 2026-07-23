@@ -1,0 +1,52 @@
+schema_version: 1
+id: egipto:shena_granary
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.shena_granary
+description_key: egipto:building.shena_granary.description
+epoch_window:
+  - 3
+  - 4
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 600
+constructible: true
+resource_costs:
+  B: 60
+build_time_ticks: 500
+dropoff_resources:
+  - A
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.1-datos-edificios
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "Wikipedia, Economy of ancient Egypt"
+        locator: "Temples as backbone of the economy; granaries and treasuries administered by overseers who redistributed grain and goods"
+        url: "https://en.wikipedia.org/wiki/Economy_of_ancient_Egypt"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: el granero estatal/religioso egipcio (šnwt) funcionó como punto de acopio y redistribución de grano; HP=600, coste B=60, tiempo 500, footprint 2x2, dropoff exclusivo de A y balance general son diseño."
+    reviewed_by:
+      - architect

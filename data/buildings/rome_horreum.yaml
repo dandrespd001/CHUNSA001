@@ -1,0 +1,52 @@
+schema_version: 1
+id: rome:horreum
+civ_id: rome:republic_imperial
+display_name_key: rome:building.horreum
+description_key: rome:building.horreum.description
+epoch_window:
+  - 5
+  - 5
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 600
+constructible: true
+resource_costs:
+  B: 60
+build_time_ticks: 500
+dropoff_resources:
+  - A
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.1-datos-edificios
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Wikipedia, Horreum"
+        locator: "Definition as Roman public warehouse; first public horreum built by Gaius Gracchus in 123 BC; most important class stored grain and olive oil distributed by the state"
+        url: "https://en.wikipedia.org/wiki/Horreum"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: el horreum fue el almacén público romano para grano y aceite; HP=600, coste B=60, tiempo 500, footprint 2x2, dropoff exclusivo de A y balance general son diseño."
+    reviewed_by:
+      - architect

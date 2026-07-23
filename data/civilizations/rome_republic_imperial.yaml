@@ -36,7 +36,9 @@ unit_ids:
   - rome:ballista_crew
   - rome:camp_work_crew
   - rome:legionary
-building_ids: []
+building_ids:
+  - rome:forum_center
+  - rome:horreum
 tech_ids: []
 art_rule_keys:
   - rome:art.period_and_province

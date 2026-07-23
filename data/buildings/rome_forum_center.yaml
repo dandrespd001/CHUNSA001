@@ -1,0 +1,53 @@
+schema_version: 1
+id: rome:forum_center
+civ_id: rome:republic_imperial
+display_name_key: rome:building.forum_center
+description_key: rome:building.forum_center.description
+epoch_window:
+  - 5
+  - 5
+kind: civic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 1500
+constructible: false
+resource_costs: {}
+build_time_ticks: 0
+dropoff_resources:
+  - A
+  - B
+  - Me
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.1-datos-edificios
+  generated_on: "2026-07-23"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Wikipedia, Roman Forum"
+        locator: "Originally a marketplace; central location for judicial and political life in the Roman Republic and Empire; nucleus of commercial and legal affairs"
+        url: "https://en.wikipedia.org/wiki/Roman_Forum"
+        accessed_on: "2026-07-23"
+  balance_design:
+    author: minimax
+    rationale: "Identidad histórica: el Foro Romano funcionó como centro cívico/comercial/judicial de Roma desde la República; HP, pre-colocado por escenario (no construible), footprint 3x3, dropoff universal A/B/Me y rol jugable son balance."
+    reviewed_by:
+      - architect
