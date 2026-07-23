@@ -24,7 +24,8 @@ static constexpr uint32_t TOTAL_TICKS = 2000;
 // range_mt=1500 (1.5 tiles), dentro de AGGRO_RANGE_MT=10000 (10 tiles). Nadie
 // recibe MOVE_TO: si se aniquila un bando, fue la persecución del kernel.
 static void run_scenario(GameState& g) {
-    MatchConfig01A cfg{128u, 2u, 1u, 20u, 20u, 256u, 256u, 11ull};
+    // Sprint 0.4: camino debug legado explícito (ver test_combat.cpp).
+    MatchConfig01A cfg{128u, 2u, 1u, 20u, 20u, 256u, 256u, 11ull, 1u};
     gs_init(g, cfg);
 
     static RawCommand batch[2 * N_PER_SIDE];
@@ -48,6 +49,7 @@ static void run_scenario(GameState& g) {
                 c.p.attack     = 20;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 1;  // cavalry (ventaja RPS vs artillery)
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
             for (uint32_t i = 0; i < N_PER_SIDE; ++i) {
@@ -66,6 +68,7 @@ static void run_scenario(GameState& g) {
                 c.p.attack     = 20;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 2;  // artillery
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
         }

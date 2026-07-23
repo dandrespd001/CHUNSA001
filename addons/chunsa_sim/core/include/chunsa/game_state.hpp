@@ -11,6 +11,7 @@
 #include "chunsa/vision.hpp"
 #include "chunsa/flow_field.hpp"
 #include "chunsa/economy.hpp"
+#include "chunsa/data_catalog.hpp"
 
 // chunsa_sim_core — GameState (SoA, pools preasignados) y su configuración.
 // SPEC-001 §1.2/§3.2. Autor: Arquitecto.
@@ -28,6 +29,16 @@ struct MatchConfig01A {
     uint32_t map_tiles_x;                // ≤ WORLD_TILES_MAX; grid del spatial hash
     uint32_t map_tiles_y;
     uint64_t seed;
+    // Sprint 0.4 (SPEC-002 §8.4): AÑADIDO AL FINAL a propósito — varios call
+    // sites (tests, gdextension) construyen MatchConfig01A por agregado
+    // POSICIONAL; insertar un campo en medio desalinearía esos inicializadores
+    // en silencio. 0 = producción (SPAWN_UNIT/SPAWN_CITIZEN exigen unit_id de
+    // catálogo); 1 = habilita el camino debug legado (solo tests explícitos).
+    // Sin default member initializer a propósito (rompe -Wclass-memaccess en
+    // el memset de GameState, que contiene `cfg`; ver nota igual en
+    // commands.hpp::CmdPayload::unit_id) — `MatchConfig01A cfg{};` ya lo deja
+    // en 0 por value-init de agregado sin necesidad de un DMI.
+    uint8_t  allow_debug_stat_payload;
 };
 
 inline bool config_validate(const MatchConfig01A& c) noexcept {
@@ -39,6 +50,7 @@ inline bool config_validate(const MatchConfig01A& c) noexcept {
     if (c.map_tiles_x > WORLD_TILES_MAX || c.map_tiles_y > WORLD_TILES_MAX) return false;
     const uint64_t cells = ((c.map_tiles_x + 1) / 2) * (uint64_t)((c.map_tiles_y + 1) / 2);
     if (cells > SH_MAX_CELLS) return false;
+    if (c.allow_debug_stat_payload > 1u) return false;
     return true;
 }
 
@@ -91,6 +103,16 @@ struct GameState {
     int32_t morale[ENTITY_HARD_CAP];   // 0..MORALE_MAX; SPAWN_UNIT lo pone a MORALE_MAX
     uint8_t fleeing[ENTITY_HARD_CAP];  // 1 = en pánico (huye, no ataca)
 
+    // Catálogo de datos (Sprint 0.4, SPEC-002 §8.1/§8.4). ESTADO: unit_id se
+    // serializa y checksummea (identidad del dato con el que se spawneó cada
+    // entidad); INVALID_UNIT_ID para el camino debug legado. `catalog` es
+    // BINDING RUNTIME puro (como `data_catalog` en MatchConfigPersistedV1 del
+    // brief): jamás se serializa/checksummea ni se toca dentro de Step() salvo
+    // para lectura de tablas ya validadas fuera de él. El owner (fuera de
+    // GameState) no debe moverse/destruirse/mutarse mientras esté enlazado.
+    UnitId unit_id[ENTITY_HARD_CAP];
+    const DataCatalogV1* catalog;
+
     // Economía mínima (Sprint 0.3, base §3.4). ESTADO: serializado + checksummeado.
     // Módulo economy.hpp es autocontenido (sin GameState); el wiring vive aquí y
     // en step.hpp. Depósitos: posiciones fijas deterministas (gs_init_deposits);
@@ -127,6 +149,7 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
     g.eco_carry[i] = 0;
     g.eco_carry_resource[i] = 0;
+    g.unit_id[i] = INVALID_UNIT_ID;
 }
 
 // Patrón determinista fijo de depósitos (Sprint 0.3, economía mínima): 2 de
@@ -181,6 +204,24 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     gs_init_cost_grid(g);
     g.flow_has_goal = 0;
     g.flow_dirty = 0;
+    // unit_id sigue la convención de los componentes de combate/moral (Sprint
+    // 0.3): TODOS los slots hasta capacity, no solo los vivos (checksum.hpp y
+    // serialize.hpp lo recorren sin gate de alive[]). memset ya dejó 0, que
+    // bajo la nueva semántica de UnitId significaría "unidad 0 del catálogo",
+    // NO "sin catálogo" — hay que forzar INVALID_UNIT_ID explícitamente.
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) g.unit_id[i] = INVALID_UNIT_ID;
+    g.catalog = nullptr;
+}
+
+// Enlaza el catálogo de datos al GameState (Sprint 0.4). Binding runtime puro:
+// NO se serializa/checksummea/valida contra un hash persistido en esta
+// versión (deviación documentada frente al `gs_init(..., catalog, policy)`
+// literal de SPEC-002 §8.2 — ver RESULT del sprint). Precondición del
+// contrato de lifecycle: `catalog` debe seguir vivo y sin mutar mientras
+// `g` exista; el caller es responsable (igual que el resto del kernel, sin
+// refcounting dentro del núcleo determinista).
+inline void gs_bind_catalog(GameState& g, const DataCatalogV1& catalog) noexcept {
+    g.catalog = &catalog;
 }
 
 }  // namespace chunsa

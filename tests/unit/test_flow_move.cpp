@@ -21,7 +21,7 @@ static constexpr uint32_t TOTAL_TICKS = 600;
 // tick 0; en el tick 1 el emisor 0 emite FLOW_MOVE hacia el lado derecho
 // (tile 220,128), detrás de un muro vertical con un hueco (ver gs_init_cost_grid).
 static void run_scenario(GameState& g) {
-    MatchConfig01A cfg{N_UNITS + 16u, 1u, 1u, 20u, 20u, 256u, 256u, 99ull};
+    MatchConfig01A cfg{N_UNITS + 16u, 1u, 1u, 20u, 20u, 256u, 256u, 99ull, 0u};
     gs_init(g, cfg);
 
     static RawCommand batch[N_UNITS];

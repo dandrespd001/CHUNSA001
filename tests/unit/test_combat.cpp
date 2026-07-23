@@ -22,7 +22,11 @@ static constexpr uint32_t TOTAL_TICKS = 400;
 // artillería (owner 1) en x∈[126,136] y∈[120,136), solapando en la franja
 // x∈[126,130] para que entren en rango (range_mt=1500 = 1.5 tiles).
 static void run_scenario(GameState& g) {
-    MatchConfig01A cfg{512u, 2u, 1u, 20u, 20u, 256u, 256u, 7ull};
+    // Sprint 0.4: SPAWN_UNIT es data-driven por defecto; este test ejercita
+    // explícitamente el camino debug legado (stats fijas en el payload), por
+    // lo que debe activar allow_debug_stat_payload y marcar unit_id=INVALID
+    // en cada comando (ver commands.hpp).
+    MatchConfig01A cfg{512u, 2u, 1u, 20u, 20u, 256u, 256u, 7ull, 1u};
     gs_init(g, cfg);
 
     static RawCommand batch[2 * N_PER_SIDE];
@@ -46,6 +50,7 @@ static void run_scenario(GameState& g) {
                 c.p.attack     = 20;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 1;  // cavalry
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
             for (uint32_t i = 0; i < N_PER_SIDE; ++i) {
@@ -64,6 +69,7 @@ static void run_scenario(GameState& g) {
                 c.p.attack     = 20;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 2;  // artillery
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
         }

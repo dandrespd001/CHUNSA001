@@ -1,0 +1,30 @@
+{
+  "valid_plain": [
+    "base:melee_line_v1",
+    "base:epoch4_metalworking",
+    "rome:late_republic",
+    "formation_capable"
+  ],
+  "invalid_plain": [
+    "+1",
+    "1_000",
+    "1_",
+    "1:20",
+    ".inf",
+    "-.Inf",
+    ".nan",
+    "1e3",
+    "1.25",
+    "0x10",
+    "0o10",
+    "0b10",
+    "012",
+    "yes",
+    "NO",
+    "On",
+    "off",
+    "null",
+    "~",
+    "2026-07-22"
+  ]
+}

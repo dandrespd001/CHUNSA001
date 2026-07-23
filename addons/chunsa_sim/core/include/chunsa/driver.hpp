@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "chunsa/step.hpp"
@@ -60,6 +61,8 @@ struct DriveOut {
 };
 
 // Checksum de continuación (SPEC-001 §10): state_checksum + serialización de IA.
+// Dominio bump a V2 en Sprint 0.4 junto con state_checksum_v1 (que ya hashea
+// CHECKSUM_ALGO_VERSION=2 internamente; ver checksum.hpp).
 inline uint64_t continuation_checksum(const GameState& g, const AiJobBox& box,
                                       const AiRuntimeV1& rt) noexcept {
     uint8_t ai_buf[8192];
@@ -67,7 +70,7 @@ inline uint64_t continuation_checksum(const GameState& g, const AiJobBox& box,
     ai_serialize(box, rt, w);
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_CONT_V1", 14);
+    h.bytes("CHUNSA_CONT_V2", 14);
     h.u64(state_checksum_v1(g));
     h.bytes(ai_buf, w.len);
     return h.digest();
@@ -195,11 +198,20 @@ inline int drive(const DriveOpts& o, GameState& gs, AiJobBox& box, AiRuntimeV1& 
 
 // Conveniencia: partida nueva (heap) + drive + limpieza. Devuelve el código de drive.
 inline int drive_fresh(const DriveOpts& o, DriveOut& out) {
+    const uint32_t u16_max =
+        static_cast<uint32_t>(std::numeric_limits<uint16_t>::max());
+    if (o.human_input_delay_ticks > u16_max ||
+        o.max_future_command_ticks > u16_max) {
+        return 2;
+    }
+
     MatchConfig01A cfg{};
     cfg.max_entities = o.units + 4;
     cfg.player_count = o.with_ai ? uint8_t{2} : uint8_t{1};
-    cfg.human_input_delay_ticks = o.human_input_delay_ticks;
-    cfg.max_future_command_ticks = o.max_future_command_ticks;
+    cfg.human_input_delay_ticks =
+        static_cast<uint16_t>(o.human_input_delay_ticks);
+    cfg.max_future_command_ticks =
+        static_cast<uint16_t>(o.max_future_command_ticks);
     cfg.checksum_every_ticks = o.checksum_every;
     cfg.map_tiles_x = 256; cfg.map_tiles_y = 256;
     cfg.seed = o.seed;

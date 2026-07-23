@@ -1,0 +1,46 @@
+schema_version: 2
+id: egipto:work_crew
+display_name_key: egipto:unit.work_crew
+description_key: egipto:unit.work_crew.description
+civ_id: egipto:dynastic_nile
+epoch_window:
+  - 3
+  - 4
+class: citizen
+tags:
+  - drop_off_carrier
+resource_costs:
+  A: 20
+stats:
+  hp: 45
+  attack: 0
+  range_millitiles: 0
+  speed_millitile_tick: 55
+  morale: 45
+  build_time_ticks: 300
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36a.md
+    sources:
+      - citation: "UCL Digital Egypt, Ancient Egyptian sources for the history of accountancy"
+        locator: "Administrative records of grain, labor and obligations"
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/pdf/accountancy.pdf"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "Citizen es la clase económica del kernel; no afirma ciudadanía jurídica. Stats elegidos para balance de la demo."
+    reviewed_by:
+      - architect

@@ -1,0 +1,39 @@
+schema_version: 1
+id: base:demo_desert_basin
+display_name_key: base:map.demo_desert_basin
+width_tiles: 256
+height_tiles: 256
+biome: desert
+terrain_rle:
+  - terrain: desert
+    run: 65536
+cost_rle:
+  - cost: 1
+    run: 65536
+resource_spawns: []
+starting_positions:
+  - slot: 0
+    x_millitiles: 20500
+    y_millitiles: 128500
+  - slot: 1
+    x_millitiles: 235500
+    y_millitiles: 128500
+recommended_epoch_window:
+  - 4
+  - 5
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Mapa sintético de prueba para determinismo y demo; no reconstruye un lugar histórico."
+    reviewed_by:
+      - architect

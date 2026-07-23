@@ -76,6 +76,55 @@ add_executable(chunsa_test_replay_v2 tests/unit/test_replay_v2.cpp)
 target_link_libraries(chunsa_test_replay_v2 PRIVATE chunsa_sim_core)
 add_test(NAME replay_v2 COMMAND chunsa_test_replay_v2)
 
+# --- Test Sprint 0.4: kernel data-driven (loader CHDB v1 + SPAWN_UNIT/CITIZEN) ---
+add_executable(chunsa_test_data_blob tests/unit/test_data_blob.cpp)
+target_link_libraries(chunsa_test_data_blob PRIVATE chunsa_sim_core)
+# Ruta absoluta al golden versionado: el test NO depende del cwd implícito de
+# ctest (brief SONNET_KERNEL_DATOS_SPEC002 §9).
+target_compile_definitions(chunsa_test_data_blob PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME data_blob COMMAND chunsa_test_data_blob)
+
+# --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
+# tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
+# no parte del juego: solo tooling de datos). El intérprete se elige por el
+# PRIMERO que REALMENTE pueda importar esas deps (verificado con un import real,
+# para no elegir un Python "externally managed"/uv que las tenga ausentes), en
+# orden: (1) venv local .venv (gitignored), (2) descubrimiento estándar de CMake,
+# (3) /usr/bin/python3 (system Python de Linux, que suele traerlas). Reconciliación
+# del Arquitecto: unifica los dos enfoques de las ramas de datos (venv vs system).
+set(_chunsa_pycandidates "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3")
+    list(APPEND _chunsa_pycandidates "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python3")
+endif()
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    list(APPEND _chunsa_pycandidates "${Python3_EXECUTABLE}")
+endif()
+if(EXISTS "/usr/bin/python3")
+    list(APPEND _chunsa_pycandidates "/usr/bin/python3")
+endif()
+set(CHUNSA_DATA_PY "")
+foreach(_py IN LISTS _chunsa_pycandidates)
+    execute_process(COMMAND "${_py}" -c "import jsonschema, yaml, referencing"
+        RESULT_VARIABLE _rc OUTPUT_QUIET ERROR_QUIET)
+    if(_rc EQUAL 0)
+        set(CHUNSA_DATA_PY "${_py}")
+        break()
+    endif()
+endforeach()
+if(CHUNSA_DATA_PY STREQUAL "")
+    message(WARNING "data_compile: ningún Python con jsonschema+yaml+referencing; "
+        "el gate fallará. Instala esas deps (pip) o crea un .venv en la raíz.")
+    set(CHUNSA_DATA_PY "${Python3_EXECUTABLE}")
+endif()
+add_test(NAME data_compile
+    COMMAND ${CHUNSA_DATA_PY} -m unittest discover
+            -s ${CMAKE_CURRENT_SOURCE_DIR}/tools/data_compile
+            -p test_*.py -v)
+set_tests_properties(data_compile PROPERTIES
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
 # --- Adaptador GDExtension + demo (Sprint 0.2; fuentes: kimi-k3, revisado) -------
 option(CHUNSA_BUILD_GODOT "Compilar el adaptador GDExtension y la demo" OFF)
 if(CHUNSA_BUILD_GODOT)

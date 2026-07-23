@@ -37,6 +37,7 @@
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/multi_mesh_instance3d.hpp>
 #include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/quad_mesh.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
@@ -80,11 +81,39 @@ void ChunsaSimNode::_ready() {
 
     // max_entities, player_count, human_input_delay_ticks,
     // max_future_command_ticks, checksum_every_ticks, map_tiles_x,
-    // map_tiles_y, seed
+    // map_tiles_y, seed, allow_debug_stat_payload (0 = data-driven, Sprint 0.4)
     const chunsa::MatchConfig01A cfg{demo_units + 16, 1, 1, 20, 20, 256, 256,
-                                     DEMO_SEED};
+                                     DEMO_SEED, 0};
     gs = new chunsa::GameState();
     chunsa::gs_init(*gs, cfg);
+    // --- Sprint 0.4: cargar el catálogo de datos y bindearlo al GameState ---
+    {
+        godot::String blob_path = os_ptr->get_environment("CHUNSA_BLOB");
+        if (blob_path.is_empty()) {
+            blob_path = godot::ProjectSettings::get_singleton()
+                            ->globalize_path("res://chunsa_base.chdb");
+        }
+        const chunsa::CatalogLoadCode code = chunsa::catalog_load_file_v1(
+            blob_path.utf8().get_data(),
+            chunsa::CatalogLoadProfile::Development, catalog_storage);
+        if (code != chunsa::CatalogLoadCode::Ok || !catalog_storage.valid()) {
+            godot::UtilityFunctions::print(
+                "CHUNSA ERROR: catálogo no cargado (code=",
+                static_cast<int64_t>(code), ") desde ", blob_path);
+            return;  // sin catálogo no hay spawns data-driven
+        }
+        gs->catalog = &catalog_storage.catalog();
+        uid_cavalry = chunsa::catalog_find_unit(
+            *gs->catalog, "egipto:chariot_warrior", std::strlen("egipto:chariot_warrior"));
+        uid_citizen = chunsa::catalog_find_unit(
+            *gs->catalog, "egipto:work_crew", std::strlen("egipto:work_crew"));
+        uid_artillery = chunsa::catalog_find_unit(
+            *gs->catalog, "rome:ballista_crew", std::strlen("rome:ballista_crew"));
+        godot::UtilityFunctions::print(
+            "CHUNSA catálogo OK: cav_id=", static_cast<int64_t>(uid_cavalry),
+            " cit_id=", static_cast<int64_t>(uid_citizen),
+            " art_id=", static_cast<int64_t>(uid_artillery));
+    }
     ring = new chunsa::SnapshotRing<DemoSnapshot>();
     ring->init();
 
@@ -409,8 +438,7 @@ uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t
             const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 100u, 157u, dummy);
             c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
             c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
-            c.p.speed_mtpt = 150;
-            c.p.hp = 100; c.p.attack = 20; c.p.range_mt = 1500; c.p.unit_class = 1;
+            c.p.unit_id = uid_cavalry;  // stats del catálogo (payload en 0 por el memset)
             ++n;
         }
         for (uint32_t i = 0; i < n_cit; ++i) {  // ciudadanos, owner 0
@@ -422,7 +450,7 @@ uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t
             const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 36u, 45u, dummy);
             c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
             c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
-            c.p.speed_mtpt = 800;  // desviación documentada (brief: 200)
+            c.p.unit_id = uid_citizen;  // stats del catálogo (payload en 0 por el memset)
             ++n;
         }
         for (uint32_t i = 0; i < n_art; ++i) {  // artillería, owner 1
@@ -434,8 +462,7 @@ uint32_t ChunsaSimNode::build_showcase_batch(chunsa::RawCommand* batch, uint32_t
             const uint32_t ty = rng_range(DEMO_SEED, BENCH, 0u, i, 2u, 100u, 157u, dummy);
             c.p.x_raw = static_cast<int64_t>(tx) * 65536 + 32768;
             c.p.y_raw = static_cast<int64_t>(ty) * 65536 + 32768;
-            c.p.speed_mtpt = 80;
-            c.p.hp = 100; c.p.attack = 20; c.p.range_mt = 1500; c.p.unit_class = 2;
+            c.p.unit_id = uid_artillery;  // stats del catálogo (payload en 0 por el memset)
             ++n;
         }
     } else if (t == 1u) {

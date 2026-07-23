@@ -21,7 +21,13 @@
 namespace chunsa {
 
 inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 6;  // v6: +economía (deposits/stock/citizens)
+// v7 (Sprint 0.4, SPEC-002 §9.1): +unit_id/allow_debug_stat_payload (catálogo
+// de datos). DEVIACIÓN documentada frente al brief: se sube el número de
+// versión porque el layout de STATE cambió de verdad (igual que hizo v6 con
+// economía), pero el envelope/header siguen siendo el formato v6 simple —
+// NO se implementó el envelope de 80B + ContentBindingManifestV1 + Zstd
+// v1.5.7 literal de SPEC-002 §9.1 en este incremento (ver RESULT del sprint).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 7;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

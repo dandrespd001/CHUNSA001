@@ -14,7 +14,15 @@
 
 namespace chunsa {
 
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 1;
+// Sprint 0.4 (SPEC-002 §8.5): bump a v2 — el stream gana `unit_id` (identidad
+// del dato con el que se spawneó cada entidad). Cambio INTENCIONAL: el dominio
+// v1 nunca incluyó unit_id (no existía), así que dos GameState solo pueden
+// diferir en checksum si unit_id realmente difiere; el resto del stream v1
+// se conserva sin reordenar. Deviación documentada frente al brief: se
+// mantiene el símbolo `state_checksum_v1` (no se añade un `state_checksum_v2`
+// separado) para no tocar los ~6 call sites existentes — el propio dominio
+// hasheado ya se identifica como "CHUNSA_STATE_V2" y CHECKSUM_ALGO_VERSION=2.
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 2;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -41,7 +49,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V1", 15);
+    h.bytes("CHUNSA_STATE_V2", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -111,6 +119,10 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     // Moral (Sprint 0.3): componentes por índice ascendente, todos los slots.
     for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.morale[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.fleeing[i]);
+    // Catálogo (Sprint 0.4, SPEC-002 §8.5): unit_id por índice, todos los
+    // slots (misma convención que combate/moral). `catalog` (puntero binding)
+    // NUNCA se hashea — no es estado simulado.
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.unit_id[i]);
     // Economía (Sprint 0.3): depósitos (todos los slots fijos), dropoffs y stock
     // por emisor, y componentes por-ciudadano por índice ascendente.
     h.u32(g.n_deposits);

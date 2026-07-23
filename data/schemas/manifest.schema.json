@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "chunsa/manifest.schema.json", "title": "manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "package_id", "package_version", "package_kind", "owned_namespaces", "declared_capabilities", "declared_behaviors", "declared_variant_groups", "declared_materials", "dependencies", "load_after", "provenance"],
+  "properties": {
+    "schema_version": {"const": 1}, "package_id": {"$ref": "common.schema.json#/$defs/package_id"},
+    "package_version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"},
+    "package_kind": {"enum": ["base", "mod"]},
+    "owned_namespaces": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/namespace"}},
+    "declared_capabilities": {"$ref": "common.schema.json#/$defs/record_id_set"}, "declared_behaviors": {"$ref": "common.schema.json#/$defs/record_id_set"}, "declared_variant_groups": {"$ref": "common.schema.json#/$defs/record_id_set"},
+    "declared_materials": {"type": "array", "uniqueItems": true, "items": {"type": "object", "additionalProperties": false, "required": ["id", "name_key", "kind", "resource", "strategic"], "properties": {"id": {"$ref": "common.schema.json#/$defs/record_id"}, "name_key": {"$ref": "common.schema.json#/$defs/localization_key"}, "kind": {"enum": ["deposit", "intermediate"]}, "resource": {"$ref": "common.schema.json#/$defs/resource"}, "strategic": {"type": "boolean"}}}},
+    "dependencies": {"type": "array", "uniqueItems": true, "items": {"type": "object", "additionalProperties": false, "required": ["package_id", "version_constraint"], "properties": {"package_id": {"$ref": "common.schema.json#/$defs/package_id"}, "version_constraint": {"type": "string", "minLength": 1, "maxLength": 128}}}},
+    "load_after": {"type": "array", "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/package_id"}}, "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  },
+  "allOf": [{"if": {"properties": {"package_kind": {"const": "base"}}}, "then": {"properties": {"dependencies": {"maxItems": 0}, "load_after": {"maxItems": 0}}}}]
+}

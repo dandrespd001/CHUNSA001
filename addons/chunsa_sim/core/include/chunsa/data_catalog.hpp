@@ -1,0 +1,831 @@
+#pragma once
+#include <cassert>
+#include <cstdint>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
+#include <utility>
+#include <new>
+
+#include "chunsa/sha256.hpp"
+
+// chunsa_sim_core — data_catalog: loader CHDB v1 NO CONFIABLE (SPEC-002 §§6-8).
+// Sprint 0.4 (Sonnet 5, brief docs/briefs/SONNET_KERNEL_DATOS_SPEC002.md §2/§5).
+//
+// Contrato: el blob es entrada hostil. Antes de reservar memoria dependiente
+// del archivo se validan tamaño, header, directorio (offsets/tamaños/orden,
+// aritmética checked, sin solapamiento/gaps/trailing) y, por cada record, el
+// CVE1 (Canonical Value Encoding v1) con caps de profundidad/nodos/colección/
+// string ANTES de descender. Solo tras superar todo eso se reconstruyen los
+// `UnitDefinitionV1` tipados y se recomputa el content hash. Ninguna excepción
+// cruza la API pública: internamente se usa `LoadFail` para abortar temprano
+// y `catalog_load_bytes_v1`/`catalog_load_file_v1` la atrapan en el borde,
+// igual que cualquier bad_alloc (convertido a Bounds).
+//
+// Simplificaciones documentadas frente a SPEC-002 (ver RESULT del sprint):
+//  - El loader valida estructuralmente TODAS las secciones (header, directorio,
+//    CVE, orden de record_id) pero solo reconstruye tipado semántico completo
+//    para UNIT (kind=2); building/tech/civ/map/ai-profile solo se validan
+//    estructuralmente + su "id"/"package_id" para el orden canónico. La
+//    validación semántica completa de esos kinds (referencias, ventanas de
+//    época, etc.) ya la ejerce `chunsa_data_compiler.py` (gate `data_compile`);
+//    duplicarla en C++ para kinds que el kernel 0.4 no consume es está fuera
+//    de alcance de este incremento.
+//  - NFC (revisado tras auditoría de seguridad, P1-B): se valida UTF-8 bien
+//    formado, ausencia de NUL, y un chequeo NFC PARCIAL — se rechaza toda
+//    marca diacrítica combinante suelta (U+0300–U+036F), que es la forma
+//    NFD que el productor (Python `unicodedata.normalize`) jamás emite para
+//    el texto real de este fixture (español/inglés con acentos precompuestos,
+//    p.ej. "caballería"). NFC completo (tablas Unicode de descomposición/
+//    composición canónica) no se implementa; ver el comentario de
+//    `utf8_nfc_safe_no_nul` para el detalle de qué SÍ y qué NO cubre esta
+//    verificación y por qué "rechazar todo no-ASCII" habría roto el golden
+//    real (que tiene texto no-ASCII legítimo fuera de los campos que el
+//    kernel tipa).
+//  - Minimalidad CVE: al no existir en CVE1 dos codificaciones distintas para
+//    el mismo valor (int64 de ancho fijo, strings con longitud explícita,
+//    claves en orden estricto ya validado), la validación campo-a-campo basta;
+//    no se implementó un segundo paso de re-encode/byte-compare.
+//  - Fuga de memoria en fallo (P1-A, corregida): `load_impl` posee su
+//    `Impl` con `std::unique_ptr` durante toda la validación y solo hace
+//    `release()` en el único punto de éxito; cualquier `fail()` (incluidos
+//    los de `build_unit_definition`/`cve_parse`) libera `impl` vía
+//    unwinding en vez de fugarlo.
+
+namespace chunsa {
+
+// ============================================================================
+// §2 del brief — API literal (tipos y firmas NO renombrables).
+// ============================================================================
+
+using UnitId = uint32_t;
+inline constexpr UnitId INVALID_UNIT_ID = 0xFFFFFFFFu;
+
+struct ContentHashV1 {
+    uint8_t bytes[32];
+};
+
+enum class ContentHashAlgorithmId : uint16_t { Sha256 = 1 };
+
+enum class UnitClassV1 : uint8_t {
+    Infantry = 0,
+    Cavalry = 1,
+    Artillery = 2,
+    Citizen = 3,
+    Siege = 4,
+    NavalLight = 5,
+};
+
+struct UnitDefinitionV1 {
+    UnitId id;
+    UnitClassV1 unit_class;
+    uint8_t tags_mask;
+    int32_t hp;
+    int32_t attack;
+    int32_t range_millitiles;
+    int32_t speed_millitile_tick;
+    int32_t morale;
+    int32_t build_time_ticks;
+    int32_t bonus_vs_bp[6];
+};
+
+struct UnitNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    UnitId id;
+};
+
+struct DataCatalogV1 {
+    ContentHashV1 content_hash;
+    ContentHashAlgorithmId hash_algorithm;
+    uint16_t hash_algorithm_version;
+    uint16_t blob_format_major;
+    uint16_t blob_format_minor;
+    uint32_t schema_set_version;
+    uint32_t catalog_flags;
+    const char* base_package_id_utf8;
+    uint16_t base_package_id_bytes;
+    const uint8_t* content_binding_bytes;
+    uint32_t content_binding_size;
+    uint32_t unit_count;
+    const UnitDefinitionV1* units;
+    const UnitNameIndexV1* unit_names;
+};
+
+enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
+
+enum class MatchLaunchPolicy : uint8_t {
+    VerifiedRelease = 0,
+    DeterministicModded = 1,
+    Development = 2,
+};
+
+enum class CatalogLoadCode : uint8_t {
+    Ok = 0, Io, TooLarge, BadMagic, UnsupportedVersion, UnknownFlags,
+    UnverifiedForbidden, Bounds, NonCanonical, SchemaMismatch,
+    InvalidUnit,
+};
+
+class DataCatalogStorageV1 {
+public:
+    DataCatalogStorageV1() noexcept;
+    ~DataCatalogStorageV1() noexcept;
+    DataCatalogStorageV1(const DataCatalogStorageV1&) = delete;
+    DataCatalogStorageV1& operator=(const DataCatalogStorageV1&) = delete;
+    DataCatalogStorageV1(DataCatalogStorageV1&&) noexcept;
+    DataCatalogStorageV1& operator=(DataCatalogStorageV1&&) noexcept;
+    bool valid() const noexcept;
+    const DataCatalogV1& catalog() const noexcept;
+    // Nested-type forward declaration expuesta (no privada) únicamente para que
+    // la factoría interna `data_catalog_detail::load_impl` pueda nombrar el
+    // tipo de retorno; su DEFINICIÓN completa y el puntero `impl_` que la
+    // posee siguen siendo un detalle de implementación no accesible desde
+    // fuera de este header (nadie más incluye/usa `Impl`).
+    struct Impl;
+private:
+    Impl* impl_ = nullptr;
+    friend CatalogLoadCode catalog_load_bytes_v1(
+        const uint8_t*, size_t, CatalogLoadProfile, DataCatalogStorageV1&) noexcept;
+    friend CatalogLoadCode catalog_load_file_v1(
+        const char*, CatalogLoadProfile, DataCatalogStorageV1&) noexcept;
+};
+
+CatalogLoadCode catalog_load_bytes_v1(const uint8_t* bytes, size_t size,
+                                      CatalogLoadProfile profile,
+                                      DataCatalogStorageV1& out) noexcept;
+
+CatalogLoadCode catalog_load_file_v1(const char* path,
+                                     CatalogLoadProfile profile,
+                                     DataCatalogStorageV1& out) noexcept;
+
+// ============================================================================
+// Detalle de implementación (no literal del brief).
+// ============================================================================
+
+namespace data_catalog_detail {
+
+// Caps duros SPEC-002 §6.1, independientes de lo declarado por el archivo.
+inline constexpr uint64_t HARD_MAX_CHDB_FILE_BYTES = 64ull * 1024 * 1024;
+inline constexpr uint32_t HARD_MAX_CVE_DEPTH = 16;
+inline constexpr uint32_t HARD_MAX_CVE_NODES_PER_RECORD = 262144;
+inline constexpr uint32_t HARD_MAX_CVE_COLLECTION_ITEMS = 65535;
+inline constexpr uint32_t HARD_MAX_CVE_STRING_BYTES = 65535;
+inline constexpr uint32_t RECORD_PAYLOAD_CAP = 1u << 20;       // 1 MiB
+inline constexpr uint32_t RECORD_PAYLOAD_CAP_MAP = 16u << 20;  // 16 MiB
+inline constexpr size_t DIRECTORY_ENTRY_SIZE = 24;
+inline constexpr size_t HEADER_SIZE = 40;
+inline constexpr uint32_t SECTION_COUNT_D1 = 7;
+
+// Control de flujo interno: nunca cruza la API pública (atrapado en el borde).
+struct LoadFail { CatalogLoadCode code; };
+[[noreturn]] inline void fail(CatalogLoadCode c) { throw LoadFail{c}; }
+
+// Validación UTF-8 bien formada + ausencia de NUL + NFC PARCIAL (auditoría
+// de seguridad post-integración, P1-B).
+//
+// El productor (`chunsa_data_compiler.py`, líneas ~503/537) rechaza
+// cualquier string donde `unicodedata.normalize("NFC", s) != s`. Implementar
+// NFC completo en C++ exigiría las tablas Unicode de descomposición/
+// composición canónica + orden de combinación + composición algorítmica de
+// Hangul — miles de code points, fuera de alcance de este ciclo de parche.
+//
+// Descarté "rechazar todo no-ASCII": el fixture D1 real SÍ tiene texto
+// no-ASCII legítimo (p.ej. `rationale` de `egipto_chariot_warrior.yaml`:
+// "la clase cavalry aproxima movilidad de carro, no CABALLERÍA montada" —
+// el CVE genérico recorre TODOS los campos de TODAS las secciones, no solo
+// `stats`/`class`/`tags`, así que un rechazo por-no-ASCII habría roto la
+// carga del golden real con el MISMO content_hash que antes).
+//
+// Decisión: verificación NFC PARCIAL pero real, no un sucedáneo. La
+// inmensa mayoría de las strings que NFC transformaría de verdad son
+// secuencias DESCOMPUESTAS de letra base + marca diacrítica combinante
+// (p.ej. 'e' U+0065 + COMBINING ACUTE ACCENT U+0301, que NFC compone en 'é'
+// U+00E9). El productor (Python) SIEMPRE emite la forma precompuesta para
+// este tipo de texto (español/inglés/latín transliterado); ninguna marca
+// combinante suelta del bloque U+0300–U+036F (Combining Diacritical Marks)
+// puede aparecer en salida NFC de este productor para estos scripts. Por
+// eso: cualquier code point en U+0300–U+036F se rechaza como NO canónico
+// (NonCanonical) — detecta exactamente el vector de ataque/divergencia
+// realista (inyectar la forma NFD de un acento) sin romper el fixture real
+// (que usa 'é'/'í'/'ñ' precompuestos, fuera de ese bloque).
+//
+// Gaps residuales documentados (aceptados para este ciclo, no en el
+// fixture actual): (a) los ~12 "singleton" canónicos de Unicode (p.ej.
+// U+2126 OHM SIGN → U+03A9) no se detectan — no son marcas combinantes y
+// no aparecen en este dataset; (b) bloques de marcas combinantes fuera de
+// U+0300–U+036F (Combining Diacritical Marks Supplement/Extended, marcas
+// para símbolos, medias-marcas) no se cubren — relevantes para scripts que
+// este fixture no usa; (c) Hangul descompuesto en jamos (algorítmico, no
+// basado en marcas combinantes) no se detecta — irrelevante sin texto
+// coreano. Sesgo deliberado: sobre-rechazar (falso rechazo de un NFC
+// técnicamente válido pero exótico) es seguro; el riesgo que cierra esta
+// auditoría es el opuesto (aceptar de más), y ese SÍ queda cerrado para el
+// vector realista.
+inline bool utf8_nfc_safe_no_nul(const std::string& s) noexcept {
+    size_t i = 0, n = s.size();
+    while (i < n) {
+        const uint8_t c = static_cast<uint8_t>(s[i]);
+        if (c == 0x00u) return false;
+        if (c < 0x80u) { ++i; continue; }
+        size_t extra;
+        uint32_t cp;
+        if ((c & 0xE0u) == 0xC0u) {
+            if (c < 0xC2u) return false;  // overlong 2-byte
+            extra = 1; cp = c & 0x1Fu;
+        } else if ((c & 0xF0u) == 0xE0u) {
+            extra = 2; cp = c & 0x0Fu;
+        } else if ((c & 0xF8u) == 0xF0u) {
+            if (c > 0xF4u) return false;
+            extra = 3; cp = c & 0x07u;
+        } else {
+            return false;
+        }
+        if (i + extra >= n) return false;
+        for (size_t k = 1; k <= extra; ++k) {
+            const uint8_t cc = static_cast<uint8_t>(s[i + k]);
+            if ((cc & 0xC0u) != 0x80u) return false;
+            cp = (cp << 6) | (cc & 0x3Fu);
+        }
+        if (extra == 1 && cp < 0x80u) return false;
+        if (extra == 2 && cp < 0x800u) return false;
+        if (extra == 3 && cp < 0x10000u) return false;
+        if (cp >= 0xD800u && cp <= 0xDFFFu) return false;
+        if (cp > 0x10FFFFu) return false;
+        // NFC parcial (P1-B, ver comentario arriba): rechaza marcas
+        // diacríticas combinantes sueltas — la forma NFD de un acento que
+        // el productor jamás emitiría.
+        if (cp >= 0x0300u && cp <= 0x036Fu) return false;
+        i += extra + 1;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// CveValue — árbol genérico mínimo para decodificar CVE1 (SPEC-002 §6.2).
+// ---------------------------------------------------------------------------
+struct CveValue {
+    uint8_t tag = 0;              // 0x01 false, 0x02 true, 0x10 int, 0x20 str, 0x30 arr, 0x40 obj
+    int64_t i = 0;
+    std::string s;
+    std::vector<CveValue> arr;
+    std::vector<std::pair<std::string, CveValue>> obj;
+
+    const CveValue* find(const char* key) const noexcept {
+        for (const auto& kv : obj) if (kv.first == key) return &kv.second;
+        return nullptr;
+    }
+    bool is_int() const noexcept { return tag == 0x10u; }
+    bool is_str() const noexcept { return tag == 0x20u; }
+    bool is_arr() const noexcept { return tag == 0x30u; }
+    bool is_obj() const noexcept { return tag == 0x40u; }
+};
+
+// Cursor de lectura acotado; cualquier desbordamiento aborta vía LoadFail.
+struct RawCursor {
+    const uint8_t* p;
+    size_t len;
+    size_t pos = 0;
+
+    size_t remaining() const noexcept { return len - pos; }
+
+    uint8_t u8() {
+        if (pos + 1 > len) fail(CatalogLoadCode::Bounds);
+        return p[pos++];
+    }
+    uint16_t u16() {
+        if (pos + 2 > len) fail(CatalogLoadCode::Bounds);
+        uint16_t v = static_cast<uint16_t>(p[pos]) | (static_cast<uint16_t>(p[pos + 1]) << 8);
+        pos += 2;
+        return v;
+    }
+    uint32_t u32() {
+        if (pos + 4 > len) fail(CatalogLoadCode::Bounds);
+        uint32_t v = 0;
+        for (int k = 0; k < 4; ++k) v |= static_cast<uint32_t>(p[pos + k]) << (8 * k);
+        pos += 4;
+        return v;
+    }
+    uint64_t u64() {
+        if (pos + 8 > len) fail(CatalogLoadCode::Bounds);
+        uint64_t v = 0;
+        for (int k = 0; k < 8; ++k) v |= static_cast<uint64_t>(p[pos + k]) << (8 * k);
+        pos += 8;
+        return v;
+    }
+    int64_t i64() { return static_cast<int64_t>(u64()); }
+    const uint8_t* take(size_t n) {
+        if (n > remaining()) fail(CatalogLoadCode::Bounds);
+        const uint8_t* r = p + pos;
+        pos += n;
+        return r;
+    }
+};
+
+// Decodifica UN valor CVE1, con caps aplicados ANTES de reservar/iterar
+// (SPEC-002 §6.2/§6.3, orden de validación del loader). `nodes` es el
+// contador POR RECORD (se resetea en cada record, no es global al archivo).
+inline CveValue cve_parse(RawCursor& c, uint32_t depth, uint32_t& nodes) {
+    if (depth > HARD_MAX_CVE_DEPTH) fail(CatalogLoadCode::Bounds);
+    if (++nodes > HARD_MAX_CVE_NODES_PER_RECORD) fail(CatalogLoadCode::Bounds);
+    const uint8_t tag = c.u8();
+    CveValue v;
+    v.tag = tag;
+    switch (tag) {
+        case 0x01u: v.i = 0; return v;
+        case 0x02u: v.i = 1; return v;
+        case 0x10u: v.i = c.i64(); return v;
+        case 0x20u: {
+            const uint32_t n = c.u32();
+            if (n > HARD_MAX_CVE_STRING_BYTES) fail(CatalogLoadCode::Bounds);
+            const uint8_t* sp = c.take(n);
+            v.s.assign(reinterpret_cast<const char*>(sp), n);
+            if (!utf8_nfc_safe_no_nul(v.s)) fail(CatalogLoadCode::NonCanonical);
+            return v;
+        }
+        case 0x30u: {
+            const uint32_t n = c.u32();
+            if (n > HARD_MAX_CVE_COLLECTION_ITEMS) fail(CatalogLoadCode::Bounds);
+            // Mínimo 1 byte por elemento (tag false/true): valida contra los
+            // bytes restantes ANTES de reservar el vector.
+            if (static_cast<uint64_t>(n) > c.remaining()) fail(CatalogLoadCode::Bounds);
+            v.arr.reserve(n);
+            for (uint32_t k = 0; k < n; ++k) v.arr.push_back(cve_parse(c, depth + 1, nodes));
+            return v;
+        }
+        case 0x40u: {
+            const uint32_t n = c.u32();
+            if (n > HARD_MAX_CVE_COLLECTION_ITEMS) fail(CatalogLoadCode::Bounds);
+            // Mínimo por par: u32 key_len + 1 byte de valor = 5 bytes.
+            if (n > 0 && static_cast<uint64_t>(n) > c.remaining() / 5u) fail(CatalogLoadCode::Bounds);
+            v.obj.reserve(n);
+            std::string last;
+            bool has_last = false;
+            for (uint32_t k = 0; k < n; ++k) {
+                const uint32_t kl = c.u32();
+                if (kl > HARD_MAX_CVE_STRING_BYTES) fail(CatalogLoadCode::Bounds);
+                const uint8_t* kp = c.take(kl);
+                std::string key(reinterpret_cast<const char*>(kp), kl);
+                if (!utf8_nfc_safe_no_nul(key)) fail(CatalogLoadCode::NonCanonical);
+                if (has_last && !(last < key)) fail(CatalogLoadCode::NonCanonical);
+                last = key;
+                has_last = true;
+                CveValue val = cve_parse(c, depth + 1, nodes);
+                v.obj.emplace_back(std::move(key), std::move(val));
+            }
+            return v;
+        }
+        default:
+            fail(CatalogLoadCode::SchemaMismatch);
+    }
+    return v;  // inalcanzable; silencia -Wreturn-type
+}
+
+// ---------------------------------------------------------------------------
+// Tablas de mapeo string→ordinal (SPEC-002 unit.schema.json, orden congelado).
+// ---------------------------------------------------------------------------
+inline bool unit_class_from_string(const std::string& s, UnitClassV1& out) noexcept {
+    struct Entry { const char* name; UnitClassV1 v; };
+    static constexpr Entry T[] = {
+        {"infantry", UnitClassV1::Infantry}, {"cavalry", UnitClassV1::Cavalry},
+        {"artillery", UnitClassV1::Artillery}, {"citizen", UnitClassV1::Citizen},
+        {"siege", UnitClassV1::Siege}, {"naval_light", UnitClassV1::NavalLight},
+    };
+    for (const auto& e : T) if (s == e.name) { out = e.v; return true; }
+    return false;
+}
+
+inline bool tag_bit_from_string(const std::string& s, uint8_t& bit) noexcept {
+    static constexpr const char* T[] = {
+        "can_take_cover", "formation_capable", "suppression_resist_low",
+        "suppression_resist_high", "drop_off_carrier",
+    };
+    for (uint8_t k = 0; k < 5; ++k) if (s == T[k]) { bit = k; return true; }
+    return false;
+}
+
+inline bool bonus_index_from_string(const std::string& s, size_t& idx) noexcept {
+    static constexpr const char* T[] = {
+        "infantry", "cavalry", "artillery", "citizen", "siege", "naval_light",
+    };
+    for (size_t k = 0; k < 6; ++k) if (s == T[k]) { idx = k; return true; }
+    return false;
+}
+
+// P2 (auditoría de seguridad post-integración): el productor aplica
+// `additionalProperties:false` (data/schemas/unit.schema.json); antes de
+// este fix el loader ignoraba en silencio cualquier clave desconocida en
+// vez de rechazarla como el productor. Estas dos listas son exactamente las
+// claves declaradas en el schema para el objeto unit raíz y para `stats`.
+inline bool is_known_unit_key(const std::string& k) noexcept {
+    static constexpr const char* T[] = {
+        "schema_version", "id", "display_name_key", "description_key", "civ_id",
+        "epoch_window", "class", "tags", "resource_costs", "material_costs",
+        "playable_period_ids", "availability_mode", "counterfactual_label_key",
+        "stats", "bonus_vs_bp", "provenance",
+    };
+    for (const char* t : T) if (k == t) return true;
+    return false;
+}
+
+inline bool is_known_stats_key(const std::string& k) noexcept {
+    static constexpr const char* T[] = {
+        "hp", "attack", "range_millitiles", "speed_millitile_tick", "morale",
+        "build_time_ticks",
+    };
+    for (const char* t : T) if (k == t) return true;
+    return false;
+}
+
+// Reconstruye y valida un UnitDefinitionV1 desde su objeto CVE ya parseado
+// (SPEC-002 §8.1: rangos exactos del schema; ver data/schemas/unit.schema.json).
+inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
+    if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : obj.obj) {
+        if (!is_known_unit_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
+    }
+
+    const CveValue* cls = obj.find("class");
+    if (!cls || !cls->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+    UnitClassV1 uc{};
+    if (!unit_class_from_string(cls->s, uc)) fail(CatalogLoadCode::InvalidUnit);
+
+    const CveValue* tags = obj.find("tags");
+    if (!tags || !tags->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+    uint8_t tags_mask = 0;
+    for (const auto& t : tags->arr) {
+        if (!t.is_str()) fail(CatalogLoadCode::InvalidUnit);
+        uint8_t bit = 0;
+        if (!tag_bit_from_string(t.s, bit)) fail(CatalogLoadCode::InvalidUnit);
+        tags_mask = static_cast<uint8_t>(tags_mask | (1u << bit));
+    }
+
+    const CveValue* stats = obj.find("stats");
+    if (!stats || !stats->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : stats->obj) {
+        if (!is_known_stats_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
+    }
+    auto req_int = [&](const char* key) -> int64_t {
+        const CveValue* v = stats->find(key);
+        if (!v || !v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        return v->i;
+    };
+    const int64_t hp = req_int("hp");
+    const int64_t attack = req_int("attack");
+    const int64_t range_mt = req_int("range_millitiles");
+    const int64_t speed = req_int("speed_millitile_tick");
+    const int64_t morale = req_int("morale");
+    const int64_t build_time = req_int("build_time_ticks");
+
+    if (hp < 1 || hp > 1000000) fail(CatalogLoadCode::InvalidUnit);
+    if (attack < 0 || attack > 1000000) fail(CatalogLoadCode::InvalidUnit);
+    if (range_mt < 0 || range_mt > 100000) fail(CatalogLoadCode::InvalidUnit);
+    if (speed < 1 || speed > 100000) fail(CatalogLoadCode::InvalidUnit);
+    if (morale < 0 || morale > 100) fail(CatalogLoadCode::InvalidUnit);
+    if (build_time < 1 || build_time > 1000000) fail(CatalogLoadCode::InvalidUnit);
+
+    UnitDefinitionV1 def{};
+    def.id = id;
+    def.unit_class = uc;
+    def.tags_mask = tags_mask;
+    def.hp = static_cast<int32_t>(hp);
+    def.attack = static_cast<int32_t>(attack);
+    def.range_millitiles = static_cast<int32_t>(range_mt);
+    def.speed_millitile_tick = static_cast<int32_t>(speed);
+    def.morale = static_cast<int32_t>(morale);
+    def.build_time_ticks = static_cast<int32_t>(build_time);
+    for (int k = 0; k < 6; ++k) def.bonus_vs_bp[k] = 0;
+
+    if (const CveValue* bonus = obj.find("bonus_vs_bp")) {
+        if (!bonus->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+        for (const auto& kv : bonus->obj) {
+            size_t idx = 0;
+            if (!bonus_index_from_string(kv.first, idx)) fail(CatalogLoadCode::InvalidUnit);
+            if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
+            if (kv.second.i < -10000 || kv.second.i > 10000) fail(CatalogLoadCode::InvalidUnit);
+            def.bonus_vs_bp[idx] = static_cast<int32_t>(kv.second.i);
+        }
+    }
+    return def;
+}
+
+}  // namespace data_catalog_detail
+
+// ============================================================================
+// Storage (Pimpl): posee la memoria estable a la que apuntan los `const char*`
+// y punteros de `DataCatalogV1`. Definido tras el detalle porque necesita los
+// tipos anteriores completos.
+// ============================================================================
+struct DataCatalogStorageV1::Impl {
+    std::string package_id;
+    std::vector<std::string> unit_ids;         // storage estable (reserve exacto antes de llenar)
+    std::vector<UnitDefinitionV1> units;
+    std::vector<UnitNameIndexV1> unit_names;
+    std::vector<uint8_t> binding_bytes;
+    DataCatalogV1 cat{};
+};
+
+inline DataCatalogStorageV1::DataCatalogStorageV1() noexcept = default;
+
+inline DataCatalogStorageV1::~DataCatalogStorageV1() noexcept { delete impl_; }
+
+inline DataCatalogStorageV1::DataCatalogStorageV1(DataCatalogStorageV1&& o) noexcept
+    : impl_(o.impl_) {
+    o.impl_ = nullptr;
+}
+
+inline DataCatalogStorageV1& DataCatalogStorageV1::operator=(DataCatalogStorageV1&& o) noexcept {
+    if (this != &o) {
+        delete impl_;
+        impl_ = o.impl_;
+        o.impl_ = nullptr;
+    }
+    return *this;
+}
+
+inline bool DataCatalogStorageV1::valid() const noexcept { return impl_ != nullptr; }
+
+inline const DataCatalogV1& DataCatalogStorageV1::catalog() const noexcept {
+    // P2 (auditoría de seguridad post-integración): precondición explícita
+    // `valid()` — un `assert` documenta y detecta en debug builds la
+    // desreferencia de `impl_==nullptr` tras una carga fallida (contrato ya
+    // exigía `valid()` antes de llamar; esto lo hace ruidoso en vez de UB
+    // silencioso bajo NDEBUG=0). No sustituye la responsabilidad del caller.
+    assert(impl_ != nullptr && "DataCatalogStorageV1::catalog(): precondición valid() violada");
+    return impl_->cat;
+}
+
+namespace data_catalog_detail {
+
+inline void push_u16(std::vector<uint8_t>& b, uint16_t v) {
+    b.push_back(static_cast<uint8_t>(v & 0xFFu));
+    b.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+}
+
+struct KindSpec { uint16_t kind; uint16_t version; uint32_t cap; };
+
+// KIND_INFO (SPEC-002 §6.1): manifest, unit, building, tech, civ, map, ai-profile.
+inline constexpr KindSpec kKindTable[7] = {
+    {1, 1, 1}, {2, 2, 65535}, {3, 1, 65535}, {4, 1, 65535},
+    {5, 1, 1024}, {6, 1, 1024}, {7, 1, 1024},
+};
+
+// Núcleo del loader: valida el blob completo (header→directorio→records) y
+// construye un Impl* con el catálogo. Lanza LoadFail en cualquier violación;
+// el caller (catalog_load_bytes_v1) atrapa esto y cualquier bad_alloc.
+inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
+                                             CatalogLoadProfile profile) {
+    if (bytes == nullptr) fail(CatalogLoadCode::Io);
+    if (size > HARD_MAX_CHDB_FILE_BYTES) fail(CatalogLoadCode::TooLarge);
+    if (size < HEADER_SIZE) fail(CatalogLoadCode::BadMagic);
+
+    RawCursor c{bytes, size};
+
+    // ---- Header fijo (40 bytes) --------------------------------------------
+    const uint8_t* magic = c.take(8);
+    static constexpr char kMagic[8] = {'C', 'H', 'N', 'S', 'D', 'B', '1', '\0'};
+    if (std::memcmp(magic, kMagic, 8) != 0) fail(CatalogLoadCode::BadMagic);
+
+    const uint16_t fmt_major = c.u16();
+    const uint16_t fmt_minor = c.u16();
+    const uint32_t schema_set = c.u32();
+    if (fmt_major != 1 || fmt_minor != 0 || schema_set != 1) {
+        fail(CatalogLoadCode::UnsupportedVersion);
+    }
+
+    const uint32_t flags = c.u32();
+    if ((flags & ~0x1u) != 0u) fail(CatalogLoadCode::UnknownFlags);  // rechaza HAS_PATCHES (D1) y bits desconocidos
+    const bool unverified = (flags & 0x1u) != 0u;
+    if (unverified && profile == CatalogLoadProfile::Verified) {
+        fail(CatalogLoadCode::UnverifiedForbidden);
+    }
+
+    const uint32_t section_count = c.u32();
+    if (section_count != SECTION_COUNT_D1) fail(CatalogLoadCode::SchemaMismatch);
+
+    const uint32_t entry_size = c.u32();
+    if (entry_size != DIRECTORY_ENTRY_SIZE) fail(CatalogLoadCode::SchemaMismatch);
+
+    const uint32_t reserved = c.u32();
+    if (reserved != 0u) fail(CatalogLoadCode::SchemaMismatch);
+
+    const uint64_t file_size = c.u64();
+    if (file_size != static_cast<uint64_t>(size)) fail(CatalogLoadCode::Bounds);
+
+    // ---- Directorio (7 × 24 bytes) ------------------------------------------
+    struct DirEntry { uint16_t kind; uint16_t version; uint32_t count; uint64_t offset; uint64_t byte_size; };
+    DirEntry dir[7];
+    for (uint32_t k = 0; k < section_count; ++k) {
+        DirEntry e{};
+        e.kind = c.u16();
+        e.version = c.u16();
+        e.count = c.u32();
+        e.offset = c.u64();
+        e.byte_size = c.u64();
+        const KindSpec& spec = kKindTable[k];
+        if (e.kind != spec.kind || e.version != spec.version) fail(CatalogLoadCode::SchemaMismatch);
+        if (e.count > spec.cap) fail(CatalogLoadCode::Bounds);
+        if (spec.kind == 1 && e.count != 1) fail(CatalogLoadCode::SchemaMismatch);  // MANIFEST: exactamente 1
+        dir[k] = e;
+    }
+    if (c.pos != HEADER_SIZE + static_cast<size_t>(section_count) * DIRECTORY_ENTRY_SIZE) {
+        fail(CatalogLoadCode::Bounds);
+    }
+    const uint64_t directory_end = c.pos;
+    if (dir[0].offset != directory_end) fail(CatalogLoadCode::Bounds);
+
+    uint64_t cursor = directory_end;
+    for (uint32_t k = 0; k < section_count; ++k) {
+        if (dir[k].offset != cursor) fail(CatalogLoadCode::Bounds);
+        if (dir[k].byte_size > static_cast<uint64_t>(size) - dir[k].offset) fail(CatalogLoadCode::Bounds);
+        // Un record ocupa como mínimo 5 bytes (u32 payload_size + 1 byte de tag).
+        if (dir[k].count > 0 && dir[k].count > dir[k].byte_size / 5u) fail(CatalogLoadCode::Bounds);
+        cursor = dir[k].offset + dir[k].byte_size;
+    }
+    if (cursor != static_cast<uint64_t>(size)) fail(CatalogLoadCode::NonCanonical);  // trailing bytes
+
+    // ---- Records por sección --------------------------------------------------
+    // P1-A (auditoría de seguridad post-integración): `impl` se posee con
+    // unique_ptr durante TODA la construcción. `fail()` lanza `LoadFail` en
+    // cualquier punto posterior (incluidos los throws de
+    // `build_unit_definition`/`cve_parse` llamados más abajo); antes de este
+    // fix, esas rutas de error saltaban fuera de esta función con un `Impl*`
+    // crudo sin liberar (fuga de varios MB por carga fallida — DoS no
+    // acotado con blobs hostiles no triviales). El unwinding de C++ ahora
+    // libera `impl` automáticamente en cualquier salida por excepción;
+    // `impl.release()` se llama SOLO en el único `return` de éxito, al
+    // final de la función.
+    std::unique_ptr<DataCatalogStorageV1::Impl> impl(new DataCatalogStorageV1::Impl());
+    // unit_ids necesita direcciones estables: reserve exacto ANTES de llenar
+    // (evita relocación por SSO al hacer push_back más adelante).
+    impl->unit_ids.reserve(dir[1].count);
+    impl->units.reserve(dir[1].count);
+    impl->unit_names.reserve(dir[1].count);
+
+    bool have_package_id = false;
+
+    for (uint32_t k = 0; k < section_count; ++k) {
+        const KindSpec& spec = kKindTable[k];
+        RawCursor section{bytes + dir[k].offset, static_cast<size_t>(dir[k].byte_size)};
+        std::string previous_id;
+        bool has_previous = false;
+
+        for (uint32_t r = 0; r < dir[k].count; ++r) {
+            const uint32_t payload_size = section.u32();
+            const uint32_t payload_cap = (spec.kind == 6) ? RECORD_PAYLOAD_CAP_MAP : RECORD_PAYLOAD_CAP;
+            if (payload_size > payload_cap) fail(CatalogLoadCode::Bounds);
+            const uint8_t* payload = section.take(payload_size);
+
+            RawCursor precord{payload, payload_size};
+            uint32_t nodes = 0;
+            CveValue value = cve_parse(precord, 1, nodes);
+            if (precord.pos != payload_size) fail(CatalogLoadCode::NonCanonical);  // trailing dentro del record
+            if (!value.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+
+            const char* id_key = (spec.kind == 1) ? "package_id" : "id";
+            const CveValue* id_field = value.find(id_key);
+            if (!id_field || !id_field->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+            const std::string& record_id = id_field->s;
+            if (record_id.empty()) fail(CatalogLoadCode::SchemaMismatch);
+
+            if (has_previous && !(previous_id < record_id)) fail(CatalogLoadCode::NonCanonical);
+            previous_id = record_id;
+            has_previous = true;
+
+            if (spec.kind == 1) {
+                if (record_id.size() < 1 || record_id.size() > 64) fail(CatalogLoadCode::SchemaMismatch);
+                impl->package_id = record_id;
+                have_package_id = true;
+            } else if (spec.kind == 2) {
+                if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
+                const UnitId uid = static_cast<UnitId>(impl->units.size());
+                UnitDefinitionV1 def = build_unit_definition(value, uid);
+                impl->unit_ids.push_back(record_id);
+                impl->units.push_back(def);
+            }
+            // building/tech/civ/map/ai-profile: validados estructural + orden
+            // (deviación documentada arriba); no se reconstruye tipo semántico.
+        }
+        if (section.pos != section.len) fail(CatalogLoadCode::NonCanonical);  // trailing de sección
+    }
+
+    if (!have_package_id) fail(CatalogLoadCode::SchemaMismatch);
+
+    // ---- unit_names: mismo orden que units (ya ascendente por record_id) ----
+    for (size_t i = 0; i < impl->units.size(); ++i) {
+        UnitNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->unit_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->unit_ids[i].size());
+        ni.id = impl->units[i].id;
+        impl->unit_names.push_back(ni);
+    }
+
+    // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
+    static constexpr char kHashDomain[] = "CHUNSA_CONTENT_V1";
+    ContentHashV1 hash{};
+    {
+        Sha256 h;
+        h.init();
+        h.update(kHashDomain, sizeof(kHashDomain));  // incluye el NUL final (§7.1)
+        h.update(bytes, size);
+        h.final(hash.bytes);
+    }
+
+    // ---- ContentBindingManifestV1 D1 (mode=0, sin patches) — SPEC-002 §7.1 --
+    impl->binding_bytes.reserve(2 + 2 + 2 + impl->package_id.size() + 32);
+    push_u16(impl->binding_bytes, 1u);  // binding_version
+    push_u16(impl->binding_bytes, 0u);  // mode = single_package_d1
+    push_u16(impl->binding_bytes, static_cast<uint16_t>(impl->package_id.size()));
+    for (unsigned char ch : impl->package_id) impl->binding_bytes.push_back(ch);
+    for (uint8_t b : hash.bytes) impl->binding_bytes.push_back(b);
+
+    DataCatalogV1& cat = impl->cat;
+    cat.content_hash = hash;
+    cat.hash_algorithm = ContentHashAlgorithmId::Sha256;
+    cat.hash_algorithm_version = 1;
+    cat.blob_format_major = fmt_major;
+    cat.blob_format_minor = fmt_minor;
+    cat.schema_set_version = schema_set;
+    cat.catalog_flags = flags;
+    cat.base_package_id_utf8 = impl->package_id.c_str();
+    cat.base_package_id_bytes = static_cast<uint16_t>(impl->package_id.size());
+    cat.content_binding_bytes = impl->binding_bytes.data();
+    cat.content_binding_size = static_cast<uint32_t>(impl->binding_bytes.size());
+    cat.unit_count = static_cast<uint32_t>(impl->units.size());
+    cat.units = impl->units.data();
+    cat.unit_names = impl->unit_names.data();
+
+    // Único punto de éxito: transfiere la propiedad al caller. Cualquier
+    // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
+    return impl.release();
+}
+
+}  // namespace data_catalog_detail
+
+inline CatalogLoadCode catalog_load_bytes_v1(const uint8_t* bytes, size_t size,
+                                             CatalogLoadProfile profile,
+                                             DataCatalogStorageV1& out) noexcept {
+    out = DataCatalogStorageV1{};
+    try {
+        DataCatalogStorageV1::Impl* impl = data_catalog_detail::load_impl(bytes, size, profile);
+        out.impl_ = impl;
+        return CatalogLoadCode::Ok;
+    } catch (const data_catalog_detail::LoadFail& lf) {
+        return lf.code;
+    } catch (const std::bad_alloc&) {
+        return CatalogLoadCode::Bounds;
+    } catch (...) {
+        return CatalogLoadCode::Bounds;
+    }
+}
+
+inline CatalogLoadCode catalog_load_file_v1(const char* path,
+                                            CatalogLoadProfile profile,
+                                            DataCatalogStorageV1& out) noexcept {
+    out = DataCatalogStorageV1{};
+    if (path == nullptr) return CatalogLoadCode::Io;
+    std::FILE* f = std::fopen(path, "rb");
+    if (!f) return CatalogLoadCode::Io;
+    if (std::fseek(f, 0, SEEK_END) != 0) { std::fclose(f); return CatalogLoadCode::Io; }
+    const long sz_signed = std::ftell(f);
+    if (sz_signed < 0) { std::fclose(f); return CatalogLoadCode::Io; }
+    if (static_cast<uint64_t>(sz_signed) > data_catalog_detail::HARD_MAX_CHDB_FILE_BYTES) {
+        std::fclose(f);
+        return CatalogLoadCode::TooLarge;
+    }
+    if (std::fseek(f, 0, SEEK_SET) != 0) { std::fclose(f); return CatalogLoadCode::Io; }
+    try {
+        std::vector<uint8_t> buf(static_cast<size_t>(sz_signed));
+        const size_t rd = buf.empty() ? 0 : std::fread(buf.data(), 1, buf.size(), f);
+        std::fclose(f);
+        if (rd != buf.size()) return CatalogLoadCode::Io;
+        return catalog_load_bytes_v1(buf.data(), buf.size(), profile, out);
+    } catch (const std::bad_alloc&) {
+        std::fclose(f);
+        return CatalogLoadCode::Bounds;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Helper adicional (NO literal del brief): resuelve un record_id textual a
+// UnitId por búsqueda binaria en `unit_names` (ya ordenado ascendente por
+// construcción). Uso previsto: setup fuera de Step() (demo/CLI/tests), nunca
+// dentro del tick caliente. Devuelve INVALID_UNIT_ID si no existe.
+// ----------------------------------------------------------------------------
+inline UnitId catalog_find_unit(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.unit_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const UnitNameIndexV1& e = cat.unit_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_UNIT_ID;
+}
+
+}  // namespace chunsa

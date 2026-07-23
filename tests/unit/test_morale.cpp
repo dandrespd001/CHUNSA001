@@ -30,7 +30,8 @@ static constexpr double SWARM_CENTER_Y = 129.0;
 // vecinos a 1 tile caen dentro de range_mt=1500 (1.5 tiles). El bando 0 está
 // en fuerte desventaja numérica local (8:1) → debe entrar en pánico.
 static void run_scenario(GameState& g, bool* out_saw_panic) {
-    MatchConfig01A cfg{512u, 2u, 1u, 20u, 20u, 256u, 256u, 11ull};
+    // Sprint 0.4: camino debug legado explícito (ver test_combat.cpp).
+    MatchConfig01A cfg{512u, 2u, 1u, 20u, 20u, 256u, 256u, 11ull, 1u};
     gs_init(g, cfg);
 
     static RawCommand batch[N_OWNER0 + N_OWNER1];
@@ -56,6 +57,7 @@ static void run_scenario(GameState& g, bool* out_saw_panic) {
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 0;  // infantry
                 c.p.speed_mtpt = 200;  // permite huir (0.2 tiles/tick)
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
             for (uint32_t i = 0; i < N_OWNER1; ++i) {
@@ -74,6 +76,7 @@ static void run_scenario(GameState& g, bool* out_saw_panic) {
                 c.p.attack     = 15;
                 c.p.range_mt   = 1500;
                 c.p.unit_class = 0;  // infantry
+                c.p.unit_id    = INVALID_UNIT_ID;  // camino debug (Sprint 0.4)
                 ++n;
             }
         }

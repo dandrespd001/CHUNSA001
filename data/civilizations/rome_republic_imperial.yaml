@@ -1,0 +1,68 @@
+schema_version: 1
+id: rome:republic_imperial
+historical_window:
+  start_year: -509
+  end_year: 476
+epoch_window:
+  - 5
+  - 5
+region_key: rome:region.mediterranean
+display_name_key: rome:civ.republic_imperial
+description_key: rome:civ.republic_imperial.description
+gameplay_verb:
+  id: rome:maintain_public_infrastructure
+  name_key: rome:verb.maintain_public_infrastructure
+  description_key: rome:verb.maintain_public_infrastructure.description
+playable_periods:
+  - id: rome:republican_expansion
+    start_year: -264
+    end_year: -133
+    label_key: rome:period.republican_expansion
+  - id: rome:high_empire
+    start_year: 117
+    end_year: 235
+    label_key: rome:period.high_empire
+institutions:
+  - id: rome:military_service
+    name_key: rome:institution.military_service
+    mechanic_description_key: rome:institution.military_service.mechanic
+    cost_or_tension_key: rome:institution.military_service.tension
+    required_capability_ids: []
+social_tensions:
+  - id: rome:legal_status
+    name_key: rome:tension.legal_status
+    description_key: rome:tension.legal_status.description
+unit_ids:
+  - rome:ballista_crew
+  - rome:camp_work_crew
+  - rome:legionary
+building_ids: []
+tech_ids: []
+art_rule_keys:
+  - rome:art.period_and_province
+  - rome:art.responsible_labor
+review_roles:
+  - architect
+  - roman_history_review
+provenance:
+  status: promoted
+  generator: human
+  task_id: T1-egipto-roma-m1
+  generated_on: "2026-07-22"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+      - game_data/research/verificacion/VERIF_36b.md
+    sources:
+      - citation: "Cambridge University Press, The Cambridge Ancient History"
+        locator: "Republican and imperial chronological framework"
+        url: "https://www.cambridge.org/core/series/cambridge-ancient-history/010C506409EE858277F898C129759025"
+        accessed_on: "2026-07-22"
+  balance_design:
+    author: architect
+    rationale: "Ventanas y verbo derivados de la ficha promovida; efectos y números siguen siendo diseño calibrable."
+    reviewed_by:
+      - architect
