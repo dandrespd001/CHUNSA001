@@ -66,6 +66,11 @@ class CompilerTests(unittest.TestCase):
         data["manifest"]["declared_variant_groups"] = ["base:epoch4_metalworking"]
         for kind, relative in FILES.items():
             self.write(root, kind, data[kind])
+        # P1-1: los fixtures de civ/tech citan verify/report.md como evidencia
+        # de procedencia; el compilador ahora exige que exista bajo source_root.
+        report = root / "verify" / "report.md"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("Fixture de evidencia de procedencia para tests.\n", encoding="utf-8")
         return td, root
 
     def write(self, root, kind, value, sort_keys=False, suffix="a.yaml"):
@@ -199,6 +204,30 @@ class CompilerTests(unittest.TestCase):
                     unit["provenance"]["historical_claims"] = {
                         "evidence":"H", "verification_reports":[bad], "sources":[{"citation":"Source"}]}
                 self.write(root, "unit", unit); self.assert_validation_error(root, "E_PROVENANCE")
+
+    def test_provenance_report_must_exist_under_source_root(self):
+        # P1-1: una ruta bien formada (POSIX relativa) pero que no existe bajo
+        # source_root debe rechazarse — la evidencia de procedencia debe estar
+        # vendorizada dentro del repo, no solo tener una forma de ruta válida.
+        td, root = self.make_root()
+        with td:
+            unit = self.read(root, "unit")
+            unit["provenance"]["historical_claims"] = {
+                "evidence": "H", "verification_reports": ["verify/missing_report.md"],
+                "sources": [{"citation": "Source"}]}
+            self.write(root, "unit", unit)
+            self.assert_validation_error(root, "E_PROVENANCE")
+        # Control: la misma referencia, apuntando a un archivo que sí existe,
+        # debe validar sin error de procedencia.
+        td, root = self.make_root()
+        with td:
+            unit = self.read(root, "unit")
+            unit["provenance"]["historical_claims"] = {
+                "evidence": "H", "verification_reports": ["verify/report.md"],
+                "sources": [{"citation": "Source"}]}
+            self.write(root, "unit", unit)
+            rc, _, stderr = self.invoke(["validate", str(root)])
+            self.assertEqual((rc, stderr), (0, ""), stderr)
 
     def test_release_dev_policy_and_flags(self):
         td, root = self.make_root()
