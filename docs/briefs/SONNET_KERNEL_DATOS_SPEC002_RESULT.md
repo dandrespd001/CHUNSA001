@@ -352,3 +352,69 @@ Build limpio: 0 warnings (`-Wall -Wextra -Wshadow -Werror`), confirmado con
 - El golden CHDB (`data/compiled/chunsa_base.chdb`) y su
   `content_hash` (`f19640cc...`) NO cambiaron — no se tocó el compilador
   Python ni los YAML de origen.
+
+## 8. Addendum — correcciones P1/P2 de la auditoría de seguridad post-integración
+
+El Arquitecto reportó gates verdes en su corrida y aprobó el diseño, pero una
+auditoría de seguridad de `data_catalog.hpp` (loader de input no confiable,
+va a cargar mods) encontró 2 P1 y sugirió 2 P2. Corregidos en el mismo
+worktree, commit separado.
+
+**P1-A — fuga de memoria de `Impl` en todo camino de fallo.** En
+`load_impl`, `auto* impl = new DataCatalogStorageV1::Impl();` era un
+puntero crudo con propiedad; cualquier `fail()` posterior (incluidos los
+lanzados desde `build_unit_definition`/`cve_parse`, es decir CUALQUIER
+blob corrupto no trivial: `hp` fuera de rango, tag CVE inválido, record_id
+desordenado en sección tardía) propagaba `LoadFail` fuera de la función sin
+liberar `impl` — cargas fallidas repetidas eran una fuga acumulativa
+(DoS no acotado con blobs hostiles). Corrección: `impl` pasa a
+`std::unique_ptr<DataCatalogStorageV1::Impl>`; el único `return` de éxito
+llama `impl.release()`; cualquier excepción posterior lo libera vía
+unwinding normal de C++. Verificado con AddressSanitizer+LeakSanitizer:
+(a) barrido de flip de cada byte del golden tras el directorio (17 931
+cargas, 682 aceptadas/17 249 rechazadas) sin un solo leak; (b) prueba
+dirigida — corrompí `hp` de `rome:legionary` (la ÚLTIMA unidad del
+fixture, 90→2 000 000) para forzar el fallo DESPUÉS de que ya se
+insertaran 4 `UnitDefinitionV1` completos + sus strings en los vectores de
+`impl`, repetido 20 000 veces: `InvalidUnit` en las 20 000, cero leaks.
+
+**P1-B — NFC no validado.** El productor (`chunsa_data_compiler.py`)
+rechaza cualquier string donde `unicodedata.normalize("NFC", s) != s`; el
+loader solo validaba UTF-8 bien formado + ausencia de NUL. Implementar NFC
+completo (tablas Unicode de descomposición/composición canónica + Hangul)
+está fuera de alcance de un ciclo de parche. Descarté la alternativa
+"rechazar todo no-ASCII" sugerida como fallback: el golden real SÍ contiene
+texto no-ASCII legítimo (p.ej. "caballería" en el `rationale` de
+`provenance.balance_design` de `egipto_chariot_warrior.yaml`) en campos que
+el CVE genérico recorre para TODAS las secciones — rechazar no-ASCII habría
+roto la carga del propio golden. Implementé en su lugar una verificación
+NFC PARCIAL pero real: rechazo de toda marca diacrítica combinante suelta
+(U+0300–U+036F, Combining Diacritical Marks) — la forma NFD de un acento
+que el productor (Python `unicodedata`) jamás emite para este tipo de texto,
+ya que siempre compone a la forma precompuesta (`é`, `í`, `ñ`, fuera de ese
+bloque). Esto detecta el vector de divergencia/ataque realista (inyectar un
+string en NFD) sin romper el fixture real. Gaps residuales documentados en
+el comentario de `utf8_nfc_safe_no_nul`: singletons canónicos raros (p.ej.
+OHM SIGN), otros bloques de marcas combinantes (scripts no usados en este
+fixture), y Hangul jamo (irrelevante sin texto coreano) — sesgo deliberado
+hacia sobre-rechazar en vez de sobre-aceptar. Verificado con un test directo
+de la función (`chunsa_test_data_blob`, sección 11): ASCII puro → válido;
+`"caballería"` precompuesta (la forma real del golden) → válido, con el
+`content_hash` del golden confirmado IDÉNTICO tras el parche; la misma
+palabra en forma NFD (`i` + `COMBINING ACUTE ACCENT` U+0301) → rechazada;
+marca combinante suelta → rechazada.
+
+**P2 (aplicados, no opcionales al final)**: (1) `DataCatalogStorageV1::catalog()`
+gana un `assert(impl_ != nullptr)` documentando la precondición `valid()`
+en debug builds. (2) El loader ahora rechaza claves desconocidas en el
+objeto `unit` raíz y en `stats` (`is_known_unit_key`/`is_known_stats_key`),
+igualando el `additionalProperties:false` del schema JSON del productor
+(antes se ignoraban en silencio).
+
+Verificación completa re-ejecutada tras estas correcciones (build limpio
+0 warnings; golden 1074/1074; G1 `alloc_delta=0`; G3/G4 OK; G5 OK
+`schedule_mismatches=0`; `ctest` 13/13) con TODOS los checksums/hash
+idénticos a la corrida anterior (`45801aa21d18c8a8`, `8ebe4c097172bbb4`,
+`309cd496d10526d6`, `content_hash=f19640cc...`) — las correcciones no
+cambian el comportamiento con input bueno, solo cierran las rutas de
+input malo.

@@ -1,8 +1,10 @@
 #pragma once
+#include <cassert>
 #include <cstdint>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 #include <utility>
@@ -32,14 +34,26 @@
 //    época, etc.) ya la ejerce `chunsa_data_compiler.py` (gate `data_compile`);
 //    duplicarla en C++ para kinds que el kernel 0.4 no consume es está fuera
 //    de alcance de este incremento.
-//  - NFC: se valida UTF-8 bien formado y ausencia de NUL; la normalización NFC
-//    completa (tablas Unicode de composición) NO se implementa — el fixture
-//    D1 es ASCII puro, por lo que es NFC trivialmente. Riesgo residual anotado
-//    para el Arquitecto.
+//  - NFC (revisado tras auditoría de seguridad, P1-B): se valida UTF-8 bien
+//    formado, ausencia de NUL, y un chequeo NFC PARCIAL — se rechaza toda
+//    marca diacrítica combinante suelta (U+0300–U+036F), que es la forma
+//    NFD que el productor (Python `unicodedata.normalize`) jamás emite para
+//    el texto real de este fixture (español/inglés con acentos precompuestos,
+//    p.ej. "caballería"). NFC completo (tablas Unicode de descomposición/
+//    composición canónica) no se implementa; ver el comentario de
+//    `utf8_nfc_safe_no_nul` para el detalle de qué SÍ y qué NO cubre esta
+//    verificación y por qué "rechazar todo no-ASCII" habría roto el golden
+//    real (que tiene texto no-ASCII legítimo fuera de los campos que el
+//    kernel tipa).
 //  - Minimalidad CVE: al no existir en CVE1 dos codificaciones distintas para
 //    el mismo valor (int64 de ancho fijo, strings con longitud explícita,
 //    claves en orden estricto ya validado), la validación campo-a-campo basta;
 //    no se implementó un segundo paso de re-encode/byte-compare.
+//  - Fuga de memoria en fallo (P1-A, corregida): `load_impl` posee su
+//    `Impl` con `std::unique_ptr` durante toda la validación y solo hace
+//    `release()` en el único punto de éxito; cualquier `fail()` (incluidos
+//    los de `build_unit_definition`/`cve_parse`) libera `impl` vía
+//    unwinding en vez de fugarlo.
 
 namespace chunsa {
 
@@ -169,8 +183,48 @@ inline constexpr uint32_t SECTION_COUNT_D1 = 7;
 struct LoadFail { CatalogLoadCode code; };
 [[noreturn]] inline void fail(CatalogLoadCode c) { throw LoadFail{c}; }
 
-// Validación UTF-8 bien formada + ausencia de NUL (ver nota de NFC arriba).
-inline bool utf8_wellformed_no_nul(const std::string& s) noexcept {
+// Validación UTF-8 bien formada + ausencia de NUL + NFC PARCIAL (auditoría
+// de seguridad post-integración, P1-B).
+//
+// El productor (`chunsa_data_compiler.py`, líneas ~503/537) rechaza
+// cualquier string donde `unicodedata.normalize("NFC", s) != s`. Implementar
+// NFC completo en C++ exigiría las tablas Unicode de descomposición/
+// composición canónica + orden de combinación + composición algorítmica de
+// Hangul — miles de code points, fuera de alcance de este ciclo de parche.
+//
+// Descarté "rechazar todo no-ASCII": el fixture D1 real SÍ tiene texto
+// no-ASCII legítimo (p.ej. `rationale` de `egipto_chariot_warrior.yaml`:
+// "la clase cavalry aproxima movilidad de carro, no CABALLERÍA montada" —
+// el CVE genérico recorre TODOS los campos de TODAS las secciones, no solo
+// `stats`/`class`/`tags`, así que un rechazo por-no-ASCII habría roto la
+// carga del golden real con el MISMO content_hash que antes).
+//
+// Decisión: verificación NFC PARCIAL pero real, no un sucedáneo. La
+// inmensa mayoría de las strings que NFC transformaría de verdad son
+// secuencias DESCOMPUESTAS de letra base + marca diacrítica combinante
+// (p.ej. 'e' U+0065 + COMBINING ACUTE ACCENT U+0301, que NFC compone en 'é'
+// U+00E9). El productor (Python) SIEMPRE emite la forma precompuesta para
+// este tipo de texto (español/inglés/latín transliterado); ninguna marca
+// combinante suelta del bloque U+0300–U+036F (Combining Diacritical Marks)
+// puede aparecer en salida NFC de este productor para estos scripts. Por
+// eso: cualquier code point en U+0300–U+036F se rechaza como NO canónico
+// (NonCanonical) — detecta exactamente el vector de ataque/divergencia
+// realista (inyectar la forma NFD de un acento) sin romper el fixture real
+// (que usa 'é'/'í'/'ñ' precompuestos, fuera de ese bloque).
+//
+// Gaps residuales documentados (aceptados para este ciclo, no en el
+// fixture actual): (a) los ~12 "singleton" canónicos de Unicode (p.ej.
+// U+2126 OHM SIGN → U+03A9) no se detectan — no son marcas combinantes y
+// no aparecen en este dataset; (b) bloques de marcas combinantes fuera de
+// U+0300–U+036F (Combining Diacritical Marks Supplement/Extended, marcas
+// para símbolos, medias-marcas) no se cubren — relevantes para scripts que
+// este fixture no usa; (c) Hangul descompuesto en jamos (algorítmico, no
+// basado en marcas combinantes) no se detecta — irrelevante sin texto
+// coreano. Sesgo deliberado: sobre-rechazar (falso rechazo de un NFC
+// técnicamente válido pero exótico) es seguro; el riesgo que cierra esta
+// auditoría es el opuesto (aceptar de más), y ese SÍ queda cerrado para el
+// vector realista.
+inline bool utf8_nfc_safe_no_nul(const std::string& s) noexcept {
     size_t i = 0, n = s.size();
     while (i < n) {
         const uint8_t c = static_cast<uint8_t>(s[i]);
@@ -200,6 +254,10 @@ inline bool utf8_wellformed_no_nul(const std::string& s) noexcept {
         if (extra == 3 && cp < 0x10000u) return false;
         if (cp >= 0xD800u && cp <= 0xDFFFu) return false;
         if (cp > 0x10FFFFu) return false;
+        // NFC parcial (P1-B, ver comentario arriba): rechaza marcas
+        // diacríticas combinantes sueltas — la forma NFD de un acento que
+        // el productor jamás emitiría.
+        if (cp >= 0x0300u && cp <= 0x036Fu) return false;
         i += extra + 1;
     }
     return true;
@@ -284,7 +342,7 @@ inline CveValue cve_parse(RawCursor& c, uint32_t depth, uint32_t& nodes) {
             if (n > HARD_MAX_CVE_STRING_BYTES) fail(CatalogLoadCode::Bounds);
             const uint8_t* sp = c.take(n);
             v.s.assign(reinterpret_cast<const char*>(sp), n);
-            if (!utf8_wellformed_no_nul(v.s)) fail(CatalogLoadCode::NonCanonical);
+            if (!utf8_nfc_safe_no_nul(v.s)) fail(CatalogLoadCode::NonCanonical);
             return v;
         }
         case 0x30u: {
@@ -310,7 +368,7 @@ inline CveValue cve_parse(RawCursor& c, uint32_t depth, uint32_t& nodes) {
                 if (kl > HARD_MAX_CVE_STRING_BYTES) fail(CatalogLoadCode::Bounds);
                 const uint8_t* kp = c.take(kl);
                 std::string key(reinterpret_cast<const char*>(kp), kl);
-                if (!utf8_wellformed_no_nul(key)) fail(CatalogLoadCode::NonCanonical);
+                if (!utf8_nfc_safe_no_nul(key)) fail(CatalogLoadCode::NonCanonical);
                 if (has_last && !(last < key)) fail(CatalogLoadCode::NonCanonical);
                 last = key;
                 has_last = true;
@@ -356,10 +414,38 @@ inline bool bonus_index_from_string(const std::string& s, size_t& idx) noexcept 
     return false;
 }
 
+// P2 (auditoría de seguridad post-integración): el productor aplica
+// `additionalProperties:false` (data/schemas/unit.schema.json); antes de
+// este fix el loader ignoraba en silencio cualquier clave desconocida en
+// vez de rechazarla como el productor. Estas dos listas son exactamente las
+// claves declaradas en el schema para el objeto unit raíz y para `stats`.
+inline bool is_known_unit_key(const std::string& k) noexcept {
+    static constexpr const char* T[] = {
+        "schema_version", "id", "display_name_key", "description_key", "civ_id",
+        "epoch_window", "class", "tags", "resource_costs", "material_costs",
+        "playable_period_ids", "availability_mode", "counterfactual_label_key",
+        "stats", "bonus_vs_bp", "provenance",
+    };
+    for (const char* t : T) if (k == t) return true;
+    return false;
+}
+
+inline bool is_known_stats_key(const std::string& k) noexcept {
+    static constexpr const char* T[] = {
+        "hp", "attack", "range_millitiles", "speed_millitile_tick", "morale",
+        "build_time_ticks",
+    };
+    for (const char* t : T) if (k == t) return true;
+    return false;
+}
+
 // Reconstruye y valida un UnitDefinitionV1 desde su objeto CVE ya parseado
 // (SPEC-002 §8.1: rangos exactos del schema; ver data/schemas/unit.schema.json).
 inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : obj.obj) {
+        if (!is_known_unit_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
+    }
 
     const CveValue* cls = obj.find("class");
     if (!cls || !cls->is_str()) fail(CatalogLoadCode::SchemaMismatch);
@@ -378,6 +464,9 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
 
     const CveValue* stats = obj.find("stats");
     if (!stats || !stats->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : stats->obj) {
+        if (!is_known_stats_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
+    }
     auto req_int = [&](const char* key) -> int64_t {
         const CveValue* v = stats->find(key);
         if (!v || !v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
@@ -458,7 +547,15 @@ inline DataCatalogStorageV1& DataCatalogStorageV1::operator=(DataCatalogStorageV
 
 inline bool DataCatalogStorageV1::valid() const noexcept { return impl_ != nullptr; }
 
-inline const DataCatalogV1& DataCatalogStorageV1::catalog() const noexcept { return impl_->cat; }
+inline const DataCatalogV1& DataCatalogStorageV1::catalog() const noexcept {
+    // P2 (auditoría de seguridad post-integración): precondición explícita
+    // `valid()` — un `assert` documenta y detecta en debug builds la
+    // desreferencia de `impl_==nullptr` tras una carga fallida (contrato ya
+    // exigía `valid()` antes de llamar; esto lo hace ruidoso en vez de UB
+    // silencioso bajo NDEBUG=0). No sustituye la responsabilidad del caller.
+    assert(impl_ != nullptr && "DataCatalogStorageV1::catalog(): precondición valid() violada");
+    return impl_->cat;
+}
 
 namespace data_catalog_detail {
 
@@ -550,7 +647,17 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     if (cursor != static_cast<uint64_t>(size)) fail(CatalogLoadCode::NonCanonical);  // trailing bytes
 
     // ---- Records por sección --------------------------------------------------
-    auto* impl = new DataCatalogStorageV1::Impl();
+    // P1-A (auditoría de seguridad post-integración): `impl` se posee con
+    // unique_ptr durante TODA la construcción. `fail()` lanza `LoadFail` en
+    // cualquier punto posterior (incluidos los throws de
+    // `build_unit_definition`/`cve_parse` llamados más abajo); antes de este
+    // fix, esas rutas de error saltaban fuera de esta función con un `Impl*`
+    // crudo sin liberar (fuga de varios MB por carga fallida — DoS no
+    // acotado con blobs hostiles no triviales). El unwinding de C++ ahora
+    // libera `impl` automáticamente en cualquier salida por excepción;
+    // `impl.release()` se llama SOLO en el único `return` de éxito, al
+    // final de la función.
+    std::unique_ptr<DataCatalogStorageV1::Impl> impl(new DataCatalogStorageV1::Impl());
     // unit_ids necesita direcciones estables: reserve exacto ANTES de llenar
     // (evita relocación por SSO al hacer push_back más adelante).
     impl->unit_ids.reserve(dir[1].count);
@@ -650,7 +757,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.units = impl->units.data();
     cat.unit_names = impl->unit_names.data();
 
-    return impl;
+    // Único punto de éxito: transfiere la propiedad al caller. Cualquier
+    // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
+    return impl.release();
 }
 
 }  // namespace data_catalog_detail

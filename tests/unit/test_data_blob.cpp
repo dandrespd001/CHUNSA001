@@ -319,6 +319,83 @@ int main() {
         }
     }
 
+    // 11) Auditoría de seguridad post-integración (P1-A/P1-B, ver RESULT).
+    {
+        // P1-B: NFC parcial. El chequeo interno `utf8_nfc_safe_no_nul` NO es
+        // parte de la API literal del brief, pero vive en el mismo header y
+        // es el punto exacto que decide NonCanonical para strings CVE — se
+        // ejercita directamente porque construir un CHDB completo con un
+        // string en forma NFD a mano (reempaquetando offsets/tamaños) es
+        // desproporcionado frente a probar la función que realmente decide.
+        using data_catalog_detail::utf8_nfc_safe_no_nul;
+        // ASCII puro: siempre válido.
+        CHECK(utf8_nfc_safe_no_nul("caballeria"));
+        // Precompuesto NFC real del fixture (í = U+00ED, 0xC3 0xAD): válido —
+        // el golden real usa exactamente esta forma ("caballería" en
+        // egipto_chariot_warrior.yaml/provenance.balance_design.rationale) y
+        // DEBE seguir cargando tras este parche.
+        CHECK(utf8_nfc_safe_no_nul(std::string("caballer\xC3\xAD" "a")));
+        // Forma NFD equivalente: 'i' + COMBINING ACUTE ACCENT (U+0301, 0xCC
+        // 0x81) — el productor jamás la emite (unicodedata.normalize la
+        // recompondría); el loader debe rechazarla como NO canónica.
+        CHECK(!utf8_nfc_safe_no_nul(std::string("caballeri\xCC\x81" "a")));
+        // Marca combinante suelta, sin letra base.
+        CHECK(!utf8_nfc_safe_no_nul(std::string("\xCC\x81")));
+
+        // El golden real (que SÍ contiene texto acentuado en `provenance`)
+        // sigue cargando y con el MISMO content_hash que antes del parche —
+        // la regla NFC parcial no rompe el fixture legítimo.
+        std::vector<uint8_t> golden2 = read_all(CHUNSA_GOLDEN_CHDB_PATH);
+        DataCatalogStorageV1 s_nfc;
+        const auto c_nfc = catalog_load_bytes_v1(golden2.data(), golden2.size(),
+                                                 CatalogLoadProfile::Verified, s_nfc);
+        CHECK(c_nfc == CatalogLoadCode::Ok);
+        if (s_nfc.valid()) {
+            CHECK(std::memcmp(s_nfc.catalog().content_hash.bytes, kExpectedHash, 32) == 0);
+        }
+
+        // P1-A: fuga de memoria en camino de fallo. Corromper `hp` de la
+        // ÚLTIMA unidad (rome:legionary, 90 -> fuera de rango) hace fallar
+        // `build_unit_definition` DESPUÉS de que ya se hayan insertado 4
+        // unidades completas en impl->units/unit_ids/unit_names — exactamente
+        // el escenario "blob corrupto no trivial" que describe la auditoría.
+        // No hay aserción de "no leak" observable en un test funcional (se
+        // verificó con AddressSanitizer+LeakSanitizer fuera de este target,
+        // ver RESULT); aquí se deja como regresión de comportamiento: la
+        // carga falla con el código correcto y de forma repetible.
+        {
+            auto u64_at = [&](size_t off) {
+                uint64_t v = 0;
+                for (int i = 0; i < 8; ++i) v |= static_cast<uint64_t>(golden2[off + i]) << (8 * i);
+                return v;
+            };
+            const size_t dir1 = 40 + 24;  // directory[1] (unit) entry
+            const uint64_t unit_off = u64_at(dir1 + 8);
+            const uint64_t unit_sz = u64_at(dir1 + 16);
+            uint8_t pattern[9] = {0x10, 90, 0, 0, 0, 0, 0, 0, 0};  // CVE int64 tag + LE64(90)
+            size_t hit = static_cast<size_t>(-1);
+            int hit_count = 0;
+            for (size_t i = unit_off; i + 9 <= unit_off + unit_sz; ++i) {
+                if (std::memcmp(golden2.data() + i, pattern, 9) == 0) { hit = i; ++hit_count; }
+            }
+            CHECK(hit_count == 1);  // el patrón debe ser único en la sección unit
+            if (hit_count == 1) {
+                auto bad = golden2;
+                const uint64_t newval = 2000000ull;  // fuera de [1, 1000000]
+                for (int i = 0; i < 8; ++i) {
+                    bad[hit + 1 + i] = static_cast<uint8_t>((newval >> (8 * i)) & 0xFFu);
+                }
+                for (int rep = 0; rep < 200; ++rep) {  // repetido: amplifica cualquier fuga
+                    DataCatalogStorageV1 s_leak;
+                    const auto c_leak = catalog_load_bytes_v1(bad.data(), bad.size(),
+                                                              CatalogLoadProfile::Verified, s_leak);
+                    CHECK(c_leak == CatalogLoadCode::InvalidUnit);
+                    CHECK(!s_leak.valid());
+                }
+            }
+        }
+    }
+
     // NOTA (deviación documentada, ver RESULT del sprint): el invariante
     // "recompilar un YAML con un stat cambiado produce blob/hash distinto,
     // sin recompilar C++" ya lo prueba
