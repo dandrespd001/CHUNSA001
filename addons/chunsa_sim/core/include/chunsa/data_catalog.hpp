@@ -1147,6 +1147,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->capability_ids.reserve(caps->arr.size());
                 for (const auto& item : caps->arr) {
                     if (!item.is_str()) fail(CatalogLoadCode::SchemaMismatch);
+                    // Paridad con unit/building/tech (endurecimiento del
+                    // Arquitecto, auditoría Opus P2): CapabilityNameIndexV1
+                    // guarda la longitud en uint16_t; un nombre > 0xFFFF la
+                    // truncaría (sin OOB, pero desajusta catalog_find_capability).
+                    if (item.s.empty() || item.s.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                     impl->capability_ids.push_back(item.s);
                 }
                 std::sort(impl->capability_ids.begin(), impl->capability_ids.end());

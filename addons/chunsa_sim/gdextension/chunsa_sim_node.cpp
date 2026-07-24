@@ -118,6 +118,13 @@ void ChunsaSimNode::_ready() {
             return;  // sin catálogo no hay spawns data-driven
         }
         gs->catalog = &catalog_storage.catalog();
+        // Sprint 1.2 (SPEC-004 §12.2, desviación 9 del RESULT de K2): fijar
+        // player_epoch a la época inicial del catálogo. Sin esto queda en 0 y
+        // el gate §12.4 rechazaría todo PLACE_BUILDING/TRAIN manual del jugador
+        // (los datos reales del slice son época >= 3) — regresión de la demo de
+        // colocación del Sprint 1.1. El adaptador enlaza gs->catalog a mano
+        // (no vía gs_bind_catalog), así que la llamada va aquí explícita.
+        chunsa::gs_init_epoch_from_catalog(*gs);
         uid_cavalry = chunsa::catalog_find_unit(
             *gs->catalog, "egipto:chariot_warrior", std::strlen("egipto:chariot_warrior"));
         uid_citizen = chunsa::catalog_find_unit(
