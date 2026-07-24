@@ -125,6 +125,13 @@ add_executable(chunsa_test_ai_skirmish_eco tests/unit/test_ai_skirmish_eco.cpp)
 target_link_libraries(chunsa_test_ai_skirmish_eco PRIVATE chunsa_sim_core)
 add_test(NAME ai_skirmish_eco COMMAND chunsa_test_ai_skirmish_eco)
 
+# --- Test Sprint 1.5A: política pura de fog para presentación -------------------
+add_executable(chunsa_test_fog_view tests/unit/test_fog_view.cpp)
+target_link_libraries(chunsa_test_fog_view PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_fog_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
+add_test(NAME fog_view COMMAND chunsa_test_fog_view)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el

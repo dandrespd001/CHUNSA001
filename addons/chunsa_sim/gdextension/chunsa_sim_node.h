@@ -45,8 +45,14 @@ public:
     struct DemoSnapshot {
         uint32_t tick;
         uint32_t capacity;      // gs->entities.capacity (cap a 1024)
+        uint32_t map_w;         // gs->vision.w (presentación, <= VIS_AXIS)
+        uint32_t map_h;         // gs->vision.h (presentación, <= VIS_AXIS)
+        uint64_t visible[chunsa::VIS_WORDS];   // visión de owner 0
+        uint64_t explored[chunsa::VIS_WORDS];  // exploración acumulada de owner 0
         float x[1024];
         float y[1024];
+        int64_t x_raw[1024];
+        int64_t y_raw[1024];
         uint8_t alive[1024];    // 1 = slot vivo este snapshot
         uint32_t generation[1024]; // generación del handle del slot
         uint8_t owner[1024];    // 0..7
@@ -94,6 +100,12 @@ private:
     static constexpr float ZOOM_MAX = 1200.0f;
     static constexpr uint32_t CONTROL_GROUPS = 10;
     static constexpr uint32_t ORDER_MARKERS_MAX = 32;
+    static constexpr uint32_t FOG_BLOCK_TILES = 8;
+    static constexpr uint32_t FOG_BLOCK_AXIS = 32;
+    static constexpr uint32_t FOG_BLOCK_COUNT = FOG_BLOCK_AXIS * FOG_BLOCK_AXIS;
+    static constexpr float TILE_PX = 4.0f;
+    static constexpr float ENTITY_Z_BIAS =
+            static_cast<float>(FOG_BLOCK_TILES) * TILE_PX;
 
     std::thread sim_thread;
     std::atomic<bool> running{false};
@@ -135,6 +147,7 @@ private:
     godot::MultiMeshInstance3D* mmi_buildings3d = nullptr;
     godot::MultiMeshInstance3D* mmi_ghost3d = nullptr;
     godot::MultiMeshInstance3D* mmi_wall3d = nullptr;
+    godot::MultiMeshInstance3D* mmi_fog3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
     // Selección/órdenes del jugador (Sprint 0.3+): el input llega en el hilo
@@ -179,6 +192,7 @@ private:
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
     void setup_3d();               // rig del modo (c), reutilizado del spike
+    void update_fog_from_snapshot();  // colores del velo sólo en snapshot nuevo
     void render_interpolated();    // cada frame: lerp(prev, curr, alpha)
     void maybe_screenshot();
     bool screen_to_tile(const godot::Vector2& screen, int64_t& tx,
@@ -205,6 +219,8 @@ private:
     godot::Rect2 selection_panel_rect() const;
     int32_t selected_count() const;
     int32_t selected_single_building_slot() const;
+    bool presentation_entity_visible(uint32_t slot) const;
+    bool presentation_tile_visible(int64_t x_raw, int64_t y_raw) const;
     bool selected_slot_is_current(uint32_t slot) const;
     godot::String slot_display_name(uint32_t slot) const;
     godot::String catalog_name(const char* name, uint16_t bytes) const;
