@@ -278,6 +278,29 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.u16(g.bld_anchor_ty[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.build_target[i]);
 
+    // (m) Producción y tecnología (Sprint 1.2, SPEC-004 §11.2/§12.2 — save
+    // v10): AL FINAL, tras todo lo v9, mismo orden que checksum.hpp
+    // (+ epoch_initial, deviación documentada en game_state.hpp).
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) w.u32(g.prod_queue[i][k]);
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.prod_count[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.prod_progress[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i64(g.rally_x[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.i64(g.rally_y[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.rally_set[i]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.i32(g.pop_used[e]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t k = 0; k < TECH_WORDS; ++k) w.u64(g.player_techs[e][k]);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t k = 0; k < CAP_WORDS; ++k) w.u64(g.player_caps[e][k]);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.u8(g.player_epoch[e]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.u8(g.epoch_initial[e]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_tech[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_progress[i]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -390,8 +413,10 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.unit_id             = r.u32();  // v9 (SPEC-004 §10.2)
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        // CommandType ∈ {1..8} (Sprint 1.1, SPEC-004 §4: +PLACE_BUILDING/ASSIGN_BUILD).
-        if (type_raw < 1 || type_raw > 8)    return false;
+        // CommandType ∈ {1..12} (Sprint 1.1: +PLACE_BUILDING/ASSIGN_BUILD;
+        // Sprint 1.2, SPEC-004 §11.3/§12.3: +TRAIN_UNIT/SET_RALLY/
+        // RESEARCH_TECH/EPOCH_UP).
+        if (type_raw < 1 || type_raw > 12)   return false;
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -512,6 +537,39 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.bld_anchor_tx[i] = r.u16();
     for (uint32_t i = 0; i < cap_e; ++i) g.bld_anchor_ty[i] = r.u16();
     for (uint32_t i = 0; i < cap_e; ++i) g.build_target[i]  = r.u32();
+    if (r.fail) return false;
+
+    // (m) Producción y tecnología (Sprint 1.2, SPEC-004 §11.2/§12.2 — save
+    // v10): mismo orden que gs_serialize. NOTA (deviación documentada, mismo
+    // espíritu que unit_id/building_id/build_target en este archivo):
+    // prod_queue/research_tech no se revalidan aquí contra el catálogo —
+    // aceptan cualquier u32; production_system/research_system ya comprueban
+    // bounds en caliente al consumirlos.
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = r.u32();
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint8_t pc = r.u8();
+        if (pc > PROD_QUEUE_CAP) return false;
+        g.prod_count[i] = pc;
+    }
+    for (uint32_t i = 0; i < cap_e; ++i) g.prod_progress[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.rally_x[i] = r.i64();
+    for (uint32_t i = 0; i < cap_e; ++i) g.rally_y[i] = r.i64();
+    for (uint32_t i = 0; i < cap_e; ++i) g.rally_set[i] = r.u8();
+    if (r.fail) return false;
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.pop_used[e] = r.i32();
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t k = 0; k < TECH_WORDS; ++k) g.player_techs[e][k] = r.u64();
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t k = 0; k < CAP_WORDS; ++k) g.player_caps[e][k] = r.u64();
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.player_epoch[e] = r.u8();
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.epoch_initial[e] = r.u8();
+    if (r.fail) return false;
+    for (uint32_t i = 0; i < cap_e; ++i) g.research_tech[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.research_progress[i] = r.u32();
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes

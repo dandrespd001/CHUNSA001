@@ -24,6 +24,14 @@ namespace chunsa {
 // build_target, misma convención que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
 inline constexpr uint32_t BUILD_NO_TARGET = 0xFFFFFFFFu;
 
+// Sprint 1.2 (SPEC-004 §11.2/§12.2): producción, tecnología y épocas.
+inline constexpr uint32_t PROD_QUEUE_CAP = 5;
+inline constexpr uint32_t POP_CAP_V1 = 200;  // constante v1 (brief K2, no re-litigar)
+// Palabras de 64 bits para los bitmask por-jugador; TECH_HARD_CAP/CAP_HARD_CAP
+// (data_catalog.hpp) son múltiplos de 64 a propósito.
+inline constexpr uint32_t TECH_WORDS = TECH_HARD_CAP / 64u;
+inline constexpr uint32_t CAP_WORDS = CAP_HARD_CAP / 64u;
+
 struct MatchConfig01A {
     uint32_t max_entities;               // 1..ENTITY_HARD_CAP
     uint8_t  player_count;               // 1..8 (emisores humanos en 0.1A)
@@ -128,6 +136,30 @@ struct GameState {
     uint32_t  build_target[ENTITY_HARD_CAP];   // índice del edificio objetivo del
                                                // ciudadano constructor; BUILD_NO_TARGET si ninguno
 
+    // Producción (Sprint 1.2, SPEC-004 §11.2). ESTADO: serializado + checksummeado.
+    // prod_queue: misma convención "todos los slots hasta capacity" que
+    // unit_id/building_id — slots >= prod_count[i] valen INVALID_UNIT_ID.
+    uint32_t prod_queue[ENTITY_HARD_CAP][PROD_QUEUE_CAP];
+    uint8_t  prod_count[ENTITY_HARD_CAP];
+    uint32_t prod_progress[ENTITY_HARD_CAP];   // ticks del ítem en cabeza
+    int64_t  rally_x[ENTITY_HARD_CAP];
+    int64_t  rally_y[ENTITY_HARD_CAP];         // raw; rally_set=0 ⇒ sin rally
+    uint8_t  rally_set[ENTITY_HARD_CAP];
+    int32_t  pop_used[MAX_EMITTERS];           // pop_cap fijo v1: POP_CAP_V1
+
+    // Tecnología y épocas (Sprint 1.2, SPEC-004 §12.2, ADR-015). ESTADO:
+    // serializado + checksummeado. `epoch_initial` (deviación documentada en
+    // el RESULT: §12.2 no lo lista literalmente, pero el gate (b) de
+    // EPOCH_UP —§12.3— exige "época_inicial" como término de la fórmula, y
+    // sin persistirlo no es reconstruible tras un EPOCH_UP + save/load) fija
+    // el punto de referencia de la fórmula de tiempo mínimo entre épocas.
+    uint64_t player_techs[MAX_EMITTERS][TECH_WORDS];   // bitmask TechId investigadas
+    uint64_t player_caps[MAX_EMITTERS][CAP_WORDS];     // bitmask capacidades adquiridas
+    uint8_t  player_epoch[MAX_EMITTERS];       // época actual (init: gs_init_epoch_from_catalog)
+    uint8_t  epoch_initial[MAX_EMITTERS];      // época inicial (fija tras el init, ver arriba)
+    uint32_t research_tech[ENTITY_HARD_CAP];   // INVALID_TECH_ID = ocioso
+    uint32_t research_progress[ENTITY_HARD_CAP];
+
     // Economía mínima (Sprint 0.3, base §3.4). ESTADO: serializado + checksummeado.
     // Módulo economy.hpp es autocontenido (sin GameState); el wiring vive aquí y
     // en step.hpp. Depósitos: posiciones fijas deterministas (gs_init_deposits);
@@ -172,6 +204,16 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.bld_anchor_tx[i] = 0;
     g.bld_anchor_ty[i] = 0;
     g.build_target[i] = BUILD_NO_TARGET;
+    // Sprint 1.2 (SPEC-004 §11.2/§12.2): producción y tecnología, misma
+    // convención "todos los slots hasta capacity" que el resto de arriba.
+    for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
+    g.prod_count[i] = 0;
+    g.prod_progress[i] = 0;
+    g.rally_x[i] = 0;
+    g.rally_y[i] = 0;
+    g.rally_set[i] = 0;
+    g.research_tech[i] = INVALID_TECH_ID;
+    g.research_progress[i] = 0;
 }
 
 // Patrón determinista fijo de depósitos (Sprint 0.3, economía mínima): 2 de
@@ -242,6 +284,17 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
         g.building_id[i] = INVALID_BUILDING_ID;
         g.build_target[i] = BUILD_NO_TARGET;
     }
+    // Sprint 1.2 (SPEC-004 §11.2/§12.2): mismo motivo — memset ya dejó 0, que
+    // bajo la semántica de UnitId/TechId significaría "unidad/tech 0", no
+    // "ninguno"; forzar los centinelas explícitamente. prod_count/progress,
+    // rally_x/y/set, pop_used, player_techs/caps/epoch, epoch_initial y
+    // research_progress sí quedan bien en 0 por el memset (player_epoch se
+    // fija a un valor con sentido aparte, vía gs_init_epoch_from_catalog,
+    // tras enlazar el catálogo — ver su comentario).
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
+        g.research_tech[i] = INVALID_TECH_ID;
+    }
 }
 
 // Enlaza el catálogo de datos al GameState (Sprint 0.4). Binding runtime puro:
@@ -253,6 +306,46 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
 // refcounting dentro del núcleo determinista).
 inline void gs_bind_catalog(GameState& g, const DataCatalogV1& catalog) noexcept {
     g.catalog = &catalog;
+}
+
+// Sprint 1.2 (SPEC-004 §12.2/§12.3, ADR-015): fija player_epoch[*] y
+// epoch_initial[*] a la ÉPOCA INICIAL derivada del catálogo YA enlazado.
+//
+// Fórmula (documentada en el RESULT del sprint): mínimo de (epoch_window[0]
+// de cada UnitDefinitionV1, epoch_window[0] de cada BuildingDefinitionV1,
+// epoch de cada TechDefinitionV1) en el catálogo — es decir, la época MÁS
+// TEMPRANA jugable de cualquier dato del slice, catálogo-ancho (el kernel
+// v1 no distingue civilización por jugador: unit_id/building_id no llevan
+// civ_id tipado, ver data_catalog.hpp). Con el catálogo real del repo
+// (building=6 tech=4) el mínimo lo fijan los edificios/unidades egipcios de
+// época 3 (egipto:settlement_center/shena_granary/chariotry_stable,
+// egipto:work_crew) — 1 (por defecto) si el catálogo no tiene ninguna
+// entrada (defensivo, caso no alcanzable con un catálogo real cargado).
+//
+// Llamar EXPLÍCITAMENTE tras gs_bind_catalog (NO se invoca automáticamente
+// desde ahí — deviación deliberada: gs_bind_catalog ya tenía 3+ call sites
+// en tests de sprints previos que NO esperan que enlazar el catálogo mueva
+// player_epoch; fusionar los dos habría cambiado su comportamiento en
+// silencio). Requiere g.catalog != nullptr; no hace nada si no lo es.
+inline void gs_init_epoch_from_catalog(GameState& g) noexcept {
+    if (g.catalog == nullptr) return;
+    const DataCatalogV1& cat = *g.catalog;
+    uint8_t min_epoch = 15;
+    bool found = false;
+    for (uint32_t i = 0; i < cat.unit_count; ++i) {
+        if (!found || cat.units[i].epoch_min < min_epoch) { min_epoch = cat.units[i].epoch_min; found = true; }
+    }
+    for (uint32_t i = 0; i < cat.building_count; ++i) {
+        if (!found || cat.buildings[i].epoch_min < min_epoch) { min_epoch = cat.buildings[i].epoch_min; found = true; }
+    }
+    for (uint32_t i = 0; i < cat.tech_count; ++i) {
+        if (!found || cat.techs[i].epoch < min_epoch) { min_epoch = cat.techs[i].epoch; found = true; }
+    }
+    const uint8_t initial = found ? min_epoch : 1u;
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        g.player_epoch[e] = initial;
+        g.epoch_initial[e] = initial;
+    }
 }
 
 }  // namespace chunsa

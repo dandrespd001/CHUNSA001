@@ -21,7 +21,8 @@ dropoff_resources:
   - B
   - Me
 trains: []
-researches: []
+researches:
+  - rome:road_engineering
 required_capabilities: []
 grants_capabilities: []
 recipes: []

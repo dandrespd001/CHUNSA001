@@ -45,7 +45,14 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // ruta de compatibilidad hacia atrás. Envelope/header sin cambios (mismo
 // patrón que v7/v8): solo el payload STATE crece (el nuevo campo de la
 // agenda).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 9;
+// v10 (Sprint 1.2, SPEC-004 §13): +11 arrays de producción/tecnología/épocas
+// (§11.2: prod_queue, prod_count, prod_progress, rally_x/y, rally_set,
+// pop_used; §12.2: player_techs, player_caps, player_epoch, research_tech,
+// research_progress — más epoch_initial, deviación documentada en
+// game_state.hpp), añadidos al final del stream STATE. Mismo patrón que
+// v7/v8/v9: envelope/header sin cambios, solo el payload crece. Sin
+// migración v9→v10 (mismo precedente D7/v8→v9).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 10;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

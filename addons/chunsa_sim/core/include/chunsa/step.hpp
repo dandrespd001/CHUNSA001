@@ -28,6 +28,17 @@ inline constexpr uint32_t AGGRO_RADIUS_CELLS = 5;
 // independiente — comparten semántica "a un tile o menos del objetivo").
 inline constexpr int64_t BUILD_ARRIVE_RADIUS_RAW = ECO_ARRIVE_RADIUS_RAW;
 
+// EPOCH_UP (Sprint 1.2, SPEC-004 §12.3, ADR-015): constantes v1 (brief K2, no
+// re-litigar). EPOCH_MIN_TICKS = 20 ticks/s * 300 s = 6000 (gate b: tiempo
+// mínimo desde la época inicial). EPOCH_COST_*: coste fijo v1. EPOCH_MAX_V1:
+// época máxima del slice — v1 la fija como constante literal (no derivada del
+// catálogo pese a la prosa "de los datos del match" del spec; ver RESULT).
+inline constexpr uint32_t EPOCH_MIN_TICKS = 6000;
+inline constexpr int32_t EPOCH_COST_A = 200;
+inline constexpr int32_t EPOCH_COST_B = 200;
+inline constexpr int32_t EPOCH_COST_ME = 100;
+inline constexpr uint8_t EPOCH_MAX_V1 = 7;
+
 // Normalización del tick efectivo de un comando (SPEC-001 §6.2): un comando
 // capturado en el tick `t` no puede surtir efecto antes de `t + delay` (retardo
 // de input humano). Función PURA extraída de la fase (3) de step() para que el
@@ -281,6 +292,24 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
                 return RejectReason::ILLEGAL_STATE;
             }
 
+            // Sprint 1.2 (SPEC-004 §12.4): gating de época/capacidades —
+            // retro-aplica a Parte I. Exento en la MISMA ventana de setup que
+            // constructible/costes (mismo motivo: los edificios iniciales de
+            // escenario nacen antes de que player_epoch/player_caps tengan un
+            // valor con sentido para el jugador que los coloca).
+            if (!scenario_exempt) {
+                if (g.player_epoch[c.emitter] < def.epoch_min || g.player_epoch[c.emitter] > def.epoch_max) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
+                for (uint8_t k = 0; k < def.required_capabilities_count; ++k) {
+                    const CapabilityId cap = def.required_capabilities[k];
+                    const uint32_t word = cap / 64u, bit = cap % 64u;
+                    if (word >= CAP_WORDS || ((g.player_caps[c.emitter][word] >> bit) & 1u) == 0u) {
+                        return RejectReason::ILLEGAL_STATE;
+                    }
+                }
+            }
+
             // Resto de campos de stats del payload == 0 (misma disciplina
             // payload-limpio que SPAWN_UNIT), + handle == NULL-ish (índice y
             // generación en 0, valor por defecto de un CmdPayload sin usar).
@@ -404,6 +433,184 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (found == g.entities.capacity) return RejectReason::INVALID_ENTITY;
 
             g.build_target[ci] = found;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::TRAIN_UNIT: {
+            // SPEC-004 §11.3: p.handle = edificio propio COMPLETO; p.unit_id =
+            // UnitId. Orden de validación es CONTRATO (testeado).
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t bi = c.p.handle.index;
+            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[bi] != 1u) return RejectReason::ILLEGAL_STATE;
+            if (g.catalog == nullptr || g.building_id[bi] >= g.catalog->building_count) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+            const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[bi]];
+            if (g.build_progress[bi] < bdef.build_time_ticks) return RejectReason::ILLEGAL_STATE;
+
+            if (c.p.unit_id >= g.catalog->unit_count) return RejectReason::MALFORMED;
+            bool in_trains = false;
+            for (uint8_t k = 0; k < bdef.train_count; ++k) {
+                if (bdef.trains[k] == c.p.unit_id) { in_trains = true; break; }
+            }
+            if (!in_trains) return RejectReason::MALFORMED;
+            const UnitDefinitionV1& udef = g.catalog->units[c.p.unit_id];
+
+            // §12.4: player_epoch ∈ epoch_window de la unidad. (unit.schema.json
+            // no declara required_capabilities — ese sub-gate pasa trivialmente
+            // sobre el conjunto vacío, deviación documentada en data_catalog.hpp).
+            if (g.player_epoch[c.emitter] < udef.epoch_min || g.player_epoch[c.emitter] > udef.epoch_max) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
+            if (g.prod_count[bi] >= PROD_QUEUE_CAP) return RejectReason::ILLEGAL_STATE;
+
+            const int32_t pop_cost = udef.pop_cost;  // constante v1 = 1
+            if (g.pop_used[c.emitter] + pop_cost > static_cast<int32_t>(POP_CAP_V1)) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
+            if (g.player_stock[c.emitter][0] < udef.cost_a
+                || g.player_stock[c.emitter][1] < udef.cost_b
+                || g.player_stock[c.emitter][2] < udef.cost_me) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
+            g.player_stock[c.emitter][0] -= udef.cost_a;
+            g.player_stock[c.emitter][1] -= udef.cost_b;
+            g.player_stock[c.emitter][2] -= udef.cost_me;
+            g.prod_queue[bi][g.prod_count[bi]] = c.p.unit_id;
+            ++g.prod_count[bi];
+            g.pop_used[c.emitter] += pop_cost;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::SET_RALLY: {
+            // SPEC-004 §11.3: p.handle = edificio propio (completo o no);
+            // p.x_raw/p.y_raw = punto raw dentro de la cota del mundo.
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t bi = c.p.handle.index;
+            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[bi] != 1u) return RejectReason::ILLEGAL_STATE;
+            const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            if (!world_contains(p)) return RejectReason::MALFORMED;
+            g.rally_x[bi] = c.p.x_raw;
+            g.rally_y[bi] = c.p.y_raw;
+            g.rally_set[bi] = 1u;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::RESEARCH_TECH: {
+            // SPEC-004 §12.3: p.handle = edificio propio completo con tech ∈
+            // researches; p.unit_id = TechId. Orden análogo a TRAIN_UNIT +
+            // los gates propios de research (prereq/mutex/época/ocioso/stock).
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t bi = c.p.handle.index;
+            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[bi] != 1u) return RejectReason::ILLEGAL_STATE;
+            if (g.catalog == nullptr || g.building_id[bi] >= g.catalog->building_count) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+            const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[bi]];
+            if (g.build_progress[bi] < bdef.build_time_ticks) return RejectReason::ILLEGAL_STATE;
+
+            if (c.p.unit_id >= g.catalog->tech_count) return RejectReason::MALFORMED;
+            bool in_researches = false;
+            for (uint8_t k = 0; k < bdef.research_count; ++k) {
+                if (bdef.researches[k] == c.p.unit_id) { in_researches = true; break; }
+            }
+            if (!in_researches) return RejectReason::MALFORMED;
+            const TechDefinitionV1& tdef = g.catalog->techs[c.p.unit_id];
+            const TechId tid = c.p.unit_id;
+
+            // No investigada ya ni en curso por este jugador (en CUALQUIERA de
+            // sus edificios, no solo el edificio `bi` de este comando).
+            {
+                const uint32_t tw = tid / 64u, tb = tid % 64u;
+                if (tw < TECH_WORDS && ((g.player_techs[c.emitter][tw] >> tb) & 1u) != 0u) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
+            }
+            for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+                if (!g.entities.alive[j]) continue;
+                if (g.owner[j] != c.emitter) continue;
+                if (g.research_tech[j] == tid) return RejectReason::ILLEGAL_STATE;
+            }
+
+            for (uint8_t k = 0; k < tdef.prereq_count; ++k) {
+                const TechId pr = tdef.prerequisites[k];
+                const uint32_t pw = pr / 64u, pb = pr % 64u;
+                const bool has = (pw < TECH_WORDS) && (((g.player_techs[c.emitter][pw] >> pb) & 1u) != 0u);
+                if (!has) return RejectReason::ILLEGAL_STATE;
+            }
+            for (uint8_t k = 0; k < tdef.mutex_count; ++k) {
+                const TechId mx = tdef.mutually_exclusive_with[k];
+                const uint32_t mw = mx / 64u, mb = mx % 64u;
+                const bool has = (mw < TECH_WORDS) && (((g.player_techs[c.emitter][mw] >> mb) & 1u) != 0u);
+                if (has) return RejectReason::ILLEGAL_STATE;
+            }
+
+            if (tdef.epoch > g.player_epoch[c.emitter]) return RejectReason::ILLEGAL_STATE;
+
+            if (g.research_tech[bi] != INVALID_TECH_ID) return RejectReason::ILLEGAL_STATE;  // edificio ocupado
+
+            if (g.player_stock[c.emitter][0] < tdef.cost_a
+                || g.player_stock[c.emitter][1] < tdef.cost_b
+                || g.player_stock[c.emitter][2] < tdef.cost_me) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
+            g.player_stock[c.emitter][0] -= tdef.cost_a;
+            g.player_stock[c.emitter][1] -= tdef.cost_b;
+            g.player_stock[c.emitter][2] -= tdef.cost_me;
+            g.research_tech[bi] = tid;
+            g.research_progress[bi] = 0;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::EPOCH_UP: {
+            // SPEC-004 §12.3: comando de JUGADOR, no de entidad (p.handle=0).
+            // Disciplina payload-limpio: TODOS los campos sin uso deben ser 0
+            // (mismo patrón que PLACE_BUILDING/SPAWN_UNIT).
+            const bool payload_clean = c.p.handle.index == 0 && c.p.handle.generation == 0
+                                    && c.p.x_raw == 0 && c.p.y_raw == 0
+                                    && c.p.speed_mtpt == 0 && c.p.hp == 0
+                                    && c.p.attack == 0 && c.p.range_mt == 0
+                                    && c.p.unit_class == 0 && c.p.unit_id == 0;
+            if (!payload_clean) return RejectReason::MALFORMED;
+
+            const uint8_t cur_epoch = g.player_epoch[c.emitter];
+            if (cur_epoch >= EPOCH_MAX_V1) return RejectReason::ILLEGAL_STATE;
+
+            // Gate (a): >= 2 edificios COMPLETOS propios cuya epoch_window
+            // incluye la época ACTUAL (antes de subir).
+            uint32_t count_ok = 0;
+            if (g.catalog != nullptr) {
+                for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+                    if (!g.entities.alive[j]) continue;
+                    if (g.owner[j] != c.emitter) continue;
+                    if (g.entity_kind[j] != 1u) continue;
+                    if (g.building_id[j] >= g.catalog->building_count) continue;
+                    const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[j]];
+                    if (g.build_progress[j] < bdef.build_time_ticks) continue;  // no completo
+                    if (cur_epoch < bdef.epoch_min || cur_epoch > bdef.epoch_max) continue;
+                    ++count_ok;
+                }
+            }
+            if (count_ok < 2u) return RejectReason::ILLEGAL_STATE;
+
+            // Gate (b): tiempo mínimo desde la época inicial.
+            const uint8_t initial = g.epoch_initial[c.emitter];
+            const uint32_t steps = static_cast<uint32_t>(cur_epoch) - static_cast<uint32_t>(initial) + 1u;
+            if (g.tick < EPOCH_MIN_TICKS * steps) return RejectReason::ILLEGAL_STATE;
+
+            if (g.player_stock[c.emitter][0] < EPOCH_COST_A
+                || g.player_stock[c.emitter][1] < EPOCH_COST_B
+                || g.player_stock[c.emitter][2] < EPOCH_COST_ME) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
+            g.player_stock[c.emitter][0] -= EPOCH_COST_A;
+            g.player_stock[c.emitter][1] -= EPOCH_COST_B;
+            g.player_stock[c.emitter][2] -= EPOCH_COST_ME;
+            g.player_epoch[c.emitter] = cur_epoch + 1u;
             return RejectReason::ACCEPTED;
         }
         case CommandType::MOVE_TO: {
@@ -1011,6 +1218,103 @@ inline void construction_system(GameState& g) noexcept {
     }
 }
 
+// Sistema de producción (Sprint 1.2, SPEC-004 §11.4). Fase propia, después de
+// construction_system y antes del destroy batch, iteración ascendente por
+// índice sobre edificios vivos COMPLETOS con cola no vacía.
+inline void production_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.catalog == nullptr || g.building_id[i] >= g.catalog->building_count) continue;
+        const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[i]];
+        if (g.build_progress[i] < bdef.build_time_ticks) continue;  // edificio no completo
+        if (g.prod_count[i] == 0u) continue;
+
+        const UnitId head_uid = g.prod_queue[i][0];
+        const UnitDefinitionV1& udef = g.catalog->units[head_uid];
+        ++g.prod_progress[i];
+        if (g.prod_progress[i] < static_cast<uint32_t>(udef.build_time_ticks)) continue;
+
+        // Posición = punto medio del lado inferior del footprint + medio
+        // tile, exacto en raw (§11.4 literal).
+        const int64_t T = FX_ONE_RAW;
+        const int64_t bx0 = static_cast<int64_t>(g.bld_anchor_tx[i]) * T;
+        const int64_t by0 = static_cast<int64_t>(g.bld_anchor_ty[i]) * T;
+        const int64_t bw = static_cast<int64_t>(bdef.footprint_w) * T;
+        const int64_t bh = static_cast<int64_t>(bdef.footprint_h) * T;
+        const int64_t spawn_x = bx0 + bw / 2;
+        const int64_t spawn_y = by0 + bh + T / 2;
+
+        const EntityHandle h = et_spawn(g.entities);
+        if (handle_eq(h, NULL_HANDLE)) {
+            // Sin slot de entidad libre: el ítem espera (reintenta cada tick,
+            // sin perder progreso — determinista). Revertir el incremento de
+            // este tick para no rebasar build_time_ticks mientras se reintenta.
+            --g.prod_progress[i];
+            continue;
+        }
+        const uint32_t ni = h.index;
+        g.pos_x[ni] = spawn_x; g.pos_y[ni] = spawn_y;
+        g.vel_x[ni] = 0; g.vel_y[ni] = 0;
+        g.owner[ni] = g.owner[i];
+        g.unit_id[ni] = head_uid;
+        if (udef.unit_class == UnitClassV1::Citizen) {
+            detail::init_citizen_from_catalog(g, ni, udef);
+        } else {
+            detail::init_combat_unit_from_catalog(g, ni, udef);
+        }
+        if (g.rally_set[i]) {
+            g.tgt_x[ni] = g.rally_x[i]; g.tgt_y[ni] = g.rally_y[i];
+        } else {
+            g.tgt_x[ni] = spawn_x; g.tgt_y[ni] = spawn_y;
+        }
+
+        // Desplazar la cola una posición (FIFO): el ítem 1 pasa a ser el 0.
+        for (uint8_t k = 1; k < g.prod_count[i]; ++k) g.prod_queue[i][k - 1] = g.prod_queue[i][k];
+        g.prod_queue[i][g.prod_count[i] - 1] = INVALID_UNIT_ID;
+        --g.prod_count[i];
+        g.prod_progress[i] = 0;
+    }
+}
+
+// Sistema de investigación (Sprint 1.2, SPEC-004 §12.3: "misma fase que
+// production"). Completa el research en curso de cada edificio vivo,
+// iteración ascendente por índice: al alcanzar research_time_ticks, marca el
+// bit de la tech en player_techs y hace OR de sus grants en player_caps.
+inline void research_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.research_tech[i] == INVALID_TECH_ID) continue;
+        if (g.catalog == nullptr || g.building_id[i] >= g.catalog->building_count) continue;
+
+        const TechId tid = g.research_tech[i];
+        if (tid >= g.catalog->tech_count) {
+            // Defensivo (catálogo desalineado): abandona el research sin
+            // completar en vez de leer fuera de rango.
+            g.research_tech[i] = INVALID_TECH_ID;
+            g.research_progress[i] = 0;
+            continue;
+        }
+        const TechDefinitionV1& tdef = g.catalog->techs[tid];
+        ++g.research_progress[i];
+        if (g.research_progress[i] < tdef.research_time_ticks) continue;
+
+        const uint8_t owner_i = g.owner[i];
+        const uint32_t tw = tid / 64u, tb = tid % 64u;
+        if (tw < TECH_WORDS) g.player_techs[owner_i][tw] |= (1ull << tb);
+        for (uint8_t k = 0; k < tdef.grant_count; ++k) {
+            const CapabilityId cap = tdef.grants[k];
+            const uint32_t cw = cap / 64u, cb = cap % 64u;
+            if (cw < CAP_WORDS) g.player_caps[owner_i][cw] |= (1ull << cb);
+        }
+        g.research_tech[i] = INVALID_TECH_ID;
+        g.research_progress[i] = 0;
+    }
+}
+
 }  // namespace detail
 
 // Ejecuta el tick t = g.tick con el corte de ingesta `batch` (RawCommands
@@ -1090,6 +1394,11 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // antes del destroy batch (contrato de orden de fases).
         detail::construction_system(g);
 
+        // (5e) Producción + investigación (Sprint 1.2, SPEC-004 §11.4/§12.3):
+        // después de construction_system, antes del destroy batch.
+        detail::production_system(g);
+        detail::research_system(g);
+
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.
         for (uint32_t a = 1; a < g.destroy_count; ++a) {
             const uint32_t v = g.destroy_batch[a];
@@ -1121,6 +1430,28 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
                     }
                 }
                 g.flow_dirty = 1;
+                // Sprint 1.2 (SPEC-004 §11.4): la muerte del edificio pierde su
+                // cola de producción (costes ya pagados se pierden); la
+                // población reservada de los ítems NO entrenados se libera
+                // (pop_cost=1 constante v1, uno por ítem restante en la cola).
+                // El research en curso (si lo hubiera) también se pierde sin
+                // reembolso — zero_components lo resetea a continuación
+                // (mismo espíritu "sin CANCEL" de Parte II, ver RESULT).
+                if (g.prod_count[i] > 0u) {
+                    const uint8_t owner_i = g.owner[i];
+                    int32_t freed = static_cast<int32_t>(g.prod_count[i]);
+                    g.pop_used[owner_i] -= freed;
+                    if (g.pop_used[owner_i] < 0) g.pop_used[owner_i] = 0;
+                }
+            } else {
+                // Sprint 1.2 (SPEC-004 §11.4): la muerte de una unidad reduce
+                // pop_used (pop_cost=1 constante v1, para TODA unidad —
+                // deviación documentada: unidades creadas fuera de la cola de
+                // producción, p.ej. SPAWN_UNIT/SPAWN_CITIZEN/debug, nunca
+                // incrementaron pop_used; se clampa a 0 para no ir negativo).
+                const uint8_t owner_i = g.owner[i];
+                g.pop_used[owner_i] -= 1;
+                if (g.pop_used[owner_i] < 0) g.pop_used[owner_i] = 0;
             }
             zero_components(g, i);
             et_release_index(g.entities, i);

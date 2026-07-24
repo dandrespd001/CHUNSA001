@@ -20,7 +20,8 @@ build_time_ticks: 600
 trains:
   - rome:legionary
   - rome:ballista_crew
-researches: []
+researches:
+  - rome:marching_drill
 required_capabilities: []
 grants_capabilities: []
 recipes: []

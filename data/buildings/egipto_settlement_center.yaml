@@ -21,7 +21,8 @@ dropoff_resources:
   - B
   - Me
 trains: []
-researches: []
+researches:
+  - egipto:corvee_logistics
 required_capabilities: []
 grants_capabilities: []
 recipes: []
