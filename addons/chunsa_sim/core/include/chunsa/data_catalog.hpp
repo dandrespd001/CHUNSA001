@@ -194,6 +194,34 @@ struct TechNameIndexV1 {
     TechId id;
 };
 
+// Sprint 1.4 (SPEC-005 §3): tabla tipada de perfiles de IA. Espejo EXACTO
+// del patrón endurecido de TechDefinitionV1 (unique_ptr, reserve, rechazo
+// del catálogo entero, catalog_find_ai_profile bytewise) — sin referencias
+// cruzadas a otras secciones (a diferencia de building/tech): todos sus
+// campos son valores inline del propio record `kind=ai-profile`. El blob NO
+// cambia de formato (el record ya viaja desde antes; solo se tipifica).
+using AiProfileId = uint32_t;
+inline constexpr AiProfileId INVALID_AI_PROFILE_ID = 0xFFFFFFFFu;
+
+// Literal de SPEC-005 §3: pesos estratégicos `_bp` (basis points 0..10000,
+// ver strategic_weights_bp del schema — `diplomacy_openness_bp` NO se tipa
+// aquí, fuera de alcance v1/1v1 según SPEC-005 §10), un subconjunto de
+// difficulty_params, y tactical_behaviors[0] (v1 usa el primero — ver §3).
+struct AiProfileV1 {
+    AiProfileId id;
+    int32_t economy_focus_bp, military_focus_bp, tech_focus_bp,
+            expansion_aggressiveness_bp, risk_tolerance_bp;
+    uint32_t decision_period_ticks;
+    uint32_t reaction_latency_ticks;
+    int32_t retreat_hp_threshold_bp, retreat_morale_threshold_bp;
+};
+
+struct AiProfileNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    AiProfileId id;
+};
+
 // Sprint 1.2 (SPEC-004 §12.1): tabla de capacidades declaradas del blob —
 // espejo textual de manifest.declared_capabilities, reordenada bytewise
 // ascendente POR EL LOADER (el orden de entrada en el blob no es bytewise —
@@ -232,6 +260,10 @@ struct DataCatalogV1 {
     const TechNameIndexV1* tech_names;
     uint32_t capability_count;
     const CapabilityNameIndexV1* capability_names;
+    // Sprint 1.4 (SPEC-005 §3): espejo de unit_count/units/unit_names.
+    uint32_t ai_profile_count;
+    const AiProfileV1* ai_profiles;
+    const AiProfileNameIndexV1* ai_profile_names;
 };
 
 enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
@@ -248,6 +280,7 @@ enum class CatalogLoadCode : uint8_t {
     InvalidUnit,
     InvalidBuilding,  // Sprint 1.1 (SPEC-004 §2); append-only, no renumerar.
     InvalidTech,      // Sprint 1.2 (SPEC-004 §12.1); append-only, no renumerar.
+    InvalidAiProfile, // Sprint 1.4 (SPEC-005 §3); append-only, no renumerar.
 };
 
 class DataCatalogStorageV1 {
@@ -896,6 +929,85 @@ inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, Te
     return def;
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 1.4 (SPEC-005 §3): tabla tipada de perfiles de IA.
+// ---------------------------------------------------------------------------
+
+// Reconstruye y valida un AiProfileV1 desde su objeto CVE ya parseado
+// (SPEC-005 §3: rangos exactos del schema; ver
+// data/schemas/ai-profile.schema.json). Mismo patrón que
+// build_tech_definition (sin gate is_known_key: personality/difficulty/
+// utility_curves/performance_lod/provenance/diplomacy_openness_bp/el resto
+// de tactical_behaviors[1..]/micro_quality_bp/build_order_variance_bp/
+// scouting_thoroughness_bp/counter_reaction_delay_ticks del schema se
+// validan estructuralmente cuando se leen pero NO se tipan en AiProfileV1 —
+// SPEC-005 §3 solo contrata los campos declarados en el struct; el resto es
+// dato que la IA v1 de K2 todavía no consume). SIN referencias cruzadas a
+// otras secciones del catálogo (a diferencia de building/tech): no hay
+// resolución diferida que hacer, todo es valor inline del propio record.
+inline AiProfileV1 build_ai_profile_definition(const CveValue& obj, AiProfileId id) {
+    if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+
+    const CveValue* sw = obj.find("strategic_weights_bp");
+    if (!sw || !sw->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    auto req_bp = [&](const CveValue& parent, const char* key) -> int64_t {
+        const CveValue* v = parent.find(key);
+        if (!v || !v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (v->i < 0 || v->i > 10000) fail(CatalogLoadCode::InvalidAiProfile);
+        return v->i;
+    };
+    const int64_t economy_bp = req_bp(*sw, "economy_focus_bp");
+    const int64_t military_bp = req_bp(*sw, "military_focus_bp");
+    const int64_t tech_bp = req_bp(*sw, "tech_focus_bp");
+    const int64_t expansion_bp = req_bp(*sw, "expansion_aggressiveness_bp");
+    const int64_t risk_bp = req_bp(*sw, "risk_tolerance_bp");
+    // diplomacy_openness_bp: presencia y rango SÍ se validan (el schema lo
+    // exige; un record que lo omita o exceda 0..10000 rechaza el catálogo
+    // entero, mismo rigor que el resto de campos) pero su VALOR no se tipa
+    // en AiProfileV1 (SPEC-005 §10: diplomacia fuera de alcance, IA v1 1v1).
+    (void)req_bp(*sw, "diplomacy_openness_bp");
+
+    const CveValue* dp = obj.find("difficulty_params");
+    if (!dp || !dp->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    auto req_ticks = [&](const char* key) -> int64_t {
+        const CveValue* v = dp->find(key);
+        if (!v || !v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (v->i < 1 || v->i > 1000000) fail(CatalogLoadCode::InvalidAiProfile);
+        return v->i;
+    };
+    const int64_t decision_period = req_ticks("decision_period_ticks");
+    const int64_t reaction_latency = req_ticks("reaction_latency_ticks");
+
+    const CveValue* tb = obj.find("tactical_behaviors");
+    if (!tb || !tb->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+    // v1 usa el PRIMERO (SPEC-005 §3): un perfil sin ningún tactical_behavior
+    // no es utilizable por la capa táctica/reactiva de K2 → se rechaza el
+    // catálogo entero (mismo espíritu "referencia no resoluble" de
+    // building/tech: aquí la "referencia" es al índice [0], inexistente en
+    // un array vacío — ver el fixture de rechazo del RESULT del sprint).
+    if (tb->arr.empty()) fail(CatalogLoadCode::InvalidAiProfile);
+    const CveValue& tb0 = tb->arr[0];
+    if (!tb0.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    const CveValue* rh = tb0.find("retreat_hp_threshold_bp");
+    const CveValue* rm = tb0.find("retreat_morale_threshold_bp");
+    if (!rh || !rh->is_int() || !rm || !rm->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    if (rh->i < 0 || rh->i > 10000) fail(CatalogLoadCode::InvalidAiProfile);
+    if (rm->i < 0 || rm->i > 10000) fail(CatalogLoadCode::InvalidAiProfile);
+
+    AiProfileV1 def{};
+    def.id = id;
+    def.economy_focus_bp = static_cast<int32_t>(economy_bp);
+    def.military_focus_bp = static_cast<int32_t>(military_bp);
+    def.tech_focus_bp = static_cast<int32_t>(tech_bp);
+    def.expansion_aggressiveness_bp = static_cast<int32_t>(expansion_bp);
+    def.risk_tolerance_bp = static_cast<int32_t>(risk_bp);
+    def.decision_period_ticks = static_cast<uint32_t>(decision_period);
+    def.reaction_latency_ticks = static_cast<uint32_t>(reaction_latency);
+    def.retreat_hp_threshold_bp = static_cast<int32_t>(rh->i);
+    def.retreat_morale_threshold_bp = static_cast<int32_t>(rm->i);
+    return def;
+}
+
 }  // namespace data_catalog_detail
 
 // ============================================================================
@@ -919,6 +1031,11 @@ struct DataCatalogStorageV1::Impl {
     std::vector<TechNameIndexV1> tech_names;
     std::vector<std::string> capability_ids;
     std::vector<CapabilityNameIndexV1> capability_names;
+    // Sprint 1.4 (SPEC-005 §3): espejo de unit_ids/units/unit_names. Sin
+    // referencias diferidas (ai-profile no referencia otras secciones).
+    std::vector<std::string> ai_profile_ids;
+    std::vector<AiProfileV1> ai_profiles;
+    std::vector<AiProfileNameIndexV1> ai_profile_names;
     // Referencias diferidas (resueltas tras parsear TODAS las secciones, ver
     // el comentario de `load_impl`); índice paralelo a buildings/techs.
     std::vector<std::vector<std::string>> pending_building_trains;
@@ -1087,6 +1204,16 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->pending_tech_prereqs.reserve(dir[3].count);
     impl->pending_tech_mutex.reserve(dir[3].count);
     impl->pending_tech_grants_caps.reserve(dir[3].count);
+    // Sprint 1.4 (SPEC-005 §3): ai_profile_ids necesita direcciones estables,
+    // mismo motivo que unit_ids/building_ids/tech_ids. dir[6] es la sección
+    // ai-profile (kind=7, último del KIND_INFO). Cap ya acotado por
+    // kKindTable (1024, ver el bucle del directorio arriba) — sin cap
+    // adicional del kernel (a diferencia de tech/cap): no hay bitmask
+    // por-jugador dimensionado en múltiplos de 64 que necesite un
+    // AI_PROFILE_HARD_CAP propio.
+    impl->ai_profile_ids.reserve(dir[6].count);
+    impl->ai_profiles.reserve(dir[6].count);
+    impl->ai_profile_names.reserve(dir[6].count);
 
     bool have_package_id = false;
 
@@ -1191,9 +1318,19 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->pending_tech_prereqs.push_back(std::move(raw.prerequisites));
                 impl->pending_tech_mutex.push_back(std::move(raw.mutually_exclusive_with));
                 impl->pending_tech_grants_caps.push_back(std::move(raw.grants_capabilities));
+            } else if (spec.kind == 7) {
+                // Sprint 1.4 (SPEC-005 §3): ai-profile, ahora tipado (antes
+                // solo estructural, igual que building/tech antes de sus
+                // sprints respectivos). Mismo patrón, sin referencias
+                // diferidas (ai-profile no referencia otras secciones).
+                if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
+                const AiProfileId aid = static_cast<AiProfileId>(impl->ai_profiles.size());
+                AiProfileV1 def = build_ai_profile_definition(value, aid);
+                impl->ai_profile_ids.push_back(record_id);
+                impl->ai_profiles.push_back(def);
             }
-            // civ/map/ai-profile: validados estructural + orden (deviación
-            // documentada arriba); no se reconstruye tipo semántico.
+            // civ/map: validados estructural + orden (deviación documentada
+            // arriba); no se reconstruye tipo semántico.
         }
         if (section.pos != section.len) fail(CatalogLoadCode::NonCanonical);  // trailing de sección
     }
@@ -1304,6 +1441,15 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         impl->capability_names.push_back(ni);
     }
 
+    // ---- ai_profile_names: mismo orden que ai_profiles (Sprint 1.4) ----
+    for (size_t i = 0; i < impl->ai_profiles.size(); ++i) {
+        AiProfileNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->ai_profile_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->ai_profile_ids[i].size());
+        ni.id = impl->ai_profiles[i].id;
+        impl->ai_profile_names.push_back(ni);
+    }
+
     // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
     static constexpr char kHashDomain[] = "CHUNSA_CONTENT_V1";
     ContentHashV1 hash{};
@@ -1346,6 +1492,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.tech_names = impl->tech_names.data();
     cat.capability_count = static_cast<uint32_t>(impl->capability_ids.size());
     cat.capability_names = impl->capability_names.data();
+    cat.ai_profile_count = static_cast<uint32_t>(impl->ai_profiles.size());
+    cat.ai_profiles = impl->ai_profiles.data();
+    cat.ai_profile_names = impl->ai_profile_names.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier
     // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
@@ -1461,6 +1610,21 @@ inline CapabilityId catalog_find_capability(const DataCatalogV1& cat, const char
         else hi = mid;
     }
     return INVALID_CAPABILITY_ID;
+}
+
+// Sprint 1.4 (SPEC-005 §3): espejo de catalog_find_unit para AiProfileId.
+inline AiProfileId catalog_find_ai_profile(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.ai_profile_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const AiProfileNameIndexV1& e = cat.ai_profile_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_AI_PROFILE_ID;
 }
 
 }  // namespace chunsa

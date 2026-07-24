@@ -301,6 +301,13 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_tech[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_progress[i]);
 
+    // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): AL FINAL
+    // del stream, tras todo lo v10 (precedente D7: append-only, sin
+    // migración — ver save_io.hpp). Escalares del partido, no por-slot.
+    w.u8(g.game_over);
+    w.u8(g.winner);
+    w.u16(g.participants_mask);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -571,6 +578,24 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.research_tech[i] = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.research_progress[i] = r.u32();
     if (r.fail) return false;
+
+    // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): mismo
+    // orden que gs_serialize. Validación: game_over booleano estricto;
+    // winner es o bien 0xFF (empate/pendiente) o un índice de jugador dentro
+    // de cfg.player_count (ya validado arriba por config_validate);
+    // participants_mask no debe tener bits fuera de [0, player_count) —
+    // cualquier otro valor es un archivo corrupto/hostil, mismo rigor que
+    // entity_kind/eco_state/resource_idx más arriba en esta función.
+    const uint8_t go = r.u8();
+    if (go > 1u) return false;
+    g.game_over = go;
+    const uint8_t win = r.u8();
+    if (win != 0xFFu && win >= cfg.player_count) return false;
+    g.winner = win;
+    const uint16_t pmask = r.u16();
+    if (r.fail) return false;
+    if ((pmask >> cfg.player_count) != 0u) return false;
+    g.participants_mask = pmask;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
     g.destroy_count = 0;

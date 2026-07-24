@@ -1315,6 +1315,88 @@ inline void research_system(GameState& g) noexcept {
     }
 }
 
+// Condición de victoria/derrota v1 (Sprint 1.4, SPEC-005 §6). Llamada AL
+// FINAL de step(), tras el destroy batch, barrido ascendente. Sin
+// RNG/float/heap (dos arrays locales fijos de MAX_EMITTERS==16 elementos,
+// en pila).
+//
+// "Jugador activo" (definición operativa, ver RESULT del sprint): un emisor
+// p ∈ [0, cfg.player_count) es activo ⟺ en algún momento del partido tuvo
+// AL MENOS UN edificio (entity_kind==1) o UN ciudadano (unit_class==3) vivo
+// simultáneamente con game_over==0 — se registra de forma monótona en
+// g.participants_mask (bit p, solo se pone a 1, nunca se limpia) la PRIMERA
+// vez que se observa. Un emisor configurado en player_count que nunca llegó
+// a tener edificio/ciudadano (p.ej. el emisor 1 en una corrida sin IA,
+// player_count==1; o un jugador de fixture nunca poblado) JAMÁS entra en el
+// conjunto activo — SPEC-005 §6 exige explícitamente no marcarlo "ganador"
+// (ni contarlo como "derrotado" para forzar un empate espurio).
+//
+// Salvaguarda adicional (deviación documentada frente a la letra literal de
+// SPEC-005 §6, ver RESULT — "conservador ante huecos"): la evaluación solo
+// se dispara con >= 2 jugadores activos. Con 0 o 1 activo no hay adversario
+// posible y la partida NUNCA puede "terminar" por este mecanismo (evita que
+// escenarios de un único jugador real —sintéticos de movimiento con
+// SPAWN_DEBUG, benchmarks, o un fixture de 2 jugadores donde solo uno de
+// ellos llega a tener producción real— declaren un "ganador"/"empate"
+// espurio con game_over==1 desde el primer tick).
+//
+// Derrota (regla v1 concreta y testeable de SPEC-005 §6): un jugador ACTIVO
+// está derrotado cuando, EN ESTE INSTANTE, no tiene ningún edificio vivo
+// propio NI ningún ciudadano vivo propio (no puede producir ni reconstruir).
+// Nota: esto es la observación INSTANTÁNEA (no monótona) — a diferencia de
+// participants_mask, un jugador puede pasar de derrotado a no-derrotado si
+// reconstruye (irrelevante en la práctica: una vez game_over==1 se congela).
+//
+// Congelado: si g.game_over ya es 1, esta función es un no-op inmediato
+// (SPEC-005 §6: "una vez game_over==1, step deja de evaluar").
+inline void victory_check(GameState& g) noexcept {
+    if (g.game_over != 0u) return;  // congelado: no reevaluar jamás
+
+    bool has_building[MAX_EMITTERS] = {};
+    bool has_citizen[MAX_EMITTERS] = {};
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        const uint8_t p = g.owner[i];
+        if (p >= MAX_EMITTERS) continue;  // defensivo: owner fuera de rango nunca debería darse
+        if (g.entity_kind[i] == 1u) has_building[p] = true;
+        else if (g.unit_class[i] == 3u) has_citizen[p] = true;
+    }
+
+    // Actualiza la máscara monótona de "jugador activo" (solo bits que se
+    // encienden, nunca se apagan) ANTES de evaluar derrota/victoria.
+    for (uint32_t p = 0; p < g.cfg.player_count; ++p) {
+        if (has_building[p] || has_citizen[p]) {
+            g.participants_mask = static_cast<uint16_t>(g.participants_mask | (uint16_t{1} << p));
+        }
+    }
+
+    uint32_t active_count = 0;
+    for (uint32_t p = 0; p < g.cfg.player_count; ++p) {
+        if ((g.participants_mask & (uint16_t{1} << p)) != 0u) ++active_count;
+    }
+    if (active_count < 2u) return;  // sin adversario posible: nunca "termina" por este mecanismo
+
+    uint32_t not_defeated_count = 0;
+    uint8_t sole_survivor = 0xFFu;
+    for (uint32_t p = 0; p < g.cfg.player_count; ++p) {
+        if ((g.participants_mask & (uint16_t{1} << p)) == 0u) continue;  // nunca jugó: fuera del cómputo
+        const bool defeated = !has_building[p] && !has_citizen[p];
+        if (!defeated) {
+            ++not_defeated_count;
+            sole_survivor = static_cast<uint8_t>(p);
+        }
+    }
+    if (not_defeated_count == 0u) {
+        g.game_over = 1u;
+        g.winner = 0xFFu;  // empate: todos los activos derrotados el mismo tick
+    } else if (not_defeated_count == 1u) {
+        g.game_over = 1u;
+        g.winner = sole_survivor;
+    }
+    // else: la partida sigue (>= 2 activos siguen sin ser derrotados).
+}
+
 }  // namespace detail
 
 // Ejecuta el tick t = g.tick con el corte de ingesta `batch` (RawCommands
@@ -1457,6 +1539,11 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
             et_release_index(g.entities, i);
         }
         g.destroy_count = 0;
+
+        // (6b) Sprint 1.4 (SPEC-005 §6): condición de victoria/derrota, tras
+        // el destroy batch, barrido ascendente. Sin RNG/float/heap. Congela
+        // en cuanto game_over==1 (no se reevalúa jamás — SPEC-005 §6).
+        detail::victory_check(g);
     }
 
     // (7) Checksum en su fase: t % N == N-1 (SPEC-001 §8, fe de erratas).
