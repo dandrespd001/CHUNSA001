@@ -454,6 +454,16 @@ inline bool ai_enemy_near_base(const GameState& g, uint8_t ai_player, int64_t an
 //         expansion_aggressiveness_bp -> ATACA (MOVE_TO al objetivo táctico).
 //         La reactiva tiene prioridad estricta sobre la táctica (§4.3: "antes
 //         de gastar presupuesto en ataque").
+//
+//    INVARIANTE DEL SCHEDULER (auditoría Opus, Sprint 1.4, P2): esta función
+//    lee el `g` VIVO, no una copia congelada en source_tick. Es correcto SOLO
+//    porque el driver invoca dispatch→execute en la MISMA iteración de tick
+//    (source_tick == g.tick al ejecutar), y la degradación RUNNING→DISPATCHED
+//    de ai_deserialize re-ejecuta contra el mismo `g` cargado. El contrato §0
+//    exige que la salida dependa solo de (g, source_tick, runtime_before) — lo
+//    cumple —, no que `g` sea una copia. Cualquier refactor futuro del
+//    scheduler DEBE preservar "execute en el tick de dispatch": jamás llamar a
+//    ai_execute con un `g` ya avanzado respecto a b.source_tick.
 // ---------------------------------------------------------------------------
 inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
     b.state        = AiJobState::RUNNING;
