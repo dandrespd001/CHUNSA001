@@ -114,6 +114,11 @@ add_executable(chunsa_test_ai_layers tests/unit/test_ai_layers.cpp)
 target_link_libraries(chunsa_test_ai_layers PRIVATE chunsa_sim_core)
 add_test(NAME ai_layers COMMAND chunsa_test_ai_layers)
 
+# --- Test Sprint 1.4 (K2): gate de fase — skirmish (SPEC-005 §8.3) -------------
+add_executable(chunsa_test_ai_skirmish tests/unit/test_ai_skirmish.cpp)
+target_link_libraries(chunsa_test_ai_skirmish PRIVATE chunsa_sim_core)
+add_test(NAME ai_skirmish COMMAND chunsa_test_ai_skirmish)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
