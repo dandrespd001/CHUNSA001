@@ -54,6 +54,27 @@ public:
         uint16_t bld_anchor_tx[1024];
         uint16_t bld_anchor_ty[1024];
         uint32_t build_target[1024]; // BUILD_NO_TARGET si el ciudadano está libre
+        // Sprint 1.2: estado de producción/tech por slot. Se conserva el
+        // layout POR-SLOT; la UI solo necesita la cabeza de la cola, pero se
+        // copia la cola completa para no dejar basura en el snapshot.
+        uint32_t prod_queue[1024][chunsa::PROD_QUEUE_CAP];
+        uint8_t prod_count[1024];
+        uint32_t prod_progress[1024];
+        uint32_t research_tech[1024];
+        uint32_t research_progress[1024];
+
+        // Sprint 1.2: estado escalar del jugador 0 para el HUD.
+        int64_t stock_a;
+        int64_t stock_b;
+        int64_t stock_me;
+        uint8_t player_epoch;
+        int32_t pop_used;
+
+        // Último receipt del mailbox del jugador 0. Es feedback de
+        // presentación; la aceptación/rechazo autoritativa sigue en kernel.
+        uint64_t last_receipt_sequence;
+        uint32_t last_receipt_tick;
+        uint16_t last_receipt_result;
     };
 
 private:
@@ -76,6 +97,8 @@ private:
     chunsa::UnitId uid_artillery = chunsa::INVALID_UNIT_ID;
     chunsa::BuildingId bid_settlement_center = chunsa::INVALID_BUILDING_ID;
     chunsa::BuildingId bid_forum_center = chunsa::INVALID_BUILDING_ID;
+    chunsa::BuildingId bid_chariotry_stable = chunsa::INVALID_BUILDING_ID;
+    chunsa::BuildingId bid_castra_barracks = chunsa::INVALID_BUILDING_ID;
     chunsa::BuildingId bid_buildable = chunsa::INVALID_BUILDING_ID;
     // Interpolación (contrato): dos snapshots + instante de llegada de curr.
     DemoSnapshot snap_prev{};
@@ -112,6 +135,10 @@ private:
     bool have_cursor = false;
     bool placement_mode = false;
     bool placement_input_captured = false;
+    bool rally_mode = false;
+    bool research_mode = false;
+    uint64_t last_feedback_sequence = 0;
+    uint8_t last_feedback_epoch = 0;
 
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
@@ -125,6 +152,10 @@ private:
                          int64_t ty) const;
     void enqueue_place_building(int64_t tx, int64_t ty);
     uint32_t enqueue_build_assignments(int64_t tx, int64_t ty);
+    int32_t selected_building_slot() const;
+    void enqueue_selected_action(uint32_t action_index, bool research);
+    void enqueue_rally(int64_t tx, int64_t ty);
+    void enqueue_epoch_up();
     void cycle_buildable_building();
 
 protected:
@@ -145,6 +176,7 @@ public:
     uint32_t build_showcase_batch(chunsa::RawCommand* batch, uint32_t t);
 
     void _ready() override;
+    void _draw() override;
     void _process(double delta) override;
     void _input(const godot::Ref<godot::InputEvent>& event) override;
     void _exit_tree() override;
