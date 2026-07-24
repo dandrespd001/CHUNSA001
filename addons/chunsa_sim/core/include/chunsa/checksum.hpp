@@ -58,7 +58,22 @@ namespace chunsa {
 // estado comparan dos corridas EN VIVO entre sí. Se mantiene el símbolo
 // `state_checksum_v1` por la misma razón que en sprints anteriores (no tocar
 // call sites).
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 5;
+//
+// Sprint 1.4 (SPEC-005 §6/§7): bump a v6 — el stream gana `game_over`,
+// `winner` y `participants_mask` (condición de victoria/derrota + la
+// definición operativa de "jugador activo", ver step.hpp::detail::
+// victory_check y el RESULT del sprint), añadidos AL FINAL tras todo lo v5
+// (orden intencional). Cambio de dominio DELIBERADO: mismo precedente que
+// los bumps v1→v5 anteriores — no hay golden-checksum de estado persistido
+// en este repo, todos los tests de estado comparan dos corridas EN VIVO
+// entre sí, así que "regenerar" el golden no requiere tocar ningún archivo
+// aparte de este bump. La TRAYECTORIA de los escenarios previos (posiciones/
+// aceptación/rechazo de comandos) no cambia — solo el dominio hasheado y los
+// 3 campos nuevos, que para cualquier escenario que nunca alcance game_over
+// quedan en su valor inicial (0/0xFF/0) durante toda la corrida. Se mantiene
+// el símbolo `state_checksum_v1` por la misma razón que en sprints
+// anteriores (no tocar call sites).
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 6;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -85,7 +100,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V5", 15);
+    h.bytes("CHUNSA_STATE_V6", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -212,6 +227,11 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.epoch_initial[e]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_tech[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_progress[i]);
+    // Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7): AL FINAL, tras todo lo
+    // v5. Escalares del partido (no por-slot): un único u8/u8/u16.
+    h.u8(g.game_over);
+    h.u8(g.winner);
+    h.u16(g.participants_mask);
     return h.digest();
 }
 
