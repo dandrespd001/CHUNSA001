@@ -1,6 +1,6 @@
 # PLAN MAESTRO — CHUNSA: Ascenso de las Civilizaciones
 
-**Versión:** 1.1 · **Fecha:** 2026-07-24 · **Autor:** Arquitecto Jefe · **Aprobación:** Director (replan Sprint 1.5A, 2026-07-24)
+**Versión:** 1.2 · **Fecha:** 2026-07-24 · **Autor:** Arquitecto Jefe · **Aprobación:** Director (replan mecánico desde Sprint 1.6, 2026-07-24)
 **Estado:** VIGENTE — documento vivo, se actualiza al cierre de cada sprint (§7).
 
 ---
@@ -43,7 +43,9 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 
 - **PERF-0 físico**: sin hardware de referencia (UHD 620); ADR-011 sigue TARGET. Conseguir acceso antes de Fase 2.
 - **Pacing de producto**: el skirmish automático actual dura ~2:08. Falta diseñar y validar una apertura económica jugada por humanos; no confundir el límite técnico de 30 min de SPEC-005 con una duración mínima.
-- **Arte y audio**: requieren decisión explícita de presupuesto antes del Sprint 1.6 y una medición posterior en el hardware mínimo real.
+- **Arte y audio diferidos**: por decisión del Director se abordan únicamente después
+  del cierre mecánico 1.7. Antes deben quedar completas la apertura económica,
+  construcción/producción/población y las órdenes de combate.
 
 ---
 
@@ -77,7 +79,7 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | **SPEC-004** | Sistemas de partida: construcción (I) + producción/tech/epoch-up/población (II) + victoria/derrota (III) | APPROVED+ejecutada | 1.1 + 1.2 + 1.4 | Arquitecto |
 | **SPEC-005** | IA oponente de tres capas sobre mailbox determinista + perfil data-driven + partida completa | APPROVED+ejecutada | Sprint 1.4 | Arquitecto |
 | **SPEC-006** | UI/HUD: cámara/minimapa/selección/grupos (I) + fog de presentación y política anti-fugas (II) | APPROVED+ejecutada (Partes I–II) | 1.3 + 1.5A | Arquitecto |
-| **SPEC-003** | Pipeline de assets/render/audio: formatos, presupuesto, atlas/batching sobre ADR-009 y QA | PENDIENTE DE SPEC FINAL + presupuesto | Sprint 1.6 | Arquitecto |
+| **SPEC-003** | Pipeline de assets/render/audio: formatos, presupuesto, atlas/batching sobre ADR-009 y QA | DIFERIDA hasta cierre mecánico + presupuesto | Post-1.7 | Arquitecto |
 | **SPEC-TRAYECTORIA** | Contrato final de ADR-016: sucesión/legado de módulos históricos, IDs namespaced, reglas de era | POR ESCRIBIR | Fase 2 (antes de integrar la 3ª civ) | Arquitecto |
 | **SPEC-007** | Campaña y escenarios: YAML de misión (doc 08), triggers deterministas como Commands, árbol de decisiones, saves de campaña | POR ESCRIBIR | Fase 3 | Arquitecto |
 
@@ -208,17 +210,111 @@ Ver `docs/REPORTE_SPRINT_1.5.md`.
   visión en cualquier consumidor · core intacto · suite completa y headless
   verdes · ganador/tick final del skirmish sin cambios.
 
-#### Sprint 1.6 — arte, audio y feel (condicionado a presupuesto)
-- **Objetivo**: que el vertical slice se VEA y SIENTA como un juego — y decisión de presupuesto de arte.
+#### Sprint 1.6A — ranged hitscan v1 + movilidad/cadencia ✅ EJECUTADO
+- **Objetivo**: convertir alcance, velocidad y cadencia data-driven en diferencias
+  tácticas reales antes de introducir entidades de proyectil.
 - **Entregables**:
-  1. **SPEC-003 final** (Arquitecto): pipeline de assets (formatos, importación, presupuesto por época del doc 13, atlas/batching sobre el modo (c) de ADR-009), plan de audio.
-  2. Primer pase de assets reales del slice M1 (sprites/modelos low-poly de unidades y edificios de Egipto y Roma) — **aquí el Director decide presupuesto**: encargo externo, asset packs adaptados, o generación asistida.
-  3. Audio mínimo: feedback de órdenes, combate, construcción, música de época M1.
-  4. Juice del doc 34: animación de selección, proyectiles visibles, muertes, partículas mínimas.
-  5. **PERF-1**: perfilado con assets reales; objetivo 600u@60fps en tier mínimo (doc 35 §35.7 — la única tabla válida).
-- **Referencias**: doc 13 (pipeline/coste de assets) · doc 34 (juice) · doc 35 (presupuesto de rendimiento) · ADR-009.
-- **Delegación**: SPEC-003 = **Arquitecto**. Integración de assets/animación/audio en Godot = **Kimi**. Herramientas de pipeline (import/atlas scripts) = **MiniMax**. Arte en sí = decisión de presupuesto del Director (externo o asistido).
-- **DoD**: el vertical slice con arte y sonido reales mantiene 600u@60fps en tier mínimo medido · un tráiler de 60s es grabable de la partida real · gates verdes.
+  1. Contrato de combate a distancia v1: adquisición de objetivo en todas las
+     celdas intersectadas por el alcance, filtro geométrico exacto y resolución
+     hitscan en tick.
+  2. Velocidad por definición de unidad aplicada de forma consistente a movimiento,
+     persecución, economía y construcción; sin constantes de demo que suplanten datos.
+  3. Cadencia hitscan v1 explícita y exacta: diez ticks entre impactos, sin el
+     desfase anterior de once. La cadencia por arma se integra junto con
+     proyectiles en 1.7 para realizar una sola ampliación de datos/estado.
+  4. Casos funcionales del slice: ballesta romana y carro egipcio atacan desde su
+     alcance; infantería debe cerrar distancia; unidades móviles no disparan fuera
+     de las reglas acordadas.
+- **Exclusiones**: entidades de proyectil y tiempo de vuelo, ATTACK/ATTACK_MOVE,
+  formaciones, flanqueo, arte, partículas y audio.
+- **Referencias**: doc 07 (combate) · SPEC-001 §3/§8 · SPEC-002 (stats data-driven).
+- **Delegación**: contrato y revisión de determinismo = **Arquitecto/Sol Xhigh**;
+  auditoría de integración = **Tierra High**; kernel acotado = **Luna Max o
+  MiniMax M3 supervisado** según tamaño; tests focalizados = **Sol Low/Medium**.
+  **GPT-5.3 Codex-Spark** queda condicional para búsquedas, microdiffs y tests
+  focalizados si el runtime lo expone; no estuvo disponible para invocación en
+  la sesión de este replan y no se le atribuye ejecución.
+- **DoD**: matriz melee/ranged determinista · alcances y velocidades distintos
+  observables desde datos/HUD · cooldown global v1 exacto · save/replay
+  bit-exactos · gates globales verdes.
+
+#### Sprint 1.6B — apertura económica completa ⏳ PLANIFICADO
+- **Objetivo**: iniciar con centro y aldeanos y llegar a producción militar sin
+  depósitos, unidades ni edificios militares inyectados después del setup.
+- **Entregables**:
+  1. `resource_spawns` del mapa compilado alimenta depósitos runtime; el patrón
+     fijo queda sólo como fixture legacy.
+  2. Comando append-only de recolección explícita y órdenes de grupo, con
+     agotamiento/reasignación y dropoff deterministas.
+  3. Centros egipcio y romano producen sus aldeanos reales.
+  4. Identidad de civilización y época inicial por jugador; gates de unidad,
+     edificio y tecnología impiden usar contenido de otra civilización.
+  5. IA adapta demanda de A/B/Me, repone aldeanos y progresa desde la apertura.
+- **Exclusiones**: materiales intermedios/recetas, población por viviendas,
+  cancelaciones, reparación, proyectiles y arte/audio.
+- **Referencias**: doc 24 (recursos) · doc 33 (economía/balance) · SPEC-002
+  (`map`/`civ`) · SPEC-004 · SPEC-005.
+- **Delegación**: contrato, civ/época y revisión = **Arquitecto/Sol Xhigh**;
+  mapa/compilador y helpers de economía = **MiniMax M3 supervisado**; adaptador
+  Godot = **Luna Max**; auditoría = **Tierra High**; tests = **Sol Low/Medium**.
+- **DoD**: escenario `centro + 3 aldeanos → recolectar → construir edificio
+  militar → entrenar ejército` sin mutaciones privilegiadas · IA recorre el
+  mismo camino · save/load/replay a mitad de recolección · gates verdes.
+
+#### Sprint 1.6C — población, construcción y producción completas ⏳ PLANIFICADO
+- **Objetivo**: cerrar el bucle macro del slice y eliminar los atajos v1 que
+  impiden sostener una partida larga.
+- **Entregables**:
+  1. `pop_cost` data-driven, población inicial exacta y `pop_cap` por jugador.
+  2. Vivienda/equivalente por civilización que aporta capacidad; gates de cola
+     correctos al crear, morir, cancelar o perder el productor.
+  3. Catálogo de construcción por civilización completo para el slice, selección
+     de edificio real y validación autoritativa única.
+  4. Cancelación determinista de obra y producción con política de reembolso
+     explícita; colas, rally y feedback de rechazos completos.
+  5. Construcción y producción integradas en IA y HUD sin leer/mutar GameState
+     desde presentación.
+- **Exclusiones**: materiales intermedios/recetas M2–M3, reparación avanzada,
+  formaciones, arte y audio.
+- **Referencias**: SPEC-004 Partes I–II · SPEC-006 · docs 24/33/34.
+- **Delegación**: contrato/reembolsos/estado persistente = **Arquitecto/Sol
+  Xhigh**; kernel y migración = **Luna Max o MiniMax M3 supervisado** con
+  revisión independiente; UI = **Luna Max**; tests = **Sol Low/Medium**.
+- **DoD**: población coincide con unidades+colas en todo tick · vivienda desbloquea
+  producción · cancelar/destruir no fuga recursos ni población · partida humana
+  e IA sostenibles desde aldeanos hasta victoria · gates verdes.
+
+#### Sprint 1.7 — proyectiles deterministas + ATTACK/ATTACK_MOVE ⏳ PLANIFICADO
+- **Objetivo**: cerrar las órdenes y la resolución de combate necesarias para
+  una partida RTS completa antes de invertir en presentación final.
+- **Entregables**:
+  1. Proyectiles autoritativos deterministas para armas con tiempo de vuelo:
+     spawn, trayectoria, impacto/fallo, destrucción y persistencia.
+  2. Cadencia por unidad/arma y velocidad de proyectil data-driven, integradas
+     en la misma migración versionada de catálogo, estado, save y checksum.
+  3. Comandos append-only `ATTACK` y `ATTACK_MOVE`, con validación de ownership,
+     fog como política de presentación y targeting canónico.
+  4. Integración de órdenes de grupo, persecución, reacquisición y prioridad de
+     objetivos para jugador e IA.
+  5. Feedback provisional de órdenes/proyectiles mediante geometría existente,
+     sin requerir assets ni audio finales.
+- **Exclusiones**: formaciones avanzadas, cobertura direccional, flanqueo,
+  balística visual no autoritativa, arte final y audio.
+- **Referencias**: doc 07 · SPEC-001 §6–§9 · SPEC-005 · SPEC-006.
+- **Delegación**: contrato y orden de sistemas = **Arquitecto/Sol Xhigh**;
+  auditoría de riesgos = **Tierra High**; kernel/proyectiles = **Luna Max o
+  MiniMax M3 supervisado**; input/HUD = **Luna Max**; pruebas = **Sol
+  Low/Medium**.
+- **DoD**: ATTACK y ATTACK_MOVE sobreviven save/replay · proyectiles producen
+  el mismo impacto/tick/checksum en ejecuciones repetidas · humano e IA usan las
+  órdenes · partida desde aldeanos hasta victoria sin comandos de debug · gates
+  verdes. Este DoD constituye el **cierre mecánico de Fase 1**.
+
+#### Post-1.7 — arte, audio y feel (diferido por decisión del Director)
+- **Condición de entrada**: cierre mecánico 1.7 aceptado; no comienza antes.
+- **Alcance posterior**: SPEC-003 final, presupuesto, assets reales M1, audio,
+  animación/partículas y PERF-1 sobre hardware mínimo. No se declara
+  implementado ni financiado en este plan.
 
 ---
 
@@ -257,6 +353,7 @@ Ver `docs/REPORTE_SPRINT_1.5.md`.
 | Revisión arquitectónica | GPT-5.6 Tierra High | Dependencias, riesgos, coherencia del roadmap y segunda lectura | Medio |
 | QA/documentación | GPT-5.6 Sol Low/Medium | Tests puros, checklists, SPECs y reportes de alcance cerrado | Bajo/medio |
 | Volumen externo | MiniMax M3 supervisado | Helpers puros, boilerplate y datos con paquete mínimo sellado | Bajo; exige aprobación de egress |
+| Microtareas condicionales | GPT-5.3 Codex-Spark | Búsquedas rápidas, diffs pequeños y tests focalizados **cuando el runtime lo exponga** | Bajo; no disponible para invocación en esta sesión |
 
 **Reglas permanentes** (aprendidas en Fase 0, no negociables):
 1. **Térmica**: builds `nice -n 19` y `-j2` máximo; una tarea pesada a la vez (el equipo se apaga).
@@ -272,14 +369,14 @@ Ver `docs/REPORTE_SPRINT_1.5.md`.
 
 | Riesgo | Impacto | Mitigación |
 |---|---|---|
-| **Arte** = mayor coste real del proyecto | Sprint 1.6 puede estancar la release | Decisión de presupuesto explícita en 1.6 con los números del doc 13; estilo low-poly/estilizado reduce coste; el slice M1 acota el volumen inicial |
+| **Arte/audio** = mayor coste real del proyecto | Puede estancar la release antes de que el juego esté mecánicamente completo | Diferido hasta aceptar 1.7; después, decisión de presupuesto explícita con doc 13 y medición PERF-1 |
 | Cuotas de modelos (Kimi 403 recurrente; MiniMax 600s en bridge) | Sprints de UI se alargan | Briefs por lotes pequeños; fallback documentado (2 fallos → Arquitecto o reasignación); `claude-minimax` para tareas largas |
 | PERF-0/2 sin hardware físico de referencia | ADR-011 sigue TARGET; sorpresas tarde | Mantener perfilado continuo en máquina dev; conseguir acceso a UHD 620 antes de Fase 2 |
 | Scope creep hacia 15 épocas / 12 civs | Nunca se lanza | ADR-012 protege: TODO contenido extra es post-1.0; este plan es el instrumento de control |
 | Determinismo roto por sistemas nuevos (IA, triggers, campaña) | Se pierde la preparación MP y los replays | G1–G5 en CI en cada sprint = P0 bloqueante; todo muta vía Commands |
 | Gate técnico confundido con pacing divertido | Se declara “jugable” una partida demasiado corta | Separar pruebas deterministas de playtests humanos; registrar duración, apertura económica y decisiones por minuto |
 | UI/Godot sin tests automatizados suficientes | Fugas de información o regresiones de input sobreviven a CTest | Helpers puros bajo CTest + headless + evidencia visual; añadir automatización de input en un sprint de QA |
-| Combate simplista (directriz del Director: posición/formaciones deben contar) | Profundidad insuficiente en beta | Candidato combate v2 en Sprint 2.4 sobre doc 07; registrado en memoria `chunsa-diseno-combate-futuro` |
+| Combate simplista (directriz del Director: posición/formaciones deben contar) | Profundidad insuficiente en beta | Ranged/cadencia en 1.6A y proyectiles+órdenes en 1.7; formaciones/flanqueo permanecen candidatos de combate v2 en Sprint 2.4 |
 | Docs canónicos vs viejos (04/05/06/11 supersedidos) | Datos generados desde fuente equivocada | Todo brief de datos cita el doc canónico por ruta y sección; INDICE_MAESTRO §0 manda |
 
 ---

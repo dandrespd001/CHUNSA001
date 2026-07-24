@@ -1,26 +1,51 @@
-# Doctrina de delegación de modelos — CHUNSA (2026-07-18)
+# Doctrina de delegación de modelos — CHUNSA (actualizada 2026-07-24)
 
-**Autor**: Arquitecto. Basada en benchmarks públicos (julio 2026) + evidencia empírica de los Sprints 0.1A/0.1B.
+**Autor**: Arquitecto. Basada en benchmarks públicos (julio 2026) + evidencia
+empírica de los sprints ejecutados. Los nombres de perfiles disponibles dependen
+del runtime de cada sesión; declarar un perfil aquí no implica que haya sido
+invocado.
 
-## Los cuatro roles
+## Pool principal Codex
 
-| Agente | Acceso | Para qué es MEJOR | Evitar |
-|---|---|---|---|
-| **Claude Arquitecto** (esta sesión, Opus 4.8) | — | Arquitectura, specs/contratos, revisión línea a línea, integración, seguridad, decisiones de determinismo, orquestación | Generación masiva (caro) |
-| **Sonnet 5** (Claude, tu suscripción) | `claude --model sonnet -p "..." --dangerously-skip-permissions` (agéntico; rama propia) | **Tareas agénticas con JUICIO durante la implementación**: conectar sistemas del kernel, refactors delicados, código donde la corrección importa más que el volumen. El punto medio: mejor razonamiento que M3, más barato que Opus/Fable. Cuando M3 no razona lo suficiente y no justifica gastar al Arquitecto | Boilerplate trivial (usa M3); frontend puro (usa Kimi) |
-| **Kimi K3** (Moonshot, 2.8T) | `~/.kimi-code/bin/kimi -p "..."` (agéntico; `-p` ya auto-aprueba) | **① Frontend/UI** (#1 Frontend Code Arena, 1679 Elo): render, GDScript de HUD, escenas · **② Tareas agénticas de largo horizonte multi-archivo** (Coding Index 76.2) | Micro-tareas de un archivo; **cuota limitada — se agota (visto 2×), no dársela a tareas que deban terminar sí o sí** |
-| **MiniMax M3** | ① bridge MCP **v2.1** (paralelo, cap 600 s) · ② `fish -c 'claude-minimax --dangerously-skip-permissions -p "..."'` (Claude Code sobre M3 **ctx 1M**, sin cap, con web) | **① CÓDIGO EXTENSO de spec cerrada** (módulos grandes, multi-archivo) — es el más BARATO (MSA: 1/20 de coste a 1M) → darle el VOLUMEN · ② Módulos únicos (serialize/sha/Dial/visión impecables) · ③ Contexto masivo barato · ④ Investigación con navegación (BrowseComp 83.5) vía claude-minimax · ⑤ Datos masivos. Bridge = cero carga local (el más seguro para paralelo) | Razonamiento abstracto novedoso ("ejecutor competente, no gran razonador"); firmas de API en prosa (las inventa — dáselas como código); código EXTENSO por el bridge si tarda >600 s (usa claude-minimax sin cap) |
+| Agente | Para qué es mejor | Evitar |
+|---|---|---|
+| **GPT-5.6 Sol Xhigh** | Arquitectura, contratos, revisión final, integración, seguridad y determinismo | Generación masiva que pueda cerrarse con un contrato |
+| **GPT-5.6 Tierra High** | Auditoría independiente, dependencias, riesgos y segunda lectura de kernel | Trabajo visual o boilerplate extenso |
+| **GPT-5.6 Luna Max** | Godot, UI/HUD, adaptadores y paquetes multiarchivo de alcance cerrado | Decisiones finales de estado/save/replay |
+| **GPT-5.6 Sol Low/Medium** | Inventarios, tests puros, documentación y verificación focal | Migraciones arquitectónicas no especificadas |
+| **GPT-5.3 Codex-Spark** (condicional) | Microtareas rápidas: búsquedas dirigidas, reproducción localizada, diffs pequeños y tests focalizados | Arquitectura, cambios amplios o cualquier tarea que requiera asumir disponibilidad |
 
-## Estrategia de reparto por consumo (equilibrar las 3 suscripciones)
+**Disponibilidad registrada**: GPT-5.3 Codex-Spark **no estuvo disponible para
+invocación en la sesión que produjo el replan de Sprints 1.6A–1.7**. Por tanto,
+no se le atribuye análisis, código, pruebas ni revisión ya ejecutados. Su uso
+futuro exige comprobar primero que el runtime lo expone y registrar la
+invocación real en el reporte del sprint.
 
-**Principio: cada token en el modelo más barato que lo hace bien.** De más barato a más caro por token: **MiniMax M3 ≪ Kimi K3 < Sonnet 5 < Opus (Arquitecto)**.
+## Ejecutores externos o heredados
 
-- **El VOLUMEN de código → MiniMax M3** (bridge v2.1). Es 1/20 del coste; ahora optimizado para código extenso: `max_tokens=65536`, `thinking=disabled` (no gasta tokens/tiempo razonando lo que la spec ya trae → menos truncamiento, menos timeouts), `temp=1.0/top_p=0.95`. Dale módulos grandes, boilerplate, datos, cualquier cosa donde la spec cerrada + golden basten. Código extenso que pase de 600 s → por `claude-minimax` (sin cap).
-- **El JUICIO de kernel → Sonnet 5.** Reservado para donde la corrección/determinismo importa más que el volumen (combate, moral, integraciones delicadas). No malgastarlo en boilerplate (eso es de M3).
-- **El FRONTEND/render → Kimi K3.** Su especialidad; cuota limitada → no para lo que deba terminar sí o sí.
-- **Lo indelegable → Arquitecto (Opus).** Contratos, revisión línea a línea, integración, decisiones. El más caro: solo lo que nadie más puede hacer.
+| Agente | Uso permitido | Condición |
+|---|---|---|
+| **MiniMax M3** | Volumen de código con spec cerrada, helpers puros, datos y boilerplate | API oficial supervisada, allowlist mínima, revisión del manifiesto y aprobación de egress de plataforma |
+| **Sonnet 5** | Integraciones de kernel delicadas cuando esté disponible por un canal autorizado | Rama/worktree acotado y revisión completa del Arquitecto |
+| **Kimi K3** | Frontend/UI y cambios Godot de horizonte largo | Sólo cuando su runtime/cuota estén disponibles; no es dependencia crítica |
 
-**Bridge v2.1 (2026-07-21):** `MINIMAX_MCP_THINKING` (enabled/disabled), `MINIMAX_MCP_MAX_TOKENS` hasta 131072, `MINIMAX_MCP_TOP_P`. Config del proyecto: thinking disabled + 65K tokens (perfil código extenso). Requiere `/mcp` reconectar para activar.
+## Estrategia de reparto por consumo
+
+**Principio: cada token en el perfil menos costoso que satisfaga el contrato,
+sin delegar la aceptación.** Codex-Spark no entra en la planificación efectiva
+hasta que el runtime exponga disponibilidad y coste.
+
+- **Arquitectura y aceptación → Sol Xhigh.**
+- **Auditoría independiente → Tierra High.**
+- **Frontend/volumen acotado → Luna Max.**
+- **QA y documentación → Sol Low/Medium.**
+- **Volumen externo → MiniMax M3**, sólo mediante el runner seguro y si la
+  plataforma aprueba el paquete exacto.
+- **La MICROITERACIÓN → Codex-Spark, condicional.** Si está disponible, usarlo
+  para una pregunta o diff pequeño con archivos y tests enumerados; si no está
+  expuesto, reasignar sin bloquear el sprint y sin inventar una ejecución.
+- **Lo indelegable → Arquitecto/Sol Xhigh.** Contratos, revisión línea a
+  línea, integración y decisión final.
 
 ## Reglas operativas (aprendidas a golpes)
 
@@ -30,11 +55,28 @@
 4. **Todo pasa la cascada**: compilación `-Werror` → tests/golden → revisión del Arquitecto → integración con procedencia (`generado: <modelo> · revisado: Arquitecto`).
 5. **Regla de fallback**: 2 fallos → lo escribe el Arquitecto.
 6. **Recursos locales**: los tres son inferencia remota (CPU local ~0) ✓; los builds que disparen los agénticos deben heredar el protocolo `nice -19 -j2`.
+7. **Disponibilidad antes de atribución**: un modelo condicional solo cuenta
+   como delegado si existe una invocación verificable en la sesión; una
+   intención, perfil o brief preparado no es ejecución.
 
-## Asignaciones tipo para los próximos sprints
+## Asignaciones tipo desde Sprint 1.6
 
-- Adaptador GDExtension multi-archivo + demo → **Kimi** (agéntico, multi-archivo).
-- HUD/UI del juego (0.3+), herramientas de visualización → **Kimi** (frontend).
-- Sistemas del kernel de a un módulo (visión, combate, moral) → **M3 bridge** (spec cerrada).
-- Verificación factual de fichas T3/T-B7 con fuentes web → **claude-minimax** (navegación) + veredicto final del Arquitecto.
-- Análisis del corpus completo de /Investigación (17K líneas) → **claude-minimax** (1M ctx barato).
+- Adaptador GDExtension, demo y HUD → **Luna Max**.
+- Sistemas del kernel por módulo → **Tierra High** para auditoría y
+  **Luna Max/MiniMax M3** para implementación cerrada, con aceptación Sol Xhigh.
+- Inventarios y matrices de cobertura → **Sol Low/Medium**.
+- Paquetes externos de volumen → **MiniMax M3** sólo con allowlist y egress
+  aprobados; si la plataforma deniega, reasignar localmente.
+- **Sprint 1.6A**: contrato ranged/movilidad/cadencia → Arquitecto; kernel
+  acotado → Tierra/Luna; búsqueda de call sites y tests unitarios pequeños →
+  Sol Low o Codex-Spark si está disponible.
+- **Sprint 1.6B**: recursos de mapa/compilador y helper de recolección →
+  Luna/MiniMax; civ/época y command stream → Tierra + Arquitecto; Godot/UI →
+  Luna.
+- **Sprint 1.6C**: población, cancelaciones y persistencia → Tierra/Luna;
+  datos y fixtures → MiniMax o Sol Medium; HUD → Luna; microdiffs/tests →
+  Codex-Spark condicional.
+- **Sprint 1.7**: contrato ATTACK/ATTACK_MOVE y orden de sistemas →
+  Arquitecto; proyectiles deterministas → Tierra/Luna/MiniMax por módulo;
+  input y feedback provisional → Luna.
+- **Arte/audio**: no asignar antes de aceptar el cierre mecánico de Sprint 1.7.
