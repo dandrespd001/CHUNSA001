@@ -54,7 +54,115 @@ static void run_scenario(GameState& g) {
     }
 }
 
+static EcoCitizenIn citizen_at(int64_t x_raw, int64_t y_raw,
+                               EcoState state, uint32_t assigned,
+                               int32_t carry = 0, uint8_t resource = 0) {
+    EcoCitizenIn in{};
+    in.pos_x = x_raw;
+    in.pos_y = y_raw;
+    in.state = state;
+    in.assigned_deposit = assigned;
+    in.carry = carry;
+    in.carry_resource_idx = resource;
+    in.speed_mtpt = 100;
+    return in;
+}
+
+static void test_nearest_tie_and_invalid_retarget() {
+    constexpr int64_t T = FX_ONE_RAW;
+    const EcoDeposit deposits[2] = {
+        {-2 * T, 0, 0, 50},
+        { 2 * T, 0, 1, 50},
+    };
+    FatalReason fatal = FatalReason::NONE;
+
+    CHECK(eco_find_nearest_deposit(deposits, 2, 0, 0, fatal) == 0u);
+
+    const EcoCitizenIn invalid = citizen_at(0, 0, EcoState::SEEK, 99u);
+    const EcoCitizenOut out =
+        eco_step_citizen(invalid, deposits, 2, 20 * T, 20 * T, fatal);
+    CHECK(fatal == FatalReason::NONE);
+    CHECK(out.assigned_deposit == 0u);
+    CHECK(out.state == EcoState::SEEK);
+}
+
+static void test_exhaustion_retargets_deterministically() {
+    constexpr int64_t T = FX_ONE_RAW;
+    const EcoDeposit deposits[2] = {
+        {0, 0, 0, 0},
+        {2 * T, 0, 1, 50},
+    };
+    FatalReason fatal = FatalReason::NONE;
+
+    const EcoCitizenIn harvesting =
+        citizen_at(0, 0, EcoState::HARVEST, 0u);
+    const EcoCitizenOut exhausted =
+        eco_step_citizen(harvesting, deposits, 2, 20 * T, 20 * T, fatal);
+    CHECK(exhausted.state == EcoState::SEEK);
+    CHECK(exhausted.assigned_deposit == 0u);
+    CHECK(!exhausted.did_harvest);
+
+    EcoCitizenIn seeking = citizen_at(exhausted.pos_x, exhausted.pos_y,
+                                      exhausted.state,
+                                      exhausted.assigned_deposit,
+                                      exhausted.carry,
+                                      exhausted.carry_resource_idx);
+    const EcoCitizenOut retargeted =
+        eco_step_citizen(seeking, deposits, 2, 20 * T, 20 * T, fatal);
+    CHECK(fatal == FatalReason::NONE);
+    CHECK(retargeted.assigned_deposit == 1u);
+    CHECK(retargeted.state == EcoState::SEEK);
+}
+
+static void test_harvest_clamps_and_exact_dropoff() {
+    constexpr int64_t T = FX_ONE_RAW;
+    FatalReason fatal = FatalReason::NONE;
+
+    {
+        const EcoDeposit deposits[1] = {{0, 0, 2, 3}};
+        const EcoCitizenIn harvesting =
+            citizen_at(0, 0, EcoState::HARVEST, 0u);
+        const EcoCitizenOut out =
+            eco_step_citizen(harvesting, deposits, 1, 20 * T, 20 * T, fatal);
+        CHECK(out.did_harvest);
+        CHECK(out.harvested_amount == 3);
+        CHECK(out.carry == 3);
+        CHECK(out.carry_resource_idx == 2u);
+    }
+
+    {
+        const EcoDeposit deposits[1] = {{0, 0, 1, 100}};
+        const EcoCitizenIn almost_full =
+            citizen_at(0, 0, EcoState::HARVEST, 0u, ECO_CARRY_CAP - 1, 1u);
+        const EcoCitizenOut out =
+            eco_step_citizen(almost_full, deposits, 1, 20 * T, 20 * T, fatal);
+        CHECK(out.did_harvest);
+        CHECK(out.harvested_amount == 1);
+        CHECK(out.carry == ECO_CARRY_CAP);
+        CHECK(out.state == EcoState::RETURN);
+    }
+
+    {
+        const EcoDeposit deposits[1] = {{0, 0, 0, 50}};
+        const EcoCitizenIn returning =
+            citizen_at(10 * T, 10 * T, EcoState::RETURN, 0u, 37, 2u);
+        const EcoCitizenOut out =
+            eco_step_citizen(returning, deposits, 1, 10 * T, 10 * T, fatal);
+        CHECK(out.did_dropoff);
+        CHECK(out.dropoff_amount == 37);
+        CHECK(out.dropoff_resource_idx == 2u);
+        CHECK(out.carry == 0);
+        CHECK(out.state == EcoState::SEEK);
+    }
+
+    CHECK(fatal == FatalReason::NONE);
+}
+
 int main() {
+    test_nearest_tie_and_invalid_retarget();
+    test_exhaustion_retargets_deterministically();
+    test_harvest_clamps_and_exact_dropoff();
+
     auto* g1 = new GameState();
     run_scenario(*g1);
 

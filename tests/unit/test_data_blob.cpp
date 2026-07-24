@@ -269,6 +269,22 @@ int main() {
     CHECK(cat.units[legionary].speed_millitile_tick == 50);
     CHECK(cat.units[legionary].morale == 70);
 
+    const UnitId ballista =
+        catalog_find_unit(cat, "rome:ballista_crew", std::strlen("rome:ballista_crew"));
+    CHECK(ballista != INVALID_UNIT_ID);
+    CHECK(cat.units[ballista].unit_class == UnitClassV1::Artillery);
+    CHECK(cat.units[ballista].attack == 8);
+    CHECK(cat.units[ballista].range_millitiles == 4000);
+    CHECK(cat.units[ballista].speed_millitile_tick == 35);
+
+    const UnitId chariot =
+        catalog_find_unit(cat, "egipto:chariot_warrior", std::strlen("egipto:chariot_warrior"));
+    CHECK(chariot != INVALID_UNIT_ID);
+    CHECK(cat.units[chariot].unit_class == UnitClassV1::Cavalry);
+    CHECK(cat.units[chariot].attack == 9);
+    CHECK(cat.units[chariot].range_millitiles == 800);
+    CHECK(cat.units[chariot].speed_millitile_tick == 70);
+
     const UnitId citizen = catalog_find_unit(cat, "egipto:work_crew", 16);
     CHECK(citizen != INVALID_UNIT_ID);
     CHECK(cat.units[citizen].unit_class == UnitClassV1::Citizen);
