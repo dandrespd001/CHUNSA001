@@ -19,7 +19,8 @@ resource_costs:
 build_time_ticks: 600
 trains:
   - egipto:chariot_warrior
-researches: []
+researches:
+  - egipto:composite_bow_program
 required_capabilities: []
 grants_capabilities: []
 recipes: []
