@@ -103,6 +103,14 @@ inline std::vector<uint8_t> cve_str_arr(const std::vector<std::string>& items) {
     for (const auto& s : items) append(b, cve_str(s));
     return b;
 }
+// Sprint 1.2 (SPEC-004 §11.1/§12.1): array de enteros (p.ej. epoch_window).
+inline std::vector<uint8_t> cve_arr_int(const std::vector<int64_t>& items) {
+    std::vector<uint8_t> b;
+    w_u8(b, 0x30u);
+    w_u32(b, static_cast<uint32_t>(items.size()));
+    for (int64_t v : items) append(b, cve_int(v));
+    return b;
+}
 // `kvs` DEBE venir ya en orden ascendente estricto por clave (responsabilidad
 // del caller, igual que exige cve_parse al leerlo).
 inline std::vector<uint8_t> cve_obj(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& kvs) {
@@ -124,11 +132,23 @@ struct BuildingSpec {
     int64_t build_time = 30;
     bool constructible = true;
     int64_t cost_a = 100, cost_b = 0, cost_me = 20;
+    // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window + listas de
+    // referencia (vacías por defecto — el fixture de Sprint 1.1 no las
+    // ejercitaba; los tests de resolución exitosa las pueblan explícitamente).
+    int64_t epoch_min = 1, epoch_max = 15;
+    std::vector<std::string> trains{};
+    std::vector<std::string> researches{};
+    std::vector<std::string> required_capabilities{};
+    // Sprint 1.2 (SPEC-004 §12.1): capacidades declaradas en el manifest de
+    // ESTE blob fixture (fuente de la tabla CapabilityId) — normalmente el
+    // superconjunto de `required_capabilities` que el test quiera ejercitar.
+    std::vector<std::string> declared_capabilities{};
 };
 
 inline std::vector<uint8_t> build(const BuildingSpec& spec) {
     // Objeto building — claves en orden ASCENDENTE estricto (build_time_ticks
-    // < constructible < dropoff_resources < footprint < id < resource_costs < stats).
+    // < constructible < dropoff_resources < epoch_window < footprint < id <
+    // required_capabilities < researches < resource_costs < stats < trains).
     auto footprint = cve_obj({
         {"height_cells", cve_int(spec.height)},
         {"width_cells", cve_int(spec.width)},
@@ -140,16 +160,25 @@ inline std::vector<uint8_t> build(const BuildingSpec& spec) {
         {"Me", cve_int(spec.cost_me)},
     });
     auto dropoff = cve_str_arr({"A"});
+    auto epoch_window = cve_arr_int({spec.epoch_min, spec.epoch_max});
     auto building_obj = cve_obj({
         {"build_time_ticks", cve_int(spec.build_time)},
         {"constructible", cve_bool(spec.constructible)},
         {"dropoff_resources", dropoff},
+        {"epoch_window", epoch_window},
         {"footprint", footprint},
         {"id", cve_str(spec.id)},
+        {"required_capabilities", cve_str_arr(spec.required_capabilities)},
+        {"researches", cve_str_arr(spec.researches)},
         {"resource_costs", costs},
         {"stats", stats},
+        {"trains", cve_str_arr(spec.trains)},
     });
-    auto manifest_obj = cve_obj({ {"package_id", cve_str(std::string("test.fixture"))} });
+    // Claves ASCENDENTE estricto: declared_capabilities < package_id.
+    auto manifest_obj = cve_obj({
+        {"declared_capabilities", cve_str_arr(spec.declared_capabilities)},
+        {"package_id", cve_str(std::string("test.fixture"))},
+    });
 
     std::vector<uint8_t> manifest_record;
     w_u32(manifest_record, static_cast<uint32_t>(manifest_obj.size()));

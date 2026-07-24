@@ -95,6 +95,13 @@ add_executable(chunsa_test_replay_v3 tests/unit/test_replay_v3.cpp)
 target_link_libraries(chunsa_test_replay_v3 PRIVATE chunsa_sim_core)
 add_test(NAME replay_v3 COMMAND chunsa_test_replay_v3)
 
+# --- Test Sprint 1.2 (K2): producción, tecnología y épocas (SPEC-004 §11+§12) ---
+add_executable(chunsa_test_production_tech tests/unit/test_production_tech.cpp)
+target_link_libraries(chunsa_test_production_tech PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_production_tech PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME production_tech COMMAND chunsa_test_production_tech)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
