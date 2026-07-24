@@ -118,7 +118,11 @@ inline void init_citizen_from_catalog(GameState& g, uint32_t i,
                                       const UnitDefinitionV1& def) noexcept {
     g.hp[i] = def.hp; g.max_hp[i] = def.hp;
     g.attack[i] = 0; g.range_mt[i] = 0;
-    g.unit_class[i] = 3;  // citizen: excluido de combat_system
+    // citizen: attack=0 + el guard de ATACANTE `unit_class[i] > 2` en
+    // combat_system/aggro_system lo mantienen sin atacar/perseguir. Como
+    // OBJETIVO, desde SPEC-004 §7.1 (enmienda Sprint 1.4-cierre) SÍ es
+    // vulnerable en combate — ya no está excluido en ese rol.
+    g.unit_class[i] = 3;
     g.atk_cd[i] = 0;
     g.speed_mtpt[i] = def.speed_millitile_tick;
     g.morale[i] = def.morale;
@@ -214,10 +218,12 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             return RejectReason::ACCEPTED;
         }
         case CommandType::SPAWN_CITIZEN: {
-            // Ciudadano económico: unit_class=3 lo excluye de combat_system (ambos
-            // lados: atacante y objetivo — ver el guard `> 2` allí). Alias
-            // restringido a clase Citizen del mismo camino data-driven que
-            // SPAWN_UNIT (SPEC-002 §8.4).
+            // Ciudadano económico: unit_class=3 lo excluye de combat_system/
+            // aggro_system como ATACANTE (guard `unit_class[i] > 2` intacto:
+            // no ataca ni persigue). Como OBJETIVO SÍ es vulnerable desde
+            // SPEC-004 §7.1 (enmienda Sprint 1.4-cierre) — ver el guard de
+            // targeting allí. Alias restringido a clase Citizen del mismo
+            // camino data-driven que SPAWN_UNIT (SPEC-002 §8.4).
             const Vec2Fx p{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
             if (!world_contains(p)) return RejectReason::MALFORMED;
 
@@ -259,7 +265,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.owner[i] = static_cast<uint8_t>(c.emitter);
             g.hp[i] = g.max_hp[i] = 20;
             g.attack[i] = 0; g.range_mt[i] = 0;
-            g.unit_class[i] = 3;  // citizen: excluido de combat_system
+            g.unit_class[i] = 3;  // citizen: no ataca; SÍ vulnerable (SPEC-004 §7.1)
             g.atk_cd[i] = 0;
             g.speed_mtpt[i] = c.p.speed_mtpt;
             g.morale[i] = MORALE_MAX;
@@ -811,6 +817,17 @@ inline int32_t rps_mult_vs_building_bp(uint8_t atk_class) noexcept {
     return (atk_class == 2u || atk_class == 4u) ? 20000 : 10000;
 }
 
+// RPS contra aldeano defensor (Sprint 1.4-cierre, SPEC-004 §7.1 — enmienda del
+// Director): la tabla `rps_mult_bp` es 3×3 (clases 0..2); un aldeano
+// (unit_class==3) como `tgt_class` haría OOB. Rama análoga a
+// `rps_mult_vs_building_bp`: cualquier atacante inflige ×1.0 (10000 bp)
+// neutro contra un aldeano. Balance v1 ajustable — documentado, no es
+// decisión final de diseño.
+inline int32_t rps_mult_vs_citizen_bp(uint8_t atk_class) noexcept {
+    (void)atk_class;
+    return 10000;
+}
+
 // Sistema de combate (Sprint 0.3). Cada tick, período 1: cada unidad viva en
 // orden ascendente busca al enemigo más cercano en rango (celda propia + 8
 // vecinas del spatial hash), le inflige daño RPS y entra en cooldown.
@@ -850,11 +867,14 @@ inline void combat_system(GameState& g) noexcept {
                     if (!t.alive[j]) continue;
                     if (g.hp[j] <= 0) continue;
                     if (g.owner[j] == g.owner[i]) continue;
-                    // Objetivo válido: unidad de combate (unit_class 0..2) O
-                    // edificio (entity_kind==1, aunque su unit_class==255 lo
-                    // deje fuera del rango 0..2). Ciudadanos (unit_class==3)
-                    // siguen sin ser objetivo (Sprint 1.1, SPEC-004 §7).
-                    if (g.unit_class[j] > 2 && g.entity_kind[j] != 1u) continue;
+                    // Objetivo válido: unidad de combate (unit_class 0..2),
+                    // aldeano (unit_class==3 — SPEC-004 §7.1, enmienda del
+                    // Director Sprint 1.4-cierre: ahora vulnerable en combate)
+                    // O edificio (entity_kind==1, aunque su unit_class==255
+                    // lo deje fuera del rango 0..3). Excluido: unit_class>3
+                    // que no sea edificio (no hay entidades vivas así hoy).
+                    if (g.unit_class[j] > 2 && g.unit_class[j] != 3u
+                        && g.entity_kind[j] != 1u) continue;
 
                     FatalReason local_fatal = FatalReason::NONE;
                     const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
@@ -872,7 +892,9 @@ inline void combat_system(GameState& g) noexcept {
         if (best != SH_EMPTY) {
             const int32_t mult = (g.entity_kind[best] == 1u)
                                 ? rps_mult_vs_building_bp(g.unit_class[i])
-                                : rps_mult_bp(g.unit_class[i], g.unit_class[best]);
+                                : (g.unit_class[best] == 3u)
+                                    ? rps_mult_vs_citizen_bp(g.unit_class[i])
+                                    : rps_mult_bp(g.unit_class[i], g.unit_class[best]);
             const int32_t dmg = static_cast<int32_t>(
                 (static_cast<int64_t>(g.attack[i]) * mult) / 10000);
             g.hp[best] -= dmg;
@@ -940,9 +962,11 @@ inline void aggro_system(GameState& g) noexcept {
                     if (!t.alive[j]) continue;
                     if (g.hp[j] <= 0) continue;
                     if (g.owner[j] == g.owner[i]) continue;
-                    // Mismo criterio que combat_system (Sprint 1.1, SPEC-004
-                    // §7): edificios sí son objetivo de aggro; ciudadanos no.
-                    if (g.unit_class[j] > 2 && g.entity_kind[j] != 1u) continue;
+                    // Mismo criterio que combat_system (SPEC-004 §7.1,
+                    // enmienda Sprint 1.4-cierre): edificios y aldeanos
+                    // (unit_class==3) sí son objetivo válido de aggro.
+                    if (g.unit_class[j] > 2 && g.unit_class[j] != 3u
+                        && g.entity_kind[j] != 1u) continue;
 
                     FatalReason local_fatal = FatalReason::NONE;
                     const Vec2Fx pos_j{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};

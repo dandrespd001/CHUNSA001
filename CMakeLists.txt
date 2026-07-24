@@ -119,6 +119,12 @@ add_executable(chunsa_test_ai_skirmish tests/unit/test_ai_skirmish.cpp)
 target_link_libraries(chunsa_test_ai_skirmish PRIVATE chunsa_sim_core)
 add_test(NAME ai_skirmish COMMAND chunsa_test_ai_skirmish)
 
+# --- Test Sprint 1.4 (K3): skirmish CON ECONOMÍA — aldeanos vulnerables --------
+# (SPEC-004 §7.1: partida completa con economía que termina por conquista)
+add_executable(chunsa_test_ai_skirmish_eco tests/unit/test_ai_skirmish_eco.cpp)
+target_link_libraries(chunsa_test_ai_skirmish_eco PRIVATE chunsa_sim_core)
+add_test(NAME ai_skirmish_eco COMMAND chunsa_test_ai_skirmish_eco)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
