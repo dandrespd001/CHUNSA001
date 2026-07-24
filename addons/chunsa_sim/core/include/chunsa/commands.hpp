@@ -22,6 +22,15 @@ enum class CommandType : uint16_t {
     // se reinterpretan por tipo (ver comentario de CmdPayload más abajo).
     PLACE_BUILDING = 7,
     ASSIGN_BUILD = 8,
+    // Sprint 1.2 (SPEC-004 §11.3/§12.3): producción, tecnología y épocas. El
+    // CmdPayload SIGUE sin cambiar de layout — TRAIN_UNIT/RESEARCH_TECH
+    // reutilizan p.handle+p.unit_id (mismo patrón que PLACE_BUILDING),
+    // SET_RALLY reutiliza p.handle+p.x_raw/p.y_raw (mismo patrón que
+    // MOVE_TO), EPOCH_UP no usa ningún campo (p.handle=0, resto=0/centinela).
+    TRAIN_UNIT = 9,
+    SET_RALLY = 10,
+    RESEARCH_TECH = 11,
+    EPOCH_UP = 12,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

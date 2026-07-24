@@ -47,7 +47,18 @@ namespace chunsa {
 // comparan dos corridas EN VIVO entre sí, así que "regenerar" el golden no
 // requiere tocar ningún archivo aparte de este bump de versión/dominio (ver
 // RESULT del sprint, punto 2).
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 4;
+// Sprint 1.2 (SPEC-004 §13): bump a v5 — el stream gana los arrays de
+// producción/tecnología/épocas (§11.2/§12.2: prod_queue, prod_count,
+// prod_progress, rally_x/y, rally_set, pop_used, player_techs, player_caps,
+// player_epoch, epoch_initial —deviación documentada, ver game_state.hpp—,
+// research_tech, research_progress), añadidos AL FINAL tras todo lo v4 (orden
+// intencional). Cambio de dominio DELIBERADO: no hay golden-checksum de
+// estado persistido en este repo (mismo precedente que los bumps v1→v2,
+// v2→v3 y v3→v4 — ver checksum.hpp de esos sprints); todos los tests de
+// estado comparan dos corridas EN VIVO entre sí. Se mantiene el símbolo
+// `state_checksum_v1` por la misma razón que en sprints anteriores (no tocar
+// call sites).
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 5;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -74,7 +85,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V4", 15);
+    h.bytes("CHUNSA_STATE_V5", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -178,6 +189,29 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_tx[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_ty[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.build_target[i]);
+    // Producción y tecnología (Sprint 1.2, SPEC-004 §11.2/§12.2/§13): AL
+    // FINAL, tras todo lo v4, en el mismo orden que aparecen en §11.2/§12.2
+    // (+ epoch_initial, deviación documentada en game_state.hpp). Todos los
+    // slots (misma convención que unit_id/edificios), sin gate de alive[].
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) h.u32(g.prod_queue[i][k]);
+    }
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.prod_count[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.prod_progress[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i64(g.rally_x[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.i64(g.rally_y[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.rally_set[i]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.i32(g.pop_used[e]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t w = 0; w < TECH_WORDS; ++w) h.u64(g.player_techs[e][w]);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t w = 0; w < CAP_WORDS; ++w) h.u64(g.player_caps[e][w]);
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.player_epoch[e]);
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.epoch_initial[e]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_tech[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_progress[i]);
     return h.digest();
 }
 

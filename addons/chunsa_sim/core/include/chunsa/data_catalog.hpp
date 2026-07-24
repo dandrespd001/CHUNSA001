@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
@@ -90,6 +91,15 @@ struct UnitDefinitionV1 {
     int32_t morale;
     int32_t build_time_ticks;
     int32_t bonus_vs_bp[6];
+    // Sprint 1.2 (SPEC-004 §11.1): costes de entrenamiento (de resource_costs,
+    // ausente=0; solo A/B/Me — misma política que building Parte I) y
+    // pop_cost (constante v1=1, NO viene de datos). §12.4: epoch_window
+    // (mismo campo del schema que building; unit.schema.json NO declara
+    // required_capabilities — el gate correspondiente pasa trivialmente
+    // sobre el conjunto vacío, ver step.hpp/TRAIN_UNIT y RESULT del sprint).
+    int32_t cost_a, cost_b, cost_me;
+    int32_t pop_cost;
+    uint8_t epoch_min, epoch_max;  // 1..15, epoch_min <= epoch_max
 };
 
 struct UnitNameIndexV1 {
@@ -103,6 +113,28 @@ struct UnitNameIndexV1 {
 using BuildingId = uint32_t;
 inline constexpr BuildingId INVALID_BUILDING_ID = 0xFFFFFFFFu;
 
+// Sprint 1.2 (SPEC-004 §11.1/§12.1): tipos de producción/tech. TechId/CapabilityId
+// == índice en DataCatalogV1::techs[]/capability_names[] (mismo patrón que
+// UnitId/BuildingId). Caps del kernel (PROD_*_MAX, TECH_*_MAX, TECH_HARD_CAP,
+// CAP_HARD_CAP) son MÁS ESTRICTOS que los del schema/blob (65535) — mismo
+// espíritu que el footprint 1..8 de BuildingDefinitionV1 (Parte I): un dato
+// real que excediera estos caps se rechaza (catálogo entero), no se trunca.
+using TechId = uint32_t;
+inline constexpr TechId INVALID_TECH_ID = 0xFFFFFFFFu;
+using CapabilityId = uint32_t;
+inline constexpr CapabilityId INVALID_CAPABILITY_ID = 0xFFFFFFFFu;
+
+inline constexpr uint32_t PROD_TRAINS_MAX = 8;
+inline constexpr uint32_t PROD_TECHS_MAX = 8;
+inline constexpr uint32_t BUILDING_REQCAP_MAX = 8;
+inline constexpr uint32_t TECH_PREREQ_MAX = 4;
+inline constexpr uint32_t TECH_GRANT_MAX = 4;
+inline constexpr uint32_t TECH_MUTEX_MAX = 4;
+// Caps duros del kernel (múltiplos de 64 a propósito: GameState::player_techs/
+// player_caps los dimensiona en TECH_WORDS/CAP_WORDS palabras de 64 bits).
+inline constexpr uint32_t TECH_HARD_CAP = 256;
+inline constexpr uint32_t CAP_HARD_CAP = 256;
+
 struct BuildingDefinitionV1 {
     BuildingId id;                 // == índice
     int32_t  hp;                   // > 0
@@ -114,13 +146,63 @@ struct BuildingDefinitionV1 {
     int32_t  cost_a, cost_b, cost_me;  // >= 0 (deducidos al aceptar PLACE_BUILDING)
     uint8_t  dropoff_mask;         // bit0=A bit1=B bit2=Me (de dropoff_resources)
     uint8_t  constructible;        // 0/1 (schema `constructible`)
-    // resto de campos del schema (trains/researches/recipes/...) NO tipados en Parte I
+    // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window (mismo patrón que
+    // unit); trains/researches resueltos desde los record_id del schema
+    // (referencia no resoluble ⇒ catálogo rechazado); required_capabilities
+    // resuelto contra la tabla de capacidades del blob (manifest.declared_
+    // capabilities, ver DataCatalogV1::capability_names).
+    uint8_t  epoch_min, epoch_max;
+    UnitId   trains[PROD_TRAINS_MAX];
+    uint8_t  train_count;
+    TechId   researches[PROD_TECHS_MAX];
+    uint8_t  research_count;
+    CapabilityId required_capabilities[BUILDING_REQCAP_MAX];
+    uint8_t  required_capabilities_count;
+    // resto de campos del schema (recipes/grants_capabilities/...) NO tipados
 };
 
 struct BuildingNameIndexV1 {
     const char* record_id_utf8;
     uint16_t record_id_bytes;
     BuildingId id;
+};
+
+// Sprint 1.2 (SPEC-004 §12.1): tabla tipada de tecnologías. Las techs son
+// PAQUETES DE CAPACIDAD en Parte II (base v1.1): sin efectos de stats — solo
+// gatean contenido vía `grants` (CapabilityId) y el epoch-up (ADR-015).
+struct TechDefinitionV1 {
+    TechId id;
+    int32_t cost_a, cost_b, cost_me;
+    uint32_t research_time_ticks;  // >= 1
+    uint8_t epoch;                 // 1..15
+    TechId prerequisites[TECH_PREREQ_MAX];
+    uint8_t prereq_count;
+    CapabilityId grants[TECH_GRANT_MAX];
+    uint8_t grant_count;
+    TechId mutually_exclusive_with[TECH_MUTEX_MAX];
+    uint8_t mutex_count;
+    // required_buildings del schema NO se tipa aquí: el kernel gatea
+    // RESEARCH_TECH por `tech ∈ BuildingDefinitionV1::researches` (relación
+    // inversa, ver §11.1), no por este campo (deviación documentada en el
+    // RESULT — el compilador Python sí valida required_buildings, el kernel
+    // C++ no lo consume en Parte II).
+};
+
+struct TechNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    TechId id;
+};
+
+// Sprint 1.2 (SPEC-004 §12.1): tabla de capacidades declaradas del blob —
+// espejo textual de manifest.declared_capabilities, reordenada bytewise
+// ascendente POR EL LOADER (el orden de entrada en el blob no es bytewise —
+// ver el comentario en `load_impl` sobre el criterio real de `_normalize`).
+// CapabilityId == índice en esta tabla ya ordenada.
+struct CapabilityNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    CapabilityId id;
 };
 
 struct DataCatalogV1 {
@@ -142,6 +224,14 @@ struct DataCatalogV1 {
     uint32_t building_count;
     const BuildingDefinitionV1* buildings;
     const BuildingNameIndexV1* building_names;
+    // Sprint 1.2 (SPEC-004 §12.1): espejo de unit_count/units/unit_names, y
+    // tabla de capacidades (manifest.declared_capabilities, sin definición
+    // propia — solo nombre + índice).
+    uint32_t tech_count;
+    const TechDefinitionV1* techs;
+    const TechNameIndexV1* tech_names;
+    uint32_t capability_count;
+    const CapabilityNameIndexV1* capability_names;
 };
 
 enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
@@ -157,6 +247,7 @@ enum class CatalogLoadCode : uint8_t {
     UnverifiedForbidden, Bounds, NonCanonical, SchemaMismatch,
     InvalidUnit,
     InvalidBuilding,  // Sprint 1.1 (SPEC-004 §2); append-only, no renumerar.
+    InvalidTech,      // Sprint 1.2 (SPEC-004 §12.1); append-only, no renumerar.
 };
 
 class DataCatalogStorageV1 {
@@ -469,6 +560,77 @@ inline bool is_known_stats_key(const std::string& k) noexcept {
     return false;
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 1.2 (SPEC-004 §11.1/§12.1): helpers compartidos unit/building/tech.
+// ---------------------------------------------------------------------------
+
+// `epoch_window` (common.schema.json): array [min,max], ambos 1..15, min<=max.
+// Compartido por unit y building (mismo `$ref` del schema).
+inline void parse_epoch_window(const CveValue& obj, uint8_t& emin, uint8_t& emax,
+                               CatalogLoadCode range_fail) {
+    const CveValue* ew = obj.find("epoch_window");
+    if (!ew || !ew->is_arr() || ew->arr.size() != 2) fail(CatalogLoadCode::SchemaMismatch);
+    const CveValue& lo = ew->arr[0];
+    const CveValue& hi = ew->arr[1];
+    if (!lo.is_int() || !hi.is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    if (lo.i < 1 || lo.i > 15 || hi.i < 1 || hi.i > 15 || lo.i > hi.i) fail(range_fail);
+    emin = static_cast<uint8_t>(lo.i);
+    emax = static_cast<uint8_t>(hi.i);
+}
+
+// `resource_costs` (common.schema.json): objeto con hasta 8 claves de recurso;
+// el kernel v1 solo rastrea A/B/Me (misma política que building Parte I —
+// P/W/F/I/El se aceptan sin tipar). Ausencia de la clave ⇒ costes en 0
+// (defensivo: el schema exige la clave del objeto en unit/building/tech, pero
+// el loader no impone esa completitud — ese rigor ya lo ejerce el compilador).
+inline void parse_resource_costs(const CveValue& obj, int32_t& cost_a, int32_t& cost_b,
+                                 int32_t& cost_me, CatalogLoadCode range_fail) {
+    cost_a = 0; cost_b = 0; cost_me = 0;
+    const CveValue* costs = obj.find("resource_costs");
+    if (!costs) return;
+    if (!costs->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : costs->obj) {
+        if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (kv.second.i < 0 || kv.second.i > 1000000) fail(range_fail);
+        if (kv.first == "A") cost_a = static_cast<int32_t>(kv.second.i);
+        else if (kv.first == "B") cost_b = static_cast<int32_t>(kv.second.i);
+        else if (kv.first == "Me") cost_me = static_cast<int32_t>(kv.second.i);
+        // Otros recursos (P/W/F/I/El): fuera de alcance del kernel v1.
+    }
+}
+
+// `record_id_set` (common.schema.json): array de strings de record_id. Se
+// devuelven SIN resolver (el caller decide contra qué tabla y con qué cap —
+// building.trains/researches/required_capabilities necesitan tablas que aún
+// no existen en el momento en que se parsea el record building, ver el
+// comentario de `load_impl` sobre resolución diferida de referencias).
+inline std::vector<std::string> parse_string_array(const CveValue& obj, const char* key) {
+    const CveValue* arr = obj.find(key);
+    if (!arr || !arr->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+    std::vector<std::string> out;
+    out.reserve(arr->arr.size());
+    for (const auto& item : arr->arr) {
+        if (!item.is_str()) fail(CatalogLoadCode::SchemaMismatch);
+        out.push_back(item.s);
+    }
+    return out;
+}
+
+// Búsqueda binaria bytewise sobre una tabla de record_id YA ascendente
+// estricta (invariante que el loader ya verificó al parsear esa sección —
+// std::string::operator< es equivalente a memcmp lexicográfico de los bytes
+// UTF-8, mismo criterio de orden que `catalog_find_unit`/`catalog_find_building`).
+inline bool resolve_id(const std::vector<std::string>& ids, const std::string& target,
+                       uint32_t& out_index) noexcept {
+    uint32_t lo = 0, hi = static_cast<uint32_t>(ids.size());
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        if (ids[mid] == target) { out_index = mid; return true; }
+        if (ids[mid] < target) lo = mid + 1; else hi = mid;
+    }
+    return false;
+}
+
 // Reconstruye y valida un UnitDefinitionV1 desde su objeto CVE ya parseado
 // (SPEC-002 §8.1: rangos exactos del schema; ver data/schemas/unit.schema.json).
 inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
@@ -528,6 +690,12 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
     def.build_time_ticks = static_cast<int32_t>(build_time);
     for (int k = 0; k < 6; ++k) def.bonus_vs_bp[k] = 0;
 
+    // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): costes de entrenamiento, pop_cost
+    // constante, epoch_window.
+    parse_resource_costs(obj, def.cost_a, def.cost_b, def.cost_me, CatalogLoadCode::InvalidUnit);
+    def.pop_cost = 1;  // constante v1, no viene de datos
+    parse_epoch_window(obj, def.epoch_min, def.epoch_max, CatalogLoadCode::InvalidUnit);
+
     if (const CveValue* bonus = obj.find("bonus_vs_bp")) {
         if (!bonus->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
         for (const auto& kv : bonus->obj) {
@@ -563,14 +731,28 @@ inline bool building_resource_bit_from_string(const std::string& s, uint8_t& bit
     return true;
 }
 
+// Sprint 1.2 (SPEC-004 §11.1): referencias de building AÚN sin resolver a la
+// hora de parsear el record (trains apunta a unit — resoluble en el momento;
+// researches apunta a tech — sección posterior en el blob, kind=4 tras
+// kind=3; required_capabilities apunta a la tabla de capacidades del
+// manifest). `load_impl` resuelve LAS TRES en un único paso posterior, tras
+// haber parseado TODAS las secciones, por uniformidad (ver su comentario).
+struct BuildingRawRefs {
+    std::vector<std::string> trains;
+    std::vector<std::string> researches;
+    std::vector<std::string> required_capabilities;
+};
+
 // Reconstruye y valida un BuildingDefinitionV1 desde su objeto CVE ya parseado
 // (SPEC-004 §2: rangos exactos; ver data/schemas/building.schema.json). Mismo
 // rigor que build_unit_definition, pero sin el gate "is_known_key" (la
 // validación semántica completa de campos no tipados en Parte I —
-// trains/researches/recipes/kind/civ_id/... — la sigue ejerciendo
-// chunsa_data_compiler.py, igual que documenta el resto de kinds no-unit de
-// este loader).
-inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, BuildingId id) {
+// recipes/kind/civ_id/... — la sigue ejerciendo chunsa_data_compiler.py,
+// igual que documenta el resto de kinds no-unit de este loader). Sprint 1.2
+// (SPEC-004 §11.1/§12.1/§12.4) añade epoch_window y las tres listas de
+// referencia (`raw_out`, sin resolver todavía).
+inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, BuildingId id,
+                                                      BuildingRawRefs& raw_out) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
 
     const CveValue* footprint = obj.find("footprint");
@@ -644,6 +826,73 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     def.cost_me = static_cast<int32_t>(cost_me);
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
+
+    // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window + listas de
+    // referencia crudas (resueltas más tarde por load_impl).
+    parse_epoch_window(obj, def.epoch_min, def.epoch_max, CatalogLoadCode::InvalidBuilding);
+    raw_out.trains = parse_string_array(obj, "trains");
+    raw_out.researches = parse_string_array(obj, "researches");
+    raw_out.required_capabilities = parse_string_array(obj, "required_capabilities");
+    def.train_count = 0;
+    def.research_count = 0;
+    def.required_capabilities_count = 0;
+    for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) def.trains[k] = INVALID_UNIT_ID;
+    for (uint32_t k = 0; k < PROD_TECHS_MAX; ++k) def.researches[k] = INVALID_TECH_ID;
+    for (uint32_t k = 0; k < BUILDING_REQCAP_MAX; ++k) def.required_capabilities[k] = INVALID_CAPABILITY_ID;
+
+    return def;
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 1.2 (SPEC-004 §12.1): tabla tipada de tecnologías.
+// ---------------------------------------------------------------------------
+
+// Referencias de tech aún sin resolver (mismo motivo que BuildingRawRefs:
+// prerequisites/mutually_exclusive_with son autorreferencias dentro de la
+// MISMA sección tech, que puede citar un record_id alfabéticamente posterior
+// — imposible de resolver mientras se recorre esa misma sección; grants.
+// capabilities SÍ sería resoluble en el momento, pero se difiere igual por
+// uniformidad, ver comentario de `load_impl`).
+struct TechRawRefs {
+    std::vector<std::string> prerequisites;
+    std::vector<std::string> mutually_exclusive_with;
+    std::vector<std::string> grants_capabilities;
+};
+
+// Reconstruye y valida un TechDefinitionV1 desde su objeto CVE ya parseado
+// (SPEC-004 §12.1: rangos exactos; ver data/schemas/tech.schema.json). Mismo
+// patrón que build_building_definition (sin gate is_known_key: available_to/
+// branch/evidence/playable_period_ids/availability_mode/provenance/
+// material_costs/regional_variant_group/required_buildings NO se tipan en
+// Parte II — ver el comentario de TechDefinitionV1 sobre required_buildings).
+inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, TechRawRefs& raw_out) {
+    if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+
+    const CveValue* epoch_v = obj.find("epoch");
+    if (!epoch_v || !epoch_v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    if (epoch_v->i < 1 || epoch_v->i > 15) fail(CatalogLoadCode::InvalidTech);
+
+    const CveValue* rtt = obj.find("research_time_ticks");
+    if (!rtt || !rtt->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+    if (rtt->i < 1 || rtt->i > 10000000) fail(CatalogLoadCode::InvalidTech);
+
+    TechDefinitionV1 def{};
+    def.id = id;
+    def.epoch = static_cast<uint8_t>(epoch_v->i);
+    def.research_time_ticks = static_cast<uint32_t>(rtt->i);
+    parse_resource_costs(obj, def.cost_a, def.cost_b, def.cost_me, CatalogLoadCode::InvalidTech);
+
+    def.prereq_count = 0; def.grant_count = 0; def.mutex_count = 0;
+    for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) def.prerequisites[k] = INVALID_TECH_ID;
+    for (uint32_t k = 0; k < TECH_GRANT_MAX; ++k) def.grants[k] = INVALID_CAPABILITY_ID;
+    for (uint32_t k = 0; k < TECH_MUTEX_MAX; ++k) def.mutually_exclusive_with[k] = INVALID_TECH_ID;
+
+    raw_out.prerequisites = parse_string_array(obj, "prerequisites");
+    raw_out.mutually_exclusive_with = parse_string_array(obj, "mutually_exclusive_with");
+    const CveValue* grants_obj = obj.find("grants");
+    if (!grants_obj || !grants_obj->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    raw_out.grants_capabilities = parse_string_array(*grants_obj, "capabilities");
+
     return def;
 }
 
@@ -663,6 +912,21 @@ struct DataCatalogStorageV1::Impl {
     std::vector<std::string> building_ids;
     std::vector<BuildingDefinitionV1> buildings;
     std::vector<BuildingNameIndexV1> building_names;
+    // Sprint 1.2 (SPEC-004 §12.1): espejo de unit_ids/units/unit_names, y
+    // tabla de capacidades (manifest.declared_capabilities).
+    std::vector<std::string> tech_ids;
+    std::vector<TechDefinitionV1> techs;
+    std::vector<TechNameIndexV1> tech_names;
+    std::vector<std::string> capability_ids;
+    std::vector<CapabilityNameIndexV1> capability_names;
+    // Referencias diferidas (resueltas tras parsear TODAS las secciones, ver
+    // el comentario de `load_impl`); índice paralelo a buildings/techs.
+    std::vector<std::vector<std::string>> pending_building_trains;
+    std::vector<std::vector<std::string>> pending_building_researches;
+    std::vector<std::vector<std::string>> pending_building_reqcaps;
+    std::vector<std::vector<std::string>> pending_tech_prereqs;
+    std::vector<std::vector<std::string>> pending_tech_mutex;
+    std::vector<std::vector<std::string>> pending_tech_grants_caps;
     std::vector<uint8_t> binding_bytes;
     DataCatalogV1 cat{};
 };
@@ -808,6 +1072,21 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->building_ids.reserve(dir[2].count);
     impl->buildings.reserve(dir[2].count);
     impl->building_names.reserve(dir[2].count);
+    impl->pending_building_trains.reserve(dir[2].count);
+    impl->pending_building_researches.reserve(dir[2].count);
+    impl->pending_building_reqcaps.reserve(dir[2].count);
+    // Sprint 1.2 (SPEC-004 §12.1): tech_ids necesita direcciones estables,
+    // mismo motivo. dir[3] es la sección tech (kind=4). TECH_HARD_CAP es un
+    // cap del KERNEL más estricto que el cap 65535 del blob (mismo espíritu
+    // que el footprint 1..8 de building en Parte I) — se rechaza aquí, antes
+    // de reservar nada dependiente de un conteo desproporcionado.
+    if (dir[3].count > TECH_HARD_CAP) fail(CatalogLoadCode::Bounds);
+    impl->tech_ids.reserve(dir[3].count);
+    impl->techs.reserve(dir[3].count);
+    impl->tech_names.reserve(dir[3].count);
+    impl->pending_tech_prereqs.reserve(dir[3].count);
+    impl->pending_tech_mutex.reserve(dir[3].count);
+    impl->pending_tech_grants_caps.reserve(dir[3].count);
 
     bool have_package_id = false;
 
@@ -843,6 +1122,39 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 if (record_id.size() < 1 || record_id.size() > 64) fail(CatalogLoadCode::SchemaMismatch);
                 impl->package_id = record_id;
                 have_package_id = true;
+
+                // Sprint 1.2 (SPEC-004 §12.1): tabla de capacidades = manifest.
+                // declared_capabilities. IMPORTANTE (hallazgo de integración):
+                // el compilador Python (`_normalize`) ordena los "sets" del
+                // schema (incluido `declared_capabilities`) por
+                // `cve_encode(valor)`, NO por el string en sí — para strings,
+                // `cve_encode` antepone la LONGITUD (u32 LE) a los bytes UTF-8,
+                // así que el criterio real es "longitud primero, bytes después"
+                // (verificado contra el blob real del repo: el orden que trae
+                // NO es bytewise-ascendente por record_id). El loader, por
+                // tanto, NO exige ni asume ningún orden de entrada aquí: solo
+                // valida que sean strings, y construye la tabla ORDENÁNDOLA
+                // él mismo — bytewise ascendente por record_id (mismo criterio
+                // que `catalog_find_capability`/binary search) — para que la
+                // tabla sea buscable con independencia del orden real del
+                // blob. `record_id_set` del schema exige uniqueItems: un
+                // duplicado tras ordenar (adyacentes iguales) se rechaza como
+                // NonCanonical (dato corrupto/hostil, no debería ocurrir con
+                // un compilador conforme al schema).
+                const CveValue* caps = value.find("declared_capabilities");
+                if (!caps || !caps->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+                if (caps->arr.size() > CAP_HARD_CAP) fail(CatalogLoadCode::Bounds);
+                impl->capability_ids.reserve(caps->arr.size());
+                for (const auto& item : caps->arr) {
+                    if (!item.is_str()) fail(CatalogLoadCode::SchemaMismatch);
+                    impl->capability_ids.push_back(item.s);
+                }
+                std::sort(impl->capability_ids.begin(), impl->capability_ids.end());
+                for (size_t ci = 1; ci < impl->capability_ids.size(); ++ci) {
+                    if (!(impl->capability_ids[ci - 1] < impl->capability_ids[ci])) {
+                        fail(CatalogLoadCode::NonCanonical);  // duplicado tras ordenar
+                    }
+                }
             } else if (spec.kind == 2) {
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const UnitId uid = static_cast<UnitId>(impl->units.size());
@@ -851,20 +1163,105 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->units.push_back(def);
             } else if (spec.kind == 3) {
                 // Sprint 1.1 (SPEC-004 §2): building, ahora tipado (antes solo
-                // estructural). Mismo patrón que kind==2.
+                // estructural). Mismo patrón que kind==2. Sprint 1.2 añade las
+                // referencias crudas (trains/researches/required_capabilities),
+                // resueltas más abajo tras parsear TODAS las secciones.
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const BuildingId bid = static_cast<BuildingId>(impl->buildings.size());
-                BuildingDefinitionV1 def = build_building_definition(value, bid);
+                BuildingRawRefs raw{};
+                BuildingDefinitionV1 def = build_building_definition(value, bid, raw);
                 impl->building_ids.push_back(record_id);
                 impl->buildings.push_back(def);
+                impl->pending_building_trains.push_back(std::move(raw.trains));
+                impl->pending_building_researches.push_back(std::move(raw.researches));
+                impl->pending_building_reqcaps.push_back(std::move(raw.required_capabilities));
+            } else if (spec.kind == 4) {
+                // Sprint 1.2 (SPEC-004 §12.1): tech, tipado. Mismo patrón.
+                if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
+                const TechId tid = static_cast<TechId>(impl->techs.size());
+                TechRawRefs raw{};
+                TechDefinitionV1 def = build_tech_definition(value, tid, raw);
+                impl->tech_ids.push_back(record_id);
+                impl->techs.push_back(def);
+                impl->pending_tech_prereqs.push_back(std::move(raw.prerequisites));
+                impl->pending_tech_mutex.push_back(std::move(raw.mutually_exclusive_with));
+                impl->pending_tech_grants_caps.push_back(std::move(raw.grants_capabilities));
             }
-            // tech/civ/map/ai-profile: validados estructural + orden (deviación
+            // civ/map/ai-profile: validados estructural + orden (deviación
             // documentada arriba); no se reconstruye tipo semántico.
         }
         if (section.pos != section.len) fail(CatalogLoadCode::NonCanonical);  // trailing de sección
     }
 
     if (!have_package_id) fail(CatalogLoadCode::SchemaMismatch);
+
+    // ---- Sprint 1.2 (SPEC-004 §11.1/§12.1): resolución de referencias
+    // diferidas. TODAS las tablas fuente (unit_ids/building_ids/tech_ids/
+    // capability_ids) están completas en este punto (todas las secciones ya
+    // se parsearon, incluida tech kind=4, que va DESPUÉS de building kind=3 en
+    // el blob — por eso building.researches no podía resolverse en el mismo
+    // pase que building.trains/required_capabilities). Cualquier referencia
+    // no resoluble o que exceda el cap del kernel ⇒ catálogo entero rechazado.
+    for (size_t bi = 0; bi < impl->buildings.size(); ++bi) {
+        BuildingDefinitionV1& bd = impl->buildings[bi];
+
+        const auto& trains_raw = impl->pending_building_trains[bi];
+        if (trains_raw.size() > PROD_TRAINS_MAX) fail(CatalogLoadCode::InvalidBuilding);
+        bd.train_count = static_cast<uint8_t>(trains_raw.size());
+        for (size_t k = 0; k < trains_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->unit_ids, trains_raw[k], idx)) fail(CatalogLoadCode::InvalidBuilding);
+            bd.trains[k] = static_cast<UnitId>(idx);
+        }
+
+        const auto& researches_raw = impl->pending_building_researches[bi];
+        if (researches_raw.size() > PROD_TECHS_MAX) fail(CatalogLoadCode::InvalidBuilding);
+        bd.research_count = static_cast<uint8_t>(researches_raw.size());
+        for (size_t k = 0; k < researches_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->tech_ids, researches_raw[k], idx)) fail(CatalogLoadCode::InvalidBuilding);
+            bd.researches[k] = static_cast<TechId>(idx);
+        }
+
+        const auto& reqcaps_raw = impl->pending_building_reqcaps[bi];
+        if (reqcaps_raw.size() > BUILDING_REQCAP_MAX) fail(CatalogLoadCode::InvalidBuilding);
+        bd.required_capabilities_count = static_cast<uint8_t>(reqcaps_raw.size());
+        for (size_t k = 0; k < reqcaps_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->capability_ids, reqcaps_raw[k], idx)) fail(CatalogLoadCode::InvalidBuilding);
+            bd.required_capabilities[k] = static_cast<CapabilityId>(idx);
+        }
+    }
+    for (size_t ti = 0; ti < impl->techs.size(); ++ti) {
+        TechDefinitionV1& td = impl->techs[ti];
+
+        const auto& prereq_raw = impl->pending_tech_prereqs[ti];
+        if (prereq_raw.size() > TECH_PREREQ_MAX) fail(CatalogLoadCode::InvalidTech);
+        td.prereq_count = static_cast<uint8_t>(prereq_raw.size());
+        for (size_t k = 0; k < prereq_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->tech_ids, prereq_raw[k], idx)) fail(CatalogLoadCode::InvalidTech);
+            td.prerequisites[k] = static_cast<TechId>(idx);
+        }
+
+        const auto& mutex_raw = impl->pending_tech_mutex[ti];
+        if (mutex_raw.size() > TECH_MUTEX_MAX) fail(CatalogLoadCode::InvalidTech);
+        td.mutex_count = static_cast<uint8_t>(mutex_raw.size());
+        for (size_t k = 0; k < mutex_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->tech_ids, mutex_raw[k], idx)) fail(CatalogLoadCode::InvalidTech);
+            td.mutually_exclusive_with[k] = static_cast<TechId>(idx);
+        }
+
+        const auto& grants_raw = impl->pending_tech_grants_caps[ti];
+        if (grants_raw.size() > TECH_GRANT_MAX) fail(CatalogLoadCode::InvalidTech);
+        td.grant_count = static_cast<uint8_t>(grants_raw.size());
+        for (size_t k = 0; k < grants_raw.size(); ++k) {
+            uint32_t idx = 0;
+            if (!resolve_id(impl->capability_ids, grants_raw[k], idx)) fail(CatalogLoadCode::InvalidTech);
+            td.grants[k] = static_cast<CapabilityId>(idx);
+        }
+    }
 
     // ---- unit_names: mismo orden que units (ya ascendente por record_id) ----
     for (size_t i = 0; i < impl->units.size(); ++i) {
@@ -882,6 +1279,24 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         ni.record_id_bytes = static_cast<uint16_t>(impl->building_ids[i].size());
         ni.id = impl->buildings[i].id;
         impl->building_names.push_back(ni);
+    }
+
+    // ---- tech_names: mismo orden que techs (Sprint 1.2) ----
+    for (size_t i = 0; i < impl->techs.size(); ++i) {
+        TechNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->tech_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->tech_ids[i].size());
+        ni.id = impl->techs[i].id;
+        impl->tech_names.push_back(ni);
+    }
+
+    // ---- capability_names: mismo orden que capability_ids (Sprint 1.2) ----
+    for (size_t i = 0; i < impl->capability_ids.size(); ++i) {
+        CapabilityNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->capability_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->capability_ids[i].size());
+        ni.id = static_cast<CapabilityId>(i);
+        impl->capability_names.push_back(ni);
     }
 
     // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
@@ -921,6 +1336,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.building_count = static_cast<uint32_t>(impl->buildings.size());
     cat.buildings = impl->buildings.data();
     cat.building_names = impl->building_names.data();
+    cat.tech_count = static_cast<uint32_t>(impl->techs.size());
+    cat.techs = impl->techs.data();
+    cat.tech_names = impl->tech_names.data();
+    cat.capability_count = static_cast<uint32_t>(impl->capability_ids.size());
+    cat.capability_names = impl->capability_names.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier
     // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
@@ -1006,6 +1426,36 @@ inline BuildingId catalog_find_building(const DataCatalogV1& cat, const char* na
         else hi = mid;
     }
     return INVALID_BUILDING_ID;
+}
+
+// Sprint 1.2 (SPEC-004 §12.1): espejo de catalog_find_unit para TechId.
+inline TechId catalog_find_tech(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.tech_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const TechNameIndexV1& e = cat.tech_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_TECH_ID;
+}
+
+// Sprint 1.2 (SPEC-004 §12.1): espejo de catalog_find_unit para CapabilityId.
+inline CapabilityId catalog_find_capability(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.capability_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const CapabilityNameIndexV1& e = cat.capability_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_CAPABILITY_ID;
 }
 
 }  // namespace chunsa
