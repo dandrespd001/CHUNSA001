@@ -238,6 +238,8 @@ void ChunsaSimNode::sim_loop() {
                 s->owner[i] = gs->owner[i];
                 s->unit_class[i] = gs->unit_class[i];
                 s->fleeing[i] = gs->fleeing[i];
+                s->hp[i] = gs->hp[i];
+                s->max_hp[i] = gs->max_hp[i];
                 s->entity_kind[i] = gs->entity_kind[i];
                 s->building_id[i] = gs->building_id[i];
                 s->build_progress[i] = gs->build_progress[i];
@@ -249,6 +251,9 @@ void ChunsaSimNode::sim_loop() {
                 }
                 s->prod_count[i] = gs->prod_count[i];
                 s->prod_progress[i] = gs->prod_progress[i];
+                s->rally_x[i] = gs->rally_x[i];
+                s->rally_y[i] = gs->rally_y[i];
+                s->rally_set[i] = gs->rally_set[i];
                 s->research_tech[i] = gs->research_tech[i];
                 s->research_progress[i] = gs->research_progress[i];
             }
@@ -298,8 +303,9 @@ void ChunsaSimNode::sim_loop() {
     }
 }
 
-void ChunsaSimNode::_process(double /*delta*/) {
+void ChunsaSimNode::_process(double delta) {
     ++frame_count;
+    pan_camera_from_keyboard(delta);
     if (ring != nullptr) {
         auto h = ring->acquire_latest();
         if (h.valid) {
@@ -319,6 +325,11 @@ void ChunsaSimNode::_process(double /*delta*/) {
                 alive_in_curr = 0;
                 for (uint32_t i = 0; i < cap; ++i) {
                     alive_in_curr += snap_curr.alive[i] != 0u ? 1u : 0u;
+                    if (is_selected[i] &&
+                        (snap_curr.alive[i] == 0u ||
+                         snap_curr.generation[i] != selection_generation[i])) {
+                        is_selected[i] = false;
+                    }
                 }
                 if (snap_curr.tick % 100u == 0u &&
                     snap_curr.tick != last_reported_tick) {
@@ -346,13 +357,18 @@ void ChunsaSimNode::_process(double /*delta*/) {
             }
         }
     }
+    for (uint32_t i = 0; i < ORDER_MARKERS_MAX; ++i) {
+        if (order_marker_ttl[i] > 0.0f) {
+            order_marker_ttl[i] -= static_cast<float>(delta);
+        }
+    }
     render_interpolated();
     queue_redraw();
     maybe_screenshot();
 }
 
-// HUD mínimo de Sprint 1.2. Es una capa de presentación: lee únicamente el
-// snapshot publicado y nunca consulta/muta GameState desde el hilo principal.
+// HUD de Sprint 1.3. Es una capa de presentación: lee únicamente el snapshot
+// publicado y nunca consulta/muta GameState desde el hilo principal.
 void ChunsaSimNode::_draw() {
     if (!have_curr || godot::ThemeDB::get_singleton() == nullptr) return;
     const godot::Ref<godot::Font> font =
@@ -361,8 +377,10 @@ void ChunsaSimNode::_draw() {
 
     const godot::Color text(0.95, 0.98, 1.0, 1.0);
     const godot::Color muted(0.72, 0.82, 0.9, 1.0);
-    draw_rect(godot::Rect2(godot::Vector2(14, 14), godot::Vector2(650, 140)),
-              godot::Color(0.02, 0.04, 0.08, 0.86));
+    draw_world_overlay(font, text);
+
+    draw_rect(godot::Rect2(godot::Vector2(14, 14), godot::Vector2(720, 118)),
+              godot::Color(0.02, 0.04, 0.08, 0.9));
 
     godot::String resources = godot::String("CHUNSA  A ") +
             godot::String::num_int64(snap_curr.stock_a) + "  B " +
@@ -373,31 +391,10 @@ void ChunsaSimNode::_draw() {
     draw_string(font, godot::Vector2(28, 42), resources,
                  static_cast<godot::HorizontalAlignment>(0), -1, 18, text);
 
-    godot::String controls = "1..8 TRAIN | T: modo TECH | R + clic: rally | E: EPOCH_UP";
+    godot::String controls =
+            "1..9 grupos | WASD/flechas: cámara | rueda: zoom | MMB: pan";
     draw_string(font, godot::Vector2(28, 68), controls,
                  static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
-
-    const int32_t selected = selected_building_slot();
-    if (selected >= 0 && snap_curr.building_id[selected] <
-            catalog_storage.catalog().building_count) {
-        const chunsa::BuildingDefinitionV1& def =
-                catalog_storage.catalog().buildings[snap_curr.building_id[selected]];
-        godot::String actions = research_mode ? "TECH" : "TRAIN";
-        const uint32_t count = research_mode ? def.research_count : def.train_count;
-        actions += " edificio #" +
-                godot::String::num_int64(snap_curr.building_id[selected]) + "  ";
-        for (uint32_t k = 0; k < count && k < 8u; ++k) {
-            const uint32_t id = research_mode ? def.researches[k] : def.trains[k];
-            actions += godot::String::num_int64(static_cast<int64_t>(k + 1u)) + ":#" +
-                    godot::String::num_int64(static_cast<int64_t>(id)) + "  ";
-        }
-        draw_string(font, godot::Vector2(28, 94), actions,
-                     static_cast<godot::HorizontalAlignment>(0), -1, 15, text);
-    } else {
-        draw_string(font, godot::Vector2(28, 94),
-                     "Selecciona un cuartel propio para TRAIN/TECH",
-                     static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
-    }
 
     if (snap_curr.last_receipt_sequence != UINT64_MAX &&
         snap_curr.last_receipt_sequence >= 1000000ull) {
@@ -405,7 +402,7 @@ void ChunsaSimNode::_draw() {
                 godot::String::num_int64(
                         static_cast<int64_t>(snap_curr.last_receipt_sequence)) +
                 ": " + receipt_result_text(snap_curr.last_receipt_result);
-        draw_string(font, godot::Vector2(28, 118), feedback,
+        draw_string(font, godot::Vector2(28, 94), feedback,
                      static_cast<godot::HorizontalAlignment>(0), -1, 14,
                      snap_curr.last_receipt_result ==
                                      static_cast<uint16_t>(chunsa::RejectReason::ACCEPTED)
@@ -413,59 +410,13 @@ void ChunsaSimNode::_draw() {
                              : godot::Color(1.0, 0.65, 0.35, 1.0));
     }
 
-    // Cola y research sobre cada edificio propio relevante. La geometría
-    // estática se resuelve con el catálogo; el estado viene del snapshot.
-    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
-    for (uint32_t i = 0; i < cap; ++i) {
-        if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u ||
-            snap_curr.entity_kind[i] != 1u ||
-            snap_curr.building_id[i] >= catalog_storage.catalog().building_count) {
-            continue;
-        }
-        const chunsa::BuildingDefinitionV1& def =
-                catalog_storage.catalog().buildings[snap_curr.building_id[i]];
-        const bool has_train = snap_curr.prod_count[i] > 0u;
-        const bool has_research = snap_curr.research_tech[i] != chunsa::INVALID_TECH_ID;
-        if (!has_train && !has_research) continue;
-        const float px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
-                          static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
-        const float py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
-                          static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
-        const godot::Vector2 label_pos =
-                cam3d->unproject_position(godot::Vector3(px, -py, py + 12.0f));
-        draw_rect(godot::Rect2(label_pos - godot::Vector2(5, 32),
-                               godot::Vector2(210, has_research ? 48 : 26)),
-                  godot::Color(0.02, 0.04, 0.08, 0.8));
-        if (has_train) {
-            const uint32_t uid = snap_curr.prod_queue[i][0];
-            uint32_t total = 0;
-            if (uid < catalog_storage.catalog().unit_count) {
-                total = catalog_storage.catalog().units[uid].build_time_ticks;
-            }
-            godot::String line = "TRAIN #" +
-                    godot::String::num_int64(static_cast<int64_t>(uid)) + " " +
-                    godot::String::num_int64(snap_curr.prod_progress[i]) + "/" +
-                    godot::String::num_int64(total);
-            draw_string(font, label_pos - godot::Vector2(0, 14), line,
-                         static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
-        }
-        if (has_research) {
-            uint32_t total = 0;
-            if (snap_curr.research_tech[i] < catalog_storage.catalog().tech_count) {
-                total = catalog_storage.catalog()
-                               .techs[snap_curr.research_tech[i]]
-                               .research_time_ticks;
-            }
-            godot::String line = "TECH #" +
-                    godot::String::num_int64(
-                            static_cast<int64_t>(snap_curr.research_tech[i])) +
-                    " " + godot::String::num_int64(snap_curr.research_progress[i]) +
-                    "/" + godot::String::num_int64(total);
-            draw_string(font, label_pos + godot::Vector2(0, 2), line,
-                         static_cast<godot::HorizontalAlignment>(0), -1, 13,
-                         godot::Color(1.0, 0.86, 0.35, 1.0));
-        }
-    }
+    const godot::Rect2 epoch_rect = epoch_button_rect();
+    draw_rect(epoch_rect, godot::Color(0.12, 0.3, 0.5, 0.95));
+    draw_string(font, epoch_rect.position + godot::Vector2(12, 21), "E: SUBIR ÉPOCA",
+                static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
+
+    draw_selection_panel(font, text, muted);
+    draw_minimap(font, text);
 }
 
 // Selección, colocación y órdenes del jugador (Sprint 1.1). Todo lo que sale
@@ -476,10 +427,23 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     if (cam3d == nullptr) return;
 
     godot::Ref<godot::InputEventKey> key = event;
-    if (!key.is_null() && key->is_pressed() && !key->is_echo()) {
+    if (!key.is_null()) {
         const godot::Key physical = key->get_physical_keycode();
         const godot::Key logical = key->get_keycode();
         const godot::Key code = physical != godot::KEY_NONE ? physical : logical;
+        update_pan_key(code, key->is_pressed());
+        if (!key->is_pressed() || key->is_echo()) return;
+
+        const int32_t group_number = static_cast<int32_t>(code) -
+                static_cast<int32_t>(godot::KEY_1) + 1;
+        if (group_number >= 1 && group_number <= 9) {
+            if (key->is_ctrl_pressed()) {
+                assign_control_group(static_cast<uint32_t>(group_number));
+            } else {
+                recover_control_group(static_cast<uint32_t>(group_number));
+            }
+            return;
+        }
         if (code == godot::KEY_B) {
             placement_mode = !placement_mode;
             placement_input_captured = false;
@@ -504,8 +468,8 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         if (code == godot::KEY_T) {
             research_mode = !research_mode;
             godot::UtilityFunctions::print(
-                    research_mode ? "CHUNSA modo TECH: teclas 1..8 investigan"
-                                   : "CHUNSA modo TRAIN: teclas 1..8 entrenan");
+                    research_mode ? "CHUNSA panel TECH activo"
+                                   : "CHUNSA panel TRAIN activo");
             return;
         }
         if (code == godot::KEY_R) {
@@ -519,19 +483,29 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             enqueue_epoch_up();
             return;
         }
-        const int32_t key_number = static_cast<int32_t>(code) -
-                static_cast<int32_t>(godot::KEY_1);
-        if (key_number >= 0 && key_number < 8) {
-            enqueue_selected_action(static_cast<uint32_t>(key_number),
-                                    research_mode);
-            return;
-        }
     }
 
     godot::Ref<godot::InputEventMouseMotion> motion = event;
     if (!motion.is_null()) {
         cursor_screen = motion->get_position();
         have_cursor = true;
+        if (minimap_dragging) {
+            recenter_from_minimap(cursor_screen);
+            return;
+        }
+        if (camera_dragging) {
+            const godot::Vector2 viewport_size =
+                    get_viewport()->get_visible_rect().size;
+            if (viewport_size.y > 0.0f) {
+                const float units_per_pixel = cam3d->get_size() / viewport_size.y;
+                const godot::Vector2 delta_screen = cursor_screen - camera_drag_start;
+                set_camera_center(camera_drag_origin_px -
+                                          delta_screen.x * units_per_pixel,
+                                  camera_drag_origin_py -
+                                          delta_screen.y * units_per_pixel);
+            }
+            return;
+        }
         return;
     }
 
@@ -540,10 +514,39 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     cursor_screen = mb->get_position();
     have_cursor = true;
 
+    const godot::MouseButton button = mb->get_button_index();
+    if (button == godot::MouseButton::MOUSE_BUTTON_WHEEL_UP ||
+        button == godot::MouseButton::MOUSE_BUTTON_WHEEL_DOWN) {
+        if (mb->is_pressed() && !minimap_rect().has_point(cursor_screen)) {
+            const float factor =
+                    button == godot::MouseButton::MOUSE_BUTTON_WHEEL_UP ? 0.85f : 1.15f;
+            set_camera_zoom(cam3d->get_size() * factor, &cursor_screen);
+        }
+        return;
+    }
+
+    if (button == godot::MouseButton::MOUSE_BUTTON_MIDDLE) {
+        if (mb->is_pressed()) {
+            camera_dragging = true;
+            camera_drag_start = cursor_screen;
+            camera_drag_origin_px = camera_center_px;
+            camera_drag_origin_py = camera_center_py;
+        } else {
+            camera_dragging = false;
+        }
+        return;
+    }
+
+    if (button != godot::MouseButton::MOUSE_BUTTON_LEFT &&
+        button != godot::MouseButton::MOUSE_BUTTON_RIGHT) {
+        return;
+    }
+
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
 
-    if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_LEFT) {
+    if (button == godot::MouseButton::MOUSE_BUTTON_LEFT) {
         if (mb->is_pressed()) {
+            if (handle_hud_press(mb->get_position())) return;
             if (placement_mode) {
                 placement_input_captured = true;
                 int64_t tx = 0;
@@ -576,6 +579,11 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             }
             dragging = true;
             drag_start = mb->get_position();
+            return;
+        }
+        if (minimap_dragging) {
+            recenter_from_minimap(mb->get_position());
+            minimap_dragging = false;
             return;
         }
         if (placement_input_captured) {
@@ -628,16 +636,18 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
                 if (screen_pos.x >= rmin.x && screen_pos.x <= rmax.x &&
                     screen_pos.y >= rmin.y && screen_pos.y <= rmax.y) {
                     is_selected[i] = true;
+                    selection_generation[i] = snap_curr.generation[i];
                 }
             }
         }
         if (is_click && best_i != UINT32_MAX) {
             is_selected[best_i] = true;
+            selection_generation[best_i] = snap_curr.generation[best_i];
         }
         return;
     }
 
-    if (mb->get_button_index() == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
+    if (button == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
         int64_t tile_x = 0;
         int64_t tile_y = 0;
         if (screen_to_tile(mb->get_position(), tile_x, tile_y) &&
@@ -645,21 +655,17 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             return;
         }
 
-        // Screen → mundo: cámara ortográfica SIN rotación mirando -Z, con el
-        // mapeo world=(px,-py,py) ya usado en render_interpolated. El origen
-        // del rayo en cada píxel YA da directamente (px, world_y=-py) en sus
-        // componentes X/Y (no hace falta intersección de plano ni la dirección
-        // del rayo): world_px = origin.x ; world_py = -origin.y.
-        const godot::Vector3 origin = cam3d->project_ray_origin(mb->get_position());
-        const float world_px = origin.x;
-        const float world_py = -origin.y;
+        float world_px = 0.0f;
+        float world_py = 0.0f;
+        if (!screen_to_map(mb->get_position(), world_px, world_py)) return;
         const int64_t x_raw = static_cast<int64_t>((world_px / 4.0f) * 65536.0f);
         const int64_t y_raw = static_cast<int64_t>((world_py / 4.0f) * 65536.0f);
 
+        bool issued = false;
         std::lock_guard<std::mutex> lock(input_mutex);
         for (uint32_t i = 0; i < cap; ++i) {
-            if (!is_selected[i]) continue;
-            if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;  // pudo morir
+            if (!selected_slot_is_current(i)) continue;
+            if (snap_curr.owner[i] != 0u) continue;  // pudo morir
             if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] > 2u) continue;
             chunsa::RawCommand c;
             std::memset(&c, 0, sizeof(c));
@@ -671,6 +677,622 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             c.p.x_raw = x_raw;
             c.p.y_raw = y_raw;
             pending_player_commands.push_back(c);
+            issued = true;
+        }
+        if (issued) add_order_marker(world_px, world_py);
+    }
+}
+
+bool ChunsaSimNode::screen_to_map(const godot::Vector2& screen, float& px,
+                                  float& py) const {
+    if (cam3d == nullptr) return false;
+    const godot::Vector3 origin = cam3d->project_ray_origin(screen);
+    px = origin.x;
+    py = -origin.y;
+    return std::isfinite(px) && std::isfinite(py);
+}
+
+void ChunsaSimNode::clamp_camera_center() {
+    if (cam3d == nullptr) return;
+    const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+    if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f) return;
+    const float half_h = cam3d->get_size() * 0.5f;
+    const float half_w = half_h * viewport_size.x / viewport_size.y;
+    camera_center_px = half_w >= MAP_PX * 0.5f
+            ? MAP_PX * 0.5f
+            : std::clamp(camera_center_px, half_w, MAP_PX - half_w);
+    camera_center_py = half_h >= MAP_PX * 0.5f
+            ? MAP_PX * 0.5f
+            : std::clamp(camera_center_py, half_h, MAP_PX - half_h);
+}
+
+void ChunsaSimNode::set_camera_center(float px, float py) {
+    if (cam3d == nullptr) return;
+    camera_center_px = px;
+    camera_center_py = py;
+    clamp_camera_center();
+    const godot::Vector3 old_position = cam3d->get_position();
+    cam3d->set_position(godot::Vector3(camera_center_px, -camera_center_py,
+                                       old_position.z));
+}
+
+void ChunsaSimNode::set_camera_zoom(float size,
+                                    const godot::Vector2* anchor_screen) {
+    if (cam3d == nullptr) return;
+    float anchor_px = 0.0f;
+    float anchor_py = 0.0f;
+    const bool have_anchor = anchor_screen != nullptr &&
+            screen_to_map(*anchor_screen, anchor_px, anchor_py);
+    cam3d->set_size(std::clamp(size, ZOOM_MIN, ZOOM_MAX));
+    if (have_anchor) {
+        float after_px = 0.0f;
+        float after_py = 0.0f;
+        if (screen_to_map(*anchor_screen, after_px, after_py)) {
+            camera_center_px += anchor_px - after_px;
+            camera_center_py += anchor_py - after_py;
+        }
+    }
+    set_camera_center(camera_center_px, camera_center_py);
+}
+
+void ChunsaSimNode::pan_camera_from_keyboard(double delta) {
+    if (cam3d == nullptr || delta <= 0.0) return;
+    const float x = (pan_right ? 1.0f : 0.0f) - (pan_left ? 1.0f : 0.0f);
+    const float y = (pan_down ? 1.0f : 0.0f) - (pan_up ? 1.0f : 0.0f);
+    if (x == 0.0f && y == 0.0f) return;
+    constexpr float PAN_SPEED = 560.0f;
+    set_camera_center(camera_center_px + x * PAN_SPEED * static_cast<float>(delta),
+                      camera_center_py + y * PAN_SPEED * static_cast<float>(delta));
+}
+
+godot::Rect2 ChunsaSimNode::minimap_rect() const {
+    const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+    const float map_side = std::clamp(
+            std::min(viewport_size.x * 0.25f, viewport_size.y * 0.38f), 160.0f,
+            230.0f);
+    const godot::Vector2 panel_size(map_side + 20.0f, map_side + 42.0f);
+    return godot::Rect2(godot::Vector2(viewport_size.x - panel_size.x - 16.0f,
+                                      viewport_size.y - panel_size.y - 16.0f),
+                        panel_size);
+}
+
+godot::Rect2 ChunsaSimNode::minimap_world_rect() const {
+    const godot::Rect2 outer = minimap_rect();
+    const float side = outer.size.x - 20.0f;
+    return godot::Rect2(outer.position + godot::Vector2(10.0f, 26.0f),
+                        godot::Vector2(side, side));
+}
+
+godot::Rect2 ChunsaSimNode::epoch_button_rect() const {
+    const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+    const float width = 165.0f;
+    const float x = std::max(28.0f, std::min(550.0f, viewport_size.x - width - 16.0f));
+    return godot::Rect2(godot::Vector2(x, 48.0f), godot::Vector2(width, 30.0f));
+}
+
+godot::Rect2 ChunsaSimNode::selection_panel_rect() const {
+    const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+    const float width = std::min(560.0f, std::max(340.0f, viewport_size.x - 28.0f));
+    const float height = 236.0f;
+    return godot::Rect2(godot::Vector2(14.0f,
+                                      std::max(128.0f, viewport_size.y - height - 16.0f)),
+                        godot::Vector2(width, height));
+}
+
+int32_t ChunsaSimNode::selected_count() const {
+    if (!have_curr) return 0;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    int32_t count = 0;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (selected_slot_is_current(i)) ++count;
+    }
+    return count;
+}
+
+int32_t ChunsaSimNode::selected_single_building_slot() const {
+    if (selected_count() != 1) return -1;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (selected_slot_is_current(i) && snap_curr.entity_kind[i] == 1u &&
+            snap_curr.owner[i] == 0u) {
+            return static_cast<int32_t>(i);
+        }
+    }
+    return -1;
+}
+
+bool ChunsaSimNode::selected_slot_is_current(uint32_t slot) const {
+    return slot < 1024u && is_selected[slot] && have_curr &&
+            snap_curr.alive[slot] != 0u &&
+            snap_curr.generation[slot] == selection_generation[slot];
+}
+
+godot::String ChunsaSimNode::catalog_name(const char* name, uint16_t bytes) const {
+    return name == nullptr ? godot::String() : godot::String::utf8(name, bytes);
+}
+
+godot::String ChunsaSimNode::slot_display_name(uint32_t slot) const {
+    if (slot >= 1024u || !have_curr) return "desconocido";
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (snap_curr.entity_kind[slot] == 1u) {
+        if (snap_curr.building_id[slot] < catalog.building_count &&
+            catalog.building_names != nullptr) {
+            return catalog_name(catalog.building_names[snap_curr.building_id[slot]].record_id_utf8,
+                                catalog.building_names[snap_curr.building_id[slot]].record_id_bytes);
+        }
+        return "edificio";
+    }
+    switch (snap_curr.unit_class[slot]) {
+        case 0u: return "infantería";
+        case 1u: return "caballería";
+        case 2u: return "artillería";
+        case 3u: return "ciudadano";
+        default: return "unidad";
+    }
+}
+
+void ChunsaSimNode::update_pan_key(godot::Key code, bool pressed) {
+    switch (code) {
+        case godot::KEY_W:
+        case godot::KEY_UP: pan_up = pressed; break;
+        case godot::KEY_S:
+        case godot::KEY_DOWN: pan_down = pressed; break;
+        case godot::KEY_A:
+        case godot::KEY_LEFT: pan_left = pressed; break;
+        case godot::KEY_D:
+        case godot::KEY_RIGHT: pan_right = pressed; break;
+        default: break;
+    }
+}
+
+void ChunsaSimNode::recenter_from_minimap(const godot::Vector2& screen) {
+    const godot::Rect2 world_rect = minimap_world_rect();
+    if (!world_rect.has_point(screen)) return;
+    const float nx = std::clamp((screen.x - world_rect.position.x) / world_rect.size.x,
+                                0.0f, 1.0f);
+    const float ny = std::clamp((screen.y - world_rect.position.y) / world_rect.size.y,
+                                0.0f, 1.0f);
+    set_camera_center(nx * MAP_PX, ny * MAP_PX);
+}
+
+bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
+    if (minimap_rect().has_point(screen)) {
+        recenter_from_minimap(screen);
+        minimap_dragging = true;
+        return true;
+    }
+    if (epoch_button_rect().has_point(screen)) {
+        enqueue_epoch_up();
+        return true;
+    }
+    if (selected_count() == 0) return false;
+    const godot::Rect2 panel = selection_panel_rect();
+    if (!panel.has_point(screen)) return false;
+    const int32_t selected = selected_single_building_slot();
+    if (selected < 0) return true;
+    const float tab_y = panel.position.y + 101.0f;
+    if (screen.y >= tab_y && screen.y <= tab_y + 26.0f) {
+        if (screen.x >= panel.position.x + 16.0f &&
+            screen.x <= panel.position.x + 91.0f) {
+            research_mode = false;
+        } else if (screen.x >= panel.position.x + 97.0f &&
+                   screen.x <= panel.position.x + 172.0f) {
+            research_mode = true;
+        }
+        return true;
+    }
+    const chunsa::BuildingDefinitionV1& def =
+            catalog_storage.catalog().buildings[snap_curr.building_id[selected]];
+    const uint32_t count = research_mode ? def.research_count : def.train_count;
+    const float button_y = panel.position.y + 136.0f;
+    const float button_w = 126.0f;
+    const float button_h = 30.0f;
+    const float gap = 6.0f;
+    if (screen.y >= button_y && screen.y <= button_y + button_h) {
+        const float rel_x = screen.x - panel.position.x - 16.0f;
+        const int32_t column = static_cast<int32_t>(std::floor(rel_x / (button_w + gap)));
+        if (column >= 0 && column < 4) {
+            const float local_x = rel_x - static_cast<float>(column) * (button_w + gap);
+            if (local_x >= 0.0f && local_x <= button_w) {
+                const uint32_t action = static_cast<uint32_t>(column);
+                if (action < count) enqueue_selected_action(action, research_mode);
+                return true;
+            }
+        }
+    }
+    if (screen.y >= button_y + button_h + gap &&
+        screen.y <= button_y + button_h * 2.0f + gap) {
+        const float rel_x = screen.x - panel.position.x - 16.0f;
+        const int32_t column = static_cast<int32_t>(std::floor(rel_x / (button_w + gap)));
+        if (column >= 0 && column < 4) {
+            const float local_x = rel_x - static_cast<float>(column) * (button_w + gap);
+            if (local_x >= 0.0f && local_x <= button_w) {
+                const uint32_t action = static_cast<uint32_t>(column + 4);
+                if (action < count) enqueue_selected_action(action, research_mode);
+                return true;
+            }
+        }
+    }
+    return true;
+}
+
+void ChunsaSimNode::assign_control_group(uint32_t group_number) {
+    if (group_number == 0u || group_number >= CONTROL_GROUPS) return;
+    control_group_counts[group_number] = 0;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i)) continue;
+        const uint16_t count = control_group_counts[group_number];
+        if (count >= 1024u) break;
+        control_group_slots[group_number][count] = i;
+        control_group_generations[group_number][count] = snap_curr.generation[i];
+        control_group_counts[group_number] = static_cast<uint16_t>(count + 1u);
+    }
+    godot::UtilityFunctions::print("CHUNSA grupo ", static_cast<int64_t>(group_number),
+                                   " asignado slots=",
+                                   static_cast<int64_t>(control_group_counts[group_number]));
+}
+
+void ChunsaSimNode::recover_control_group(uint32_t group_number) {
+    if (group_number == 0u || group_number >= CONTROL_GROUPS) return;
+    const auto now = std::chrono::steady_clock::now();
+    const bool double_tap = last_group_number == static_cast<int32_t>(group_number) &&
+            std::chrono::duration<float>(now - last_group_activation).count() < 0.45f;
+    last_group_number = static_cast<int32_t>(group_number);
+    last_group_activation = now;
+
+    std::fill(std::begin(is_selected), std::end(is_selected), false);
+    float center_x = 0.0f;
+    float center_y = 0.0f;
+    uint32_t valid = 0;
+    const uint16_t count = control_group_counts[group_number];
+    for (uint16_t k = 0; k < count; ++k) {
+        const uint32_t slot = control_group_slots[group_number][k];
+        if (slot >= 1024u || !have_curr || snap_curr.alive[slot] == 0u ||
+            snap_curr.generation[slot] != control_group_generations[group_number][k]) {
+            continue;
+        }
+        is_selected[slot] = true;
+        selection_generation[slot] = snap_curr.generation[slot];
+        center_x += snap_curr.entity_kind[slot] == 1u
+                ? static_cast<float>(snap_curr.bld_anchor_tx[slot]) * 4.0f
+                : snap_curr.x[slot] * 4.0f;
+        center_y += snap_curr.entity_kind[slot] == 1u
+                ? static_cast<float>(snap_curr.bld_anchor_ty[slot]) * 4.0f
+                : snap_curr.y[slot] * 4.0f;
+        ++valid;
+    }
+    if (double_tap && valid > 0u) {
+        set_camera_center(center_x / static_cast<float>(valid),
+                          center_y / static_cast<float>(valid));
+    }
+    godot::UtilityFunctions::print("CHUNSA grupo ", static_cast<int64_t>(group_number),
+                                   " recuperado vivos=", static_cast<int64_t>(valid));
+}
+
+void ChunsaSimNode::add_order_marker(float px, float py) {
+    uint32_t target = ORDER_MARKERS_MAX;
+    for (uint32_t i = 0; i < ORDER_MARKERS_MAX; ++i) {
+        if (order_marker_ttl[i] <= 0.0f) {
+            target = i;
+            break;
+        }
+    }
+    if (target == ORDER_MARKERS_MAX) target = 0;
+    order_marker_pos[target] = godot::Vector2(px, py);
+    order_marker_ttl[target] = 1.0f;
+}
+
+void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
+                                 const godot::Color& text) {
+    const godot::Rect2 panel = minimap_rect();
+    const godot::Rect2 map = minimap_world_rect();
+    const float scale = map.size.x / MAP_PX;
+    draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
+    draw_string(font, panel.position + godot::Vector2(12, 19), "MINIMAPA · sin fog",
+                static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
+    draw_rect(map, godot::Color(0.13, 0.17, 0.2, 1.0));
+
+    for (int64_t y = 32; y < 224; ++y) {
+        if (!is_static_wall(128, y)) continue;
+        draw_rect(godot::Rect2(map.position +
+                                       godot::Vector2(128.0f * scale,
+                                                      static_cast<float>(y) * 4.0f * scale),
+                                   godot::Vector2(std::max(1.0f, 4.0f * scale),
+                                                  std::max(1.0f, 4.0f * scale))),
+                               godot::Color(0.45, 0.48, 0.52, 1.0));
+    }
+
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u) continue;
+        const godot::Color color = snap_curr.entity_kind[i] == 1u
+                ? (snap_curr.owner[i] == 0u ? godot::Color(0.15, 0.55, 0.95, 1.0)
+                                            : godot::Color(0.9, 0.25, 0.16, 1.0))
+                : (snap_curr.unit_class[i] == 3u
+                           ? godot::Color(1.0, 0.85, 0.2, 1.0)
+                           : (snap_curr.owner[i] == 0u
+                                      ? godot::Color(0.25, 0.7, 1.0, 1.0)
+                                      : godot::Color(1.0, 0.35, 0.25, 1.0)));
+        if (snap_curr.entity_kind[i] == 1u &&
+            snap_curr.building_id[i] < catalog.building_count) {
+            const chunsa::BuildingDefinitionV1& def =
+                    catalog.buildings[snap_curr.building_id[i]];
+            const godot::Rect2 b(
+                    map.position + godot::Vector2(
+                            static_cast<float>(snap_curr.bld_anchor_tx[i]) * 4.0f * scale,
+                            static_cast<float>(snap_curr.bld_anchor_ty[i]) * 4.0f * scale),
+                    godot::Vector2(static_cast<float>(def.footprint_w) * 4.0f * scale,
+                                   static_cast<float>(def.footprint_h) * 4.0f * scale));
+            draw_rect(b, color);
+            if (selected_slot_is_current(i)) draw_rect(b, godot::Color(0.35, 1.0, 0.35, 1.0), false, 2.0f);
+        } else {
+            const godot::Vector2 p = map.position + godot::Vector2(
+                    snap_curr.x[i] * 4.0f * scale, snap_curr.y[i] * 4.0f * scale);
+            draw_circle(p, std::max(1.0f, 1.5f * scale), color);
+        }
+    }
+
+    if (cam3d != nullptr) {
+        const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+        if (viewport_size.y > 0.0f) {
+            const float half_h = cam3d->get_size() * 0.5f;
+            const float half_w = half_h * viewport_size.x / viewport_size.y;
+            const float left = std::max(0.0f, camera_center_px - half_w);
+            const float top = std::max(0.0f, camera_center_py - half_h);
+            const float right = std::min(MAP_PX, camera_center_px + half_w);
+            const float bottom = std::min(MAP_PX, camera_center_py + half_h);
+            draw_rect(godot::Rect2(map.position + godot::Vector2(left * scale, top * scale),
+                                   godot::Vector2((right - left) * scale,
+                                                  (bottom - top) * scale)),
+                      godot::Color(0.8, 0.95, 1.0, 0.95), false, 2.0f);
+        }
+    }
+}
+
+void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
+                                         const godot::Color& text,
+                                         const godot::Color& muted) {
+    const int32_t count = selected_count();
+    if (count == 0) return;
+    const godot::Rect2 panel = selection_panel_rect();
+    draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
+    draw_string(font, panel.position + godot::Vector2(16, 24),
+                "SELECCIÓN · " + godot::String::num_int64(count),
+                static_cast<godot::HorizontalAlignment>(0), -1, 17, text);
+
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    int32_t first = -1;
+    int64_t hp_sum = 0;
+    int64_t max_hp_sum = 0;
+    uint32_t class_counts[6] = {};
+    uint32_t building_count = 0;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i)) continue;
+        if (first < 0) first = static_cast<int32_t>(i);
+        hp_sum += snap_curr.hp[i];
+        max_hp_sum += snap_curr.max_hp[i];
+        if (snap_curr.entity_kind[i] == 1u) ++building_count;
+        else if (snap_curr.unit_class[i] < 6u) ++class_counts[snap_curr.unit_class[i]];
+    }
+
+    if (count == 1 && first >= 0) {
+        draw_string(font, panel.position + godot::Vector2(16, 49),
+                    slot_display_name(static_cast<uint32_t>(first)) + "  · owner " +
+                            godot::String::num_int64(snap_curr.owner[first]),
+                    static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
+    } else {
+        godot::String summary = "unidades";
+        if (class_counts[1] > 0u) summary += "  caballería " + godot::String::num_int64(class_counts[1]);
+        if (class_counts[2] > 0u) summary += "  artillería " + godot::String::num_int64(class_counts[2]);
+        if (class_counts[3] > 0u) summary += "  ciudadanos " + godot::String::num_int64(class_counts[3]);
+        if (class_counts[0] > 0u) summary += "  infantería " + godot::String::num_int64(class_counts[0]);
+        if (building_count > 0u) summary += "  edificios " + godot::String::num_int64(building_count);
+        draw_string(font, panel.position + godot::Vector2(16, 49), summary,
+                    static_cast<godot::HorizontalAlignment>(0), -1, 14, muted);
+    }
+
+    const float hp_ratio = max_hp_sum > 0
+            ? std::clamp(static_cast<float>(hp_sum) / static_cast<float>(max_hp_sum), 0.0f, 1.0f)
+            : 0.0f;
+    const godot::Rect2 hp_bar(panel.position + godot::Vector2(16, 61),
+                              godot::Vector2(panel.size.x - 32.0f, 12.0f));
+    draw_rect(hp_bar, godot::Color(0.18, 0.12, 0.15, 1.0));
+    draw_rect(godot::Rect2(hp_bar.position,
+                           godot::Vector2(hp_bar.size.x * hp_ratio, hp_bar.size.y)),
+              godot::Color(0.25, 0.85, 0.35, 1.0));
+    draw_string(font, panel.position + godot::Vector2(16, 87),
+                "HP " + godot::String::num_int64(hp_sum) + "/" +
+                        godot::String::num_int64(max_hp_sum),
+                static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+
+    const int32_t selected_building = selected_single_building_slot();
+    if (selected_building >= 0 &&
+        snap_curr.building_id[selected_building] < catalog_storage.catalog().building_count) {
+        const chunsa::BuildingDefinitionV1& def =
+                catalog_storage.catalog().buildings[snap_curr.building_id[selected_building]];
+        if (def.build_time_ticks > 0u &&
+            snap_curr.build_progress[selected_building] < def.build_time_ticks) {
+            draw_string(font, panel.position + godot::Vector2(130, 87),
+                        "Construcción " +
+                                godot::String::num_int64(snap_curr.build_progress[selected_building]) +
+                                "/" + godot::String::num_int64(def.build_time_ticks),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 13,
+                        godot::Color(1.0, 0.7, 0.25, 1.0));
+        }
+        const godot::Rect2 train_tab(panel.position + godot::Vector2(16, 101),
+                                     godot::Vector2(75, 26));
+        const godot::Rect2 tech_tab(panel.position + godot::Vector2(97, 101),
+                                    godot::Vector2(75, 26));
+        draw_rect(train_tab, research_mode ? godot::Color(0.08, 0.12, 0.17, 1.0)
+                                           : godot::Color(0.14, 0.35, 0.55, 1.0));
+        draw_rect(tech_tab, research_mode ? godot::Color(0.55, 0.35, 0.12, 1.0)
+                                          : godot::Color(0.08, 0.12, 0.17, 1.0));
+        draw_string(font, train_tab.position + godot::Vector2(12, 18), "TRAIN",
+                    static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+        draw_string(font, tech_tab.position + godot::Vector2(14, 18), "TECH",
+                    static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+
+        const uint32_t action_count = research_mode ? def.research_count : def.train_count;
+        const float button_w = 126.0f;
+        const float button_h = 30.0f;
+        const float gap = 6.0f;
+        for (uint32_t k = 0; k < action_count && k < 8u; ++k) {
+            const float x = panel.position.x + 16.0f +
+                    static_cast<float>(k % 4u) * (button_w + gap);
+            const float y = panel.position.y + 136.0f +
+                    static_cast<float>(k / 4u) * (button_h + gap);
+            const godot::Color button_color = research_mode
+                    ? godot::Color(0.35, 0.24, 0.1, 1.0)
+                    : godot::Color(0.1, 0.25, 0.4, 1.0);
+            draw_rect(godot::Rect2(godot::Vector2(x, y),
+                                   godot::Vector2(button_w, button_h)), button_color);
+            const uint32_t id = research_mode ? def.researches[k] : def.trains[k];
+            godot::String label = research_mode ? "Investigar " : "Entrenar ";
+            if (research_mode && id < catalog_storage.catalog().tech_count &&
+                catalog_storage.catalog().tech_names != nullptr) {
+                label += catalog_name(catalog_storage.catalog().tech_names[id].record_id_utf8,
+                                      catalog_storage.catalog().tech_names[id].record_id_bytes);
+            } else if (!research_mode && id < catalog_storage.catalog().unit_count &&
+                       catalog_storage.catalog().unit_names != nullptr) {
+                label += catalog_name(catalog_storage.catalog().unit_names[id].record_id_utf8,
+                                      catalog_storage.catalog().unit_names[id].record_id_bytes);
+            } else {
+                label += "#" + godot::String::num_int64(id);
+            }
+            draw_string(font, godot::Vector2(x + 7, y + 20), label.left(20),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
+        }
+        const bool has_train = snap_curr.prod_count[selected_building] > 0u;
+        const bool has_research = snap_curr.research_tech[selected_building] != chunsa::INVALID_TECH_ID;
+        if (has_train || has_research) {
+            godot::String queue = has_train ? "Cola: " : "Investigación: ";
+            if (has_train) {
+                queue += slot_display_name(selected_building) + "  " +
+                        godot::String::num_int64(snap_curr.prod_count[selected_building]);
+            }
+            if (has_research) {
+                if (has_train) queue += "  ·  ";
+                queue += "tech #" + godot::String::num_int64(
+                        snap_curr.research_tech[selected_building]);
+            }
+            draw_string(font, panel.position + godot::Vector2(16, 224), queue.left(72),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
+        }
+    } else {
+        draw_string(font, panel.position + godot::Vector2(16, 116),
+                    "Acciones: clic derecho mueve · B construye · R rally",
+                    static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
+    }
+}
+
+void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
+                                       const godot::Color& text) {
+    if (cam3d == nullptr) return;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    for (uint32_t i = 0; i < ORDER_MARKERS_MAX; ++i) {
+        if (order_marker_ttl[i] <= 0.0f) continue;
+        const godot::Vector2 p = cam3d->unproject_position(godot::Vector3(
+                order_marker_pos[i].x, -order_marker_pos[i].y, order_marker_pos[i].y + 18.0f));
+        const float alpha = std::clamp(order_marker_ttl[i], 0.0f, 1.0f);
+        const godot::Color marker(1.0, 0.9, 0.25, alpha);
+        draw_circle(p, 7.0f, marker, false, 2.0f);
+        draw_line(p - godot::Vector2(10, 0), p + godot::Vector2(10, 0), marker, 2.0f);
+        draw_line(p - godot::Vector2(0, 10), p + godot::Vector2(0, 10), marker, 2.0f);
+    }
+
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u ||
+            snap_curr.rally_set[i] == 0u || snap_curr.building_id[i] >= catalog.building_count) {
+            continue;
+        }
+        const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[i]];
+        const float bx = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                          static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+        const float by = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                          static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+        const float rx = static_cast<float>(snap_curr.rally_x[i]) / 65536.0f * 4.0f;
+        const float ry = static_cast<float>(snap_curr.rally_y[i]) / 65536.0f * 4.0f;
+        const godot::Vector2 from = cam3d->unproject_position(godot::Vector3(bx, -by, by + 16.0f));
+        const godot::Vector2 to = cam3d->unproject_position(godot::Vector3(rx, -ry, ry + 16.0f));
+        const godot::Color rally_color = snap_curr.owner[i] == 0u
+                ? godot::Color(0.25, 0.95, 0.45, 0.9)
+                : godot::Color(1.0, 0.35, 0.25, 0.75);
+        draw_line(from, to, rally_color, 2.0f);
+        draw_line(to, to + godot::Vector2(0, -16), rally_color, 2.0f);
+        draw_circle(to, 5.0f, rally_color);
+    }
+
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i) || snap_curr.max_hp[i] <= 0) continue;
+        float px = snap_curr.x[i] * 4.0f;
+        float py = snap_curr.y[i] * 4.0f;
+        float width = 28.0f;
+        if (snap_curr.entity_kind[i] == 1u && snap_curr.building_id[i] < catalog.building_count) {
+            const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[i]];
+            px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                  static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+            py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                  static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+            width = std::clamp(static_cast<float>(def.footprint_w) * 4.0f, 28.0f, 72.0f);
+        }
+        const godot::Vector2 center = cam3d->unproject_position(
+                godot::Vector3(px, -py, py + 20.0f));
+        const godot::Rect2 bar(center + godot::Vector2(-width * 0.5f, -16.0f),
+                               godot::Vector2(width, 5.0f));
+        draw_rect(bar, godot::Color(0.12, 0.05, 0.06, 0.95));
+        const float ratio = std::clamp(static_cast<float>(snap_curr.hp[i]) /
+                                               static_cast<float>(snap_curr.max_hp[i]),
+                                       0.0f, 1.0f);
+        draw_rect(godot::Rect2(bar.position, godot::Vector2(width * ratio, bar.size.y)),
+                  ratio > 0.5f ? godot::Color(0.25, 0.9, 0.35, 1.0)
+                               : godot::Color(0.95, 0.35, 0.2, 1.0));
+    }
+
+    // Colas y research sobre edificios propios relevantes. El estado viene del
+    // snapshot; el catálogo solo aporta nombres y tiempos estáticos.
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u ||
+            snap_curr.entity_kind[i] != 1u || snap_curr.building_id[i] >= catalog.building_count) {
+            continue;
+        }
+        const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[i]];
+        const bool has_train = snap_curr.prod_count[i] > 0u;
+        const bool has_research = snap_curr.research_tech[i] != chunsa::INVALID_TECH_ID;
+        if (!has_train && !has_research) continue;
+        const float px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                          static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+        const float py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                          static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+        const godot::Vector2 label_pos =
+                cam3d->unproject_position(godot::Vector3(px, -py, py + 12.0f));
+        draw_rect(godot::Rect2(label_pos - godot::Vector2(5, 32),
+                               godot::Vector2(230, has_research ? 48 : 26)),
+                  godot::Color(0.02, 0.04, 0.08, 0.8));
+        if (has_train) {
+            const uint32_t uid = snap_curr.prod_queue[i][0];
+            uint32_t total = 0;
+            if (uid < catalog.unit_count) total = catalog.units[uid].build_time_ticks;
+            godot::String line = "TRAIN " + godot::String::num_int64(uid) + " " +
+                    godot::String::num_int64(snap_curr.prod_progress[i]) + "/" +
+                    godot::String::num_int64(total);
+            draw_string(font, label_pos - godot::Vector2(0, 14), line,
+                        static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+        }
+        if (has_research) {
+            uint32_t total = 0;
+            if (snap_curr.research_tech[i] < catalog.tech_count) {
+                total = catalog.techs[snap_curr.research_tech[i]].research_time_ticks;
+            }
+            godot::String line = "TECH " + godot::String::num_int64(
+                    snap_curr.research_tech[i]) + " " +
+                    godot::String::num_int64(snap_curr.research_progress[i]) + "/" +
+                    godot::String::num_int64(total);
+            draw_string(font, label_pos + godot::Vector2(0, 2), line,
+                        static_cast<godot::HorizontalAlignment>(0), -1, 13,
+                        godot::Color(1.0, 0.86, 0.35, 1.0));
         }
     }
 }
@@ -713,7 +1335,7 @@ void ChunsaSimNode::render_interpolated() {
         // snapshot actual (snap_curr, sin interpolar — solo la posición se
         // interpola). La selección tiene prioridad MÁXIMA sobre el resto.
         godot::Color c;
-        if (is_selected[i])                     c = godot::Color(0.3, 1.0, 0.3);    // seleccionado: verde brillante
+        if (selected_slot_is_current(i))        c = godot::Color(0.3, 1.0, 0.3);    // seleccionado: verde brillante
         else if (snap_curr.unit_class[i] == 3u &&
                  snap_curr.build_target[i] != chunsa::BUILD_NO_TARGET)
                                                     c = godot::Color(1.0, 0.55, 0.1); // constructor: naranja
@@ -759,7 +1381,7 @@ void ChunsaSimNode::render_interpolated() {
                                        sc, godot::Vector3(px, -py, py + box_depth * 0.5f)));
 
             godot::Color color;
-            if (is_selected[i]) {
+            if (selected_slot_is_current(i)) {
                 color = godot::Color(0.3, 1.0, 0.3, 0.95);
             } else if (progress < 1.0f) {
                 color = godot::Color(1.0, 0.68, 0.12, 0.68);
@@ -1112,11 +1734,9 @@ void ChunsaSimNode::setup_3d() {
 
 bool ChunsaSimNode::screen_to_tile(const godot::Vector2& screen, int64_t& tx,
                                    int64_t& ty) const {
-    if (cam3d == nullptr) return false;
-    const godot::Vector3 origin = cam3d->project_ray_origin(screen);
-    const float world_px = origin.x;
-    const float world_py = -origin.y;
-    if (!std::isfinite(world_px) || !std::isfinite(world_py)) return false;
+    float world_px = 0.0f;
+    float world_py = 0.0f;
+    if (!screen_to_map(screen, world_px, world_py)) return false;
     tx = static_cast<int64_t>(std::floor(world_px / 4.0f));
     ty = static_cast<int64_t>(std::floor(world_py / 4.0f));
     return true;
@@ -1201,7 +1821,7 @@ uint32_t ChunsaSimNode::enqueue_build_assignments(int64_t tx, int64_t ty) {
     uint32_t count = 0;
     std::lock_guard<std::mutex> lock(input_mutex);
     for (uint32_t i = 0; i < cap; ++i) {
-        if (!is_selected[i] || snap_curr.alive[i] == 0u ||
+        if (!selected_slot_is_current(i) ||
             snap_curr.owner[i] != 0u || snap_curr.entity_kind[i] != 0u ||
             snap_curr.unit_class[i] != 3u) {
             continue;
@@ -1226,15 +1846,7 @@ uint32_t ChunsaSimNode::enqueue_build_assignments(int64_t tx, int64_t ty) {
 }
 
 int32_t ChunsaSimNode::selected_building_slot() const {
-    if (!have_curr) return -1;
-    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
-    for (uint32_t i = 0; i < cap; ++i) {
-        if (is_selected[i] && snap_curr.alive[i] != 0u &&
-            snap_curr.owner[i] == 0u && snap_curr.entity_kind[i] == 1u) {
-            return static_cast<int32_t>(i);
-        }
-    }
-    return -1;
+    return selected_single_building_slot();
 }
 
 void ChunsaSimNode::enqueue_selected_action(uint32_t action_index, bool research) {
@@ -1284,7 +1896,7 @@ void ChunsaSimNode::enqueue_rally(int64_t tx, int64_t ty) {
     uint32_t count = 0;
     std::lock_guard<std::mutex> lock(input_mutex);
     for (uint32_t i = 0; i < cap; ++i) {
-        if (!is_selected[i] || snap_curr.alive[i] == 0u ||
+        if (!selected_slot_is_current(i) ||
             snap_curr.owner[i] != 0u || snap_curr.entity_kind[i] != 1u) {
             continue;
         }
@@ -1308,6 +1920,8 @@ void ChunsaSimNode::enqueue_rally(int64_t tx, int64_t ty) {
     } else {
         godot::UtilityFunctions::print("CHUNSA SET_RALLY enqueued tile=", tx, ",",
                                        ty, " edificios=", count);
+        add_order_marker(static_cast<float>(tx) * 4.0f + 2.0f,
+                         static_cast<float>(ty) * 4.0f + 2.0f);
     }
 }
 

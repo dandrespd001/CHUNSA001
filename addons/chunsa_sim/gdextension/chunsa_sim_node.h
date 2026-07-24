@@ -18,6 +18,8 @@
 
 #include <godot_cpp/classes/input_event.hpp>
 #include <godot_cpp/classes/node2d.hpp>
+#include <godot_cpp/classes/font.hpp>
+#include <godot_cpp/variant/rect2.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 
 #include <chunsa/game_state.hpp>
@@ -26,6 +28,7 @@
 namespace godot {
 class MultiMeshInstance3D;
 class Camera3D;
+class Font;
 }  // namespace godot
 
 class ChunsaSimNode : public godot::Node2D {
@@ -48,6 +51,8 @@ public:
         uint8_t owner[1024];    // 0..7
         uint8_t unit_class[1024]; // 0=infantry 1=cavalry 2=artillery 3=citizen
         uint8_t fleeing[1024];  // 1 = en pánico
+        int32_t hp[1024];
+        int32_t max_hp[1024];
         uint8_t entity_kind[1024]; // 0=unidad, 1=edificio
         uint32_t building_id[1024];
         uint32_t build_progress[1024];
@@ -60,6 +65,9 @@ public:
         uint32_t prod_queue[1024][chunsa::PROD_QUEUE_CAP];
         uint8_t prod_count[1024];
         uint32_t prod_progress[1024];
+        int64_t rally_x[1024];
+        int64_t rally_y[1024];
+        uint8_t rally_set[1024];
         uint32_t research_tech[1024];
         uint32_t research_progress[1024];
 
@@ -79,6 +87,10 @@ public:
 
 private:
     static constexpr float MAP_PX = 1024.0f;  // 256 tiles × 4 px
+    static constexpr float ZOOM_MIN = 300.0f;
+    static constexpr float ZOOM_MAX = 1200.0f;
+    static constexpr uint32_t CONTROL_GROUPS = 10;
+    static constexpr uint32_t ORDER_MARKERS_MAX = 32;
 
     std::thread sim_thread;
     std::atomic<bool> running{false};
@@ -129,7 +141,26 @@ private:
     std::vector<chunsa::RawCommand> pending_player_commands;
     uint64_t next_player_sequence = 1000000ull;
     bool is_selected[1024] = {};
+    uint32_t selection_generation[1024] = {};
+    uint32_t control_group_slots[CONTROL_GROUPS][1024] = {};
+    uint32_t control_group_generations[CONTROL_GROUPS][1024] = {};
+    uint16_t control_group_counts[CONTROL_GROUPS] = {};
+    int32_t last_group_number = -1;
+    std::chrono::steady_clock::time_point last_group_activation{};
     bool dragging = false;
+    bool camera_dragging = false;
+    godot::Vector2 camera_drag_start;
+    float camera_drag_origin_px = MAP_PX / 2.0f;
+    float camera_drag_origin_py = MAP_PX / 2.0f;
+    float camera_center_px = MAP_PX / 2.0f;
+    float camera_center_py = MAP_PX / 2.0f;
+    bool pan_up = false;
+    bool pan_down = false;
+    bool pan_left = false;
+    bool pan_right = false;
+    bool minimap_dragging = false;
+    godot::Vector2 order_marker_pos[ORDER_MARKERS_MAX] = {};
+    float order_marker_ttl[ORDER_MARKERS_MAX] = {};
     godot::Vector2 drag_start;
     godot::Vector2 cursor_screen;
     bool have_cursor = false;
@@ -157,6 +188,33 @@ private:
     void enqueue_rally(int64_t tx, int64_t ty);
     void enqueue_epoch_up();
     void cycle_buildable_building();
+    bool screen_to_map(const godot::Vector2& screen, float& px, float& py) const;
+    void clamp_camera_center();
+    void set_camera_center(float px, float py);
+    void set_camera_zoom(float size, const godot::Vector2* anchor_screen = nullptr);
+    void pan_camera_from_keyboard(double delta);
+    void recenter_from_minimap(const godot::Vector2& screen);
+    godot::Rect2 minimap_rect() const;
+    godot::Rect2 minimap_world_rect() const;
+    godot::Rect2 epoch_button_rect() const;
+    godot::Rect2 selection_panel_rect() const;
+    int32_t selected_count() const;
+    int32_t selected_single_building_slot() const;
+    bool selected_slot_is_current(uint32_t slot) const;
+    godot::String slot_display_name(uint32_t slot) const;
+    godot::String catalog_name(const char* name, uint16_t bytes) const;
+    bool handle_hud_press(const godot::Vector2& screen);
+    void recover_control_group(uint32_t group_number);
+    void assign_control_group(uint32_t group_number);
+    void add_order_marker(float px, float py);
+    void draw_minimap(const godot::Ref<godot::Font>& font,
+                      const godot::Color& text);
+    void draw_selection_panel(const godot::Ref<godot::Font>& font,
+                              const godot::Color& text,
+                              const godot::Color& muted);
+    void draw_world_overlay(const godot::Ref<godot::Font>& font,
+                            const godot::Color& text);
+    void update_pan_key(godot::Key code, bool pressed);
 
 protected:
     static void _bind_methods();
