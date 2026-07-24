@@ -23,6 +23,7 @@
 #include <godot_cpp/variant/vector2.hpp>
 
 #include <chunsa/game_state.hpp>
+#include <chunsa/ai_stub.hpp>
 #include <chunsa/snapshot_ring.hpp>
 
 namespace godot {
@@ -77,6 +78,8 @@ public:
         int64_t stock_me;
         uint8_t player_epoch;
         int32_t pop_used;
+        uint8_t game_over;
+        uint8_t winner;
 
         // Último receipt del mailbox del jugador 0. Es feedback de
         // presentación; la aceptación/rechazo autoritativa sigue en kernel.
@@ -99,6 +102,8 @@ private:
     // _exit_tree() los deletea sin problema.
     chunsa::SnapshotRing<DemoSnapshot>* ring = nullptr;
     chunsa::GameState* gs = nullptr;
+    chunsa::AiJobBox ai_box;
+    chunsa::AiRuntimeV1 ai_rt{0, 0};
 
     // Sprint 0.4: catálogo de datos (CHDB). `catalog_storage` posee el catálogo
     // (RAII) y vive tanto como el nodo; `gs->catalog` apunta a su interior. Los
@@ -227,6 +232,10 @@ public:
     // rodeando el muro. Ya no se usa en sim_loop (reemplazado por el showcase
     // del Sprint 0.3); se conserva como referencia del patrón rng/comandos.
     uint32_t build_flow_batch(chunsa::RawCommand* batch, uint32_t t);
+
+    // Escenario jugable Sprint 1.4: owner 0 humano contra owner 1 IA, ambos
+    // con centro, cuartel, ejército y aldeanos reales del catálogo.
+    uint32_t build_skirmish_batch(chunsa::RawCommand* batch, uint32_t t);
 
     // Escenario de demo Sprint 0.3 (showcase): dos ejércitos (caballería
     // owner 0 vs artillería owner 1) convergen en (128,128) — combate RPS +

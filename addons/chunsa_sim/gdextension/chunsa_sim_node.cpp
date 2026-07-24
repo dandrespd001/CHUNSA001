@@ -1,13 +1,11 @@
 #include "chunsa_sim_node.h"
 
-// chunsa_sim — ChunsaSimNode (Sprint 0.3, demo showcase: combate + moral +
-// economía visibles). Escenario showcase_v1 (seed fija) avanzando a 20 Hz en
-// un hilo: caballería (owner 0) y artillería (owner 1) convergen en (128,128)
-// y se enzarzan (combat/morale systems del kernel, autónomos), mientras
-// ciudadanos (owner 0) recolectan Alimentos (economy_system, autónomo). El
-// hilo de presentación lee el último snapshot publicado sin bloquear al
-// writer, interpola posiciones entre snapshots (60+ FPS) y colorea por
-// bando/clase/pánico leyendo el snapshot actual.
+// chunsa_sim — ChunsaSimNode (Sprint 1.4, skirmish jugable: humano contra IA,
+// combate + moral + economía visibles). El kernel avanza a 20 Hz en un hilo;
+// el owner 0 queda bajo control del jugador y el owner 1 recibe sus órdenes
+// del AiJobBox. El hilo de presentación lee el último snapshot publicado sin
+// bloquear al writer, interpola posiciones entre snapshots (60+ FPS) y
+// colorea por bando/clase/pánico leyendo el snapshot actual.
 //
 // Presentación (ADR-009, modo (c) — rig reutilizado del SPIKE-RENDER-0):
 // quads 3D con Camera3D ortográfica mirando al plano del mapa,
@@ -57,6 +55,11 @@ namespace {
 constexpr uint64_t DEMO_SEED = 20260716ull;
 constexpr auto TICK_PERIOD = std::chrono::milliseconds(50);  // 20 Hz
 constexpr int64_t MAP_TILES = 256;
+constexpr uint32_t SKIRMISH_ARMY_COUNT = 8;
+constexpr uint32_t SKIRMISH_CITIZEN_COUNT = 4;
+constexpr int64_t SKIRMISH_HUMAN_TX = 20;
+constexpr int64_t SKIRMISH_AI_TX = 80;
+constexpr int64_t SKIRMISH_BASE_TY = 128;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 
@@ -108,7 +111,7 @@ void ChunsaSimNode::_ready() {
     // no hace falta el hack delay=0 de Sprint 1.1: command_effective_tick
     // ahora da eff=0 a cualquier comando con target_tick==0 ingerido en el
     // PRIMER Step (t==0) SIN importar el delay — los PLACE_BUILDING de setup
-    // (los dos centros del showcase, build_showcase_batch en t==0) siguen
+    // (los dos centros del skirmish, build_skirmish_batch en t==0) siguen
     // entrando con target_tick=0 y activando la exención de SPEC-004 §4.1.2/
     // §4.3 exactamente igual que antes. La UI sigue usando el mismo command
     // stream; no hay camino privilegiado (el contrato del host es: NUNCA
@@ -118,6 +121,14 @@ void ChunsaSimNode::_ready() {
                                      DEMO_SEED, 0};
     gs = new chunsa::GameState();
     chunsa::gs_init(*gs, cfg);
+    // El escenario jugable separa las bases y conserva la simetría económica:
+    // el dropoff del owner 1 queda en el mismo ancla que su centro.
+    gs->dropoff_x[1] = SKIRMISH_AI_TX * chunsa::FX_ONE_RAW
+            + chunsa::FX_ONE_RAW / 2;
+    gs->dropoff_y[1] = SKIRMISH_BASE_TY * chunsa::FX_ONE_RAW
+            + chunsa::FX_ONE_RAW / 2;
+    chunsa::ai_box_init(ai_box, 1);
+    ai_rt = chunsa::AiRuntimeV1{0u, 0u};
     // --- Sprint 0.4: cargar el catálogo de datos y bindearlo al GameState ---
     {
         godot::String blob_path = os_ptr->get_environment("CHUNSA_BLOB");
@@ -203,13 +214,14 @@ void ChunsaSimNode::_ready() {
 void ChunsaSimNode::sim_loop() {
     using clock = std::chrono::steady_clock;
     // +512: margen para las órdenes del jugador (Sprint 0.3+) que se drenan
-    // de pending_player_commands cada tick, además del batch del showcase.
+    // de pending_player_commands cada tick, además del batch del skirmish.
     std::vector<chunsa::RawCommand> batch(std::max<uint32_t>(demo_units, 700u) + 512u);
 
     auto next_tick = clock::now();
+    bool game_over_reported = false;
     while (running.load(std::memory_order_relaxed)) {
         const uint32_t t = gs->tick;
-        uint32_t n = build_showcase_batch(batch.data(), t);
+        uint32_t n = build_skirmish_batch(batch.data(), t);
         // La primera llamada a step(t==0) solo admite setup generado por el
         // escenario. Una orden humana capturada durante ese arranque se
         // conserva para t==1 y no usa accidentalmente la exención de setup.
@@ -221,7 +233,24 @@ void ChunsaSimNode::sim_loop() {
             }
             pending_player_commands.clear();
         }
+
+        // t = gs->tick, batch/n ya contienen setup + órdenes del jugador.
+        // Este pump copia literalmente el ciclo de driver.hpp::drive con IA.
+        if (chunsa::ai_should_dispatch(ai_box, t)) chunsa::ai_dispatch(ai_box, t, ai_rt);
+        if (ai_box.state == chunsa::AiJobState::DISPATCHED) chunsa::ai_execute(ai_box, *gs);
+        if (chunsa::ai_stalled(ai_box, t)) chunsa::ai_execute(ai_box, *gs);
+        if (chunsa::ai_due(ai_box, t)) {
+            for (uint32_t k = 0; k < ai_box.result_count && n < batch.size(); ++k)
+                batch[n++] = ai_box.result[k];
+            chunsa::ai_commit(ai_box, ai_rt);
+        }
+
         chunsa::step(*gs, batch.data(), n);
+
+        // Las secuencias de setup del emisor 1 también pasan por el kernel.
+        // El runtime empieza en {0,0} por contrato y, una vez consumido el
+        // setup de t==0, continúa desde la última secuencia aceptada.
+        if (t == 0u) ai_rt.ai_sequence = gs->last_seq[1];
 
         DemoSnapshot* s = ring->begin_write();
         if (s != nullptr) {
@@ -262,6 +291,8 @@ void ChunsaSimNode::sim_loop() {
             s->stock_me = gs->player_stock[0][2];
             s->player_epoch = gs->player_epoch[0];
             s->pop_used = gs->pop_used[0];
+            s->game_over = gs->game_over;
+            s->winner = gs->winner;
             const chunsa::ReceiptMailbox& mailbox = gs->mailbox[0];
             if (mailbox.count > 0u) {
                 const uint32_t last =
@@ -279,23 +310,39 @@ void ChunsaSimNode::sim_loop() {
             ring->publish();
         }
 
-        // Diagnóstico del showcase (Sprint 0.3) cada 100 ticks, desde el hilo
-        // de simulación: vivos por clase + stock de Alimentos del owner 0.
+        if (gs->game_over != 0u && !game_over_reported) {
+            game_over_reported = true;
+            godot::UtilityFunctions::print(
+                    "CHUNSA game_over winner=", static_cast<int64_t>(gs->winner),
+                    " tick=", static_cast<int64_t>(t));
+            running.store(false, std::memory_order_relaxed);
+        }
+
+        // Diagnóstico del skirmish cada 100 ticks, desde el hilo de simulación:
+        // vivos por clase, stock del owner 0 y progreso observable de la IA.
         if (t % 100u == 0u) {
             uint32_t n_cav_alive = 0, n_art_alive = 0, n_cit_alive = 0,
                      n_buildings_alive = 0;
+            int64_t ai_first_x = -1;
             for (uint32_t i = 0; i < gs->entities.capacity; ++i) {
                 if (gs->entities.alive[i] == 0u) continue;
                 if (gs->entity_kind[i] == 1u) ++n_buildings_alive;
                 else if (gs->unit_class[i] == 1u) ++n_cav_alive;
                 else if (gs->unit_class[i] == 2u) ++n_art_alive;
                 else if (gs->unit_class[i] == 3u) ++n_cit_alive;
+                if (ai_first_x < 0 && gs->owner[i] == 1u &&
+                    gs->entity_kind[i] == 0u && gs->unit_class[i] <= 2u) {
+                    ai_first_x = gs->pos_x[i] / chunsa::FX_ONE_RAW;
+                }
             }
             godot::UtilityFunctions::print("CHUNSA cav=", n_cav_alive,
                                            " art=", n_art_alive,
                                            " citizens=", n_cit_alive,
                                            " buildings=", n_buildings_alive,
-                                           " stock_A=", gs->player_stock[0][0]);
+                                           " stock_A=", gs->player_stock[0][0],
+                                           " ai_seq=", ai_rt.ai_sequence,
+                                           " ai_last_seq=", gs->last_seq[1],
+                                           " ai_x=", ai_first_x);
         }
 
         next_tick += TICK_PERIOD;
@@ -417,6 +464,36 @@ void ChunsaSimNode::_draw() {
 
     draw_selection_panel(font, text, muted);
     draw_minimap(font, text);
+
+    if (snap_curr.game_over != 0u) {
+        const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+        const float panel_width = std::min(620.0f, viewport_size.x - 32.0f);
+        const float panel_height = 176.0f;
+        const godot::Rect2 panel(
+                godot::Vector2((viewport_size.x - panel_width) * 0.5f,
+                               (viewport_size.y - panel_height) * 0.5f),
+                godot::Vector2(panel_width, panel_height));
+
+        godot::String outcome = "EMPATE";
+        godot::Color outcome_color(1.0, 0.85, 0.35, 1.0);
+        if (snap_curr.winner == 0u) {
+            outcome = "VICTORIA";
+            outcome_color = godot::Color(0.35, 1.0, 0.55, 1.0);
+        } else if (snap_curr.winner == 1u) {
+            outcome = "DERROTA";
+            outcome_color = godot::Color(1.0, 0.35, 0.35, 1.0);
+        }
+
+        draw_rect(panel, godot::Color(0.015, 0.025, 0.05, 0.94));
+        draw_string(font, panel.position + godot::Vector2(0, 76), outcome,
+                    static_cast<godot::HorizontalAlignment>(1), panel.size.x,
+                    48, outcome_color);
+        const godot::String detail = "Partida finalizada · tick " +
+                godot::String::num_int64(static_cast<int64_t>(snap_curr.tick));
+        draw_string(font, panel.position + godot::Vector2(0, 122), detail,
+                    static_cast<godot::HorizontalAlignment>(1), panel.size.x,
+                    16, muted);
+    }
 }
 
 // Selección, colocación y órdenes del jugador (Sprint 1.1). Todo lo que sale
@@ -1465,6 +1542,93 @@ uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) 
         c.p.y_raw = static_cast<int64_t>(128) * 65536 + 32768;
         n = 1;
     }
+    return n;
+}
+
+// ---------------------------------------------------------------------------
+// Escenario jugable Sprint 1.4: skirmish humano contra IA
+// ---------------------------------------------------------------------------
+
+// El setup usa exclusivamente comandos de escenario y record_id ya resueltos
+// desde el blob real en _ready. Ambos bandos reciben la misma composición:
+// centro, cuartel, ejército y ciudadanos vulnerables. El jugador 0 no recibe
+// órdenes posteriores del escenario; sus unidades quedan disponibles para el
+// HUD. El owner 1 recibe sus órdenes únicamente del AiJobBox en sim_loop.
+uint32_t ChunsaSimNode::build_skirmish_batch(chunsa::RawCommand* batch, uint32_t t) {
+    using namespace chunsa;
+    if (t != 0u) return 0u;
+
+    uint32_t n = 0;
+    uint64_t seq0 = 0;
+    uint64_t seq1 = 0;
+
+    auto place_center = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                            BuildingId building_id) {
+        RawCommand& c = batch[n++];
+        std::memset(&c, 0, sizeof(RawCommand));
+        c.target_tick = 0;
+        c.emitter = emitter;
+        c.type = CommandType::PLACE_BUILDING;
+        c.sequence = ++sequence;
+        c.p.unit_id = building_id;
+        c.p.x_raw = tx;
+        c.p.y_raw = SKIRMISH_BASE_TY;
+    };
+
+    auto place_barracks = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                              BuildingId building_id) {
+        RawCommand& c = batch[n++];
+        std::memset(&c, 0, sizeof(RawCommand));
+        c.target_tick = 0;
+        c.emitter = emitter;
+        c.type = CommandType::PLACE_BUILDING;
+        c.sequence = ++sequence;
+        c.p.unit_id = building_id;
+        c.p.x_raw = tx + 4;
+        c.p.y_raw = SKIRMISH_BASE_TY - 4;
+    };
+
+    auto spawn_army = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                          bool approach_from_right, UnitId unit_id) {
+        for (uint32_t i = 0; i < SKIRMISH_ARMY_COUNT; ++i) {
+            RawCommand& c = batch[n++];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0;
+            c.emitter = emitter;
+            c.type = CommandType::SPAWN_UNIT;
+            c.sequence = ++sequence;
+            c.p.unit_id = unit_id;
+            const int64_t offset = static_cast<int64_t>(i);
+            c.p.x_raw = (approach_from_right ? tx - 4 - offset : tx + 4 + offset)
+                    * FX_ONE_RAW;
+            c.p.y_raw = SKIRMISH_BASE_TY * FX_ONE_RAW;
+        }
+    };
+
+    auto spawn_citizens = [&](uint16_t emitter, uint64_t& sequence, int64_t tx) {
+        for (uint32_t i = 0; i < SKIRMISH_CITIZEN_COUNT; ++i) {
+            RawCommand& c = batch[n++];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0;
+            c.emitter = emitter;
+            c.type = CommandType::SPAWN_CITIZEN;
+            c.sequence = ++sequence;
+            c.p.unit_id = uid_citizen;
+            c.p.x_raw = (tx + 2 + static_cast<int64_t>(i)) * FX_ONE_RAW;
+            c.p.y_raw = (SKIRMISH_BASE_TY + 3) * FX_ONE_RAW;
+        }
+    };
+
+    place_center(0, seq0, SKIRMISH_HUMAN_TX, bid_settlement_center);
+    place_barracks(0, seq0, SKIRMISH_HUMAN_TX, bid_chariotry_stable);
+    spawn_army(0, seq0, SKIRMISH_HUMAN_TX, false, uid_cavalry);
+    spawn_citizens(0, seq0, SKIRMISH_HUMAN_TX);
+
+    place_center(1, seq1, SKIRMISH_AI_TX, bid_forum_center);
+    place_barracks(1, seq1, SKIRMISH_AI_TX, bid_castra_barracks);
+    spawn_army(1, seq1, SKIRMISH_AI_TX, true, uid_artillery);
+    spawn_citizens(1, seq1, SKIRMISH_AI_TX);
+
     return n;
 }
 
