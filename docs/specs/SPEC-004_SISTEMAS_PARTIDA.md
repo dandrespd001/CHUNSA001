@@ -165,6 +165,31 @@ sin conocer GameState: se le pasa el punto de dropoff resuelto, como hoy).
   celdas del footprint a `cost_grid = 1` y `flow_dirty = 1`. Todo ciudadano con
   `build_target == ese índice` lo limpia en su siguiente fase §5 (no hace falta barrido).
 
+### §7.1 ENMIENDA — Aldeanos vulnerables en combate (Sprint 1.4-cierre, decisión del Director 2026-07-24)
+Hasta el Sprint 1.3 los aldeanos (`unit_class==3`) eran **intocables** en combate (excluidos
+como objetivo por el guard `unit_class[j] > 2 && entity_kind[j] != 1`). Esto era una
+simplificación temporal del Sprint 1.1, no una decisión de diseño: hacía que una partida con
+economía **nunca terminara por conquista** (quien conservara un aldeano no podía perder — la
+derrota v1 de SPEC-005 §6 exige "0 edificios Y 0 aldeanos"). El Director resuelve, alineado con
+la visión AoE2: **los aldeanos pasan a ser objetivo válido de combate**.
+- **Targeting** (`combat_system` y `aggro_system`): un aldeano enemigo vivo es objetivo válido,
+  con la misma métrica/desempate (dist_sq, menor índice). El guard de exclusión de aldeanos como
+  OBJETIVO se elimina en ambos sistemas.
+- **Los aldeanos SIGUEN sin atacar/perseguir**: el guard de ATACANTE `unit_class[i] > 2` se
+  mantiene intacto (son vulnerables, no combatientes). Sin moral/pánico (unit_class 3 fuera de
+  `morale_system` como hasta ahora).
+- **RPS contra aldeano defensor**: la tabla `rps_mult_bp` es 3×3 (clases 0..2); un aldeano
+  (unit_class 3) haría OOB. Se añade una rama análoga a la de edificios: multiplicador **×1.0
+  (10000 bp) neutro** de cualquier atacante contra un aldeano (balance v1 ajustable; documentar).
+- **Consecuencia de trayectoria**: cambia el comportamiento de TODO escenario donde un aldeano
+  quede al alcance de un enemigo (showcase, tests de economía+combate). NO es un bump de dominio
+  de checksum (los campos hasheados no cambian): es un cambio de TRAYECTORIA — los checksums
+  golden de los escenarios afectados se regeneran por el procedimiento establecido (dump del
+  diff, sin cambios de trayectoria en escenarios SIN aldeanos-en-peligro). La economía en sí
+  (recolección) no cambia salvo que un aldeano muera antes de entregar.
+- **Habilita** la partida completa con economía que termina por conquista: la condición de
+  victoria v1 (SPEC-005 §6) queda ahora alcanzable con aldeanos presentes.
+
 ## §8 Persistencia y checksum
 - **Save**: bump de versión (v7 → v8): los arrays de §3 entran al stream canónico en el
   orden en que aparecen en §3, tras los campos del v7. El loader v8 acepta v7 (arrays
