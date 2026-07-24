@@ -214,7 +214,8 @@ int main(int argc, char** argv) {
         std::cout << (a.with_ai ? "G4" : "G3") << " savetest(save@" << a.save_at
                   << (a.hold_dispatched_until_save ? ",hold" : "") << "): "
                   << (ok ? "OK" : "FAIL") << " state=" << std::hex << oa.final_checksum
-                  << " cont=" << oa.continuation_checksum << std::dec << "\n";
+                  << " cont=" << oa.continuation_checksum << std::dec
+                  << " ai_executions=" << (oa.ai_executions + ob.ai_executions) << "\n";
         return ok ? 0 : 1;
     }
     if (cmd == "record") {
