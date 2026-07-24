@@ -67,8 +67,15 @@ int main() {
     // al menos parcialmente: remaining < 500 (se extrajo algo de él).
     CHECK(g1->deposits[0].remaining < 500);
 
-    // (4) Ningún ciudadano se perdió: los 8 siguen vivos (no hay mecanismo de
-    // muerte para citizens en v1; si esto falla, algo mató a un ciudadano).
+    // (4) Ningún ciudadano se perdió: los 8 siguen vivos. Este escenario NUNCA
+    // spawnea al owner 1 (sin comandos de emitter=1 en ningún tick), así que
+    // no hay ningún enemigo vivo que pueda alcanzarlos — el guard
+    // `owner[j]==owner[i]` de combat_system/aggro_system los excluye de
+    // cualquier interacción entre sí. Desde SPEC-004 §7.1 (Sprint 1.4-cierre)
+    // SÍ existe mecanismo de muerte para citizens en presencia de un enemigo
+    // real (ver tests/unit/test_combat.cpp: test_citizen_is_vulnerable_target)
+    // — aquí sigue valiendo el check porque el escenario, por construcción,
+    // no tiene ningún atacante enemigo.
     uint32_t alive_citizens = 0;
     for (uint32_t i = 0; i < g1->entities.capacity; ++i) {
         if (g1->entities.alive[i] && g1->unit_class[i] == 3) ++alive_citizens;
