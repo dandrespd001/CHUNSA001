@@ -39,6 +39,7 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 #include "chunsa/vec2fx.hpp"
 #include "chunsa/cli_run.hpp"
 #include "chunsa/driver.hpp"
+#include "chunsa/skirmish.hpp"
 
 namespace {
 
@@ -167,7 +168,8 @@ int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty()) {
         std::cerr << "uso: chunsa_sim_cli {golden --vectors <dir> | run [--units N --ticks T "
-                     "--checksum-every K --seed S --out F | --selftest-g1] | bench | savetest | verify}\n";
+                     "--checksum-every K --seed S --out F | --selftest-g1] | bench | savetest | verify "
+                     "| skirmish [--ticks T --seed S --defenders N --attackers M]}\n";
         return 2;
     }
     const std::string& cmd = args[0];
@@ -214,7 +216,8 @@ int main(int argc, char** argv) {
         std::cout << (a.with_ai ? "G4" : "G3") << " savetest(save@" << a.save_at
                   << (a.hold_dispatched_until_save ? ",hold" : "") << "): "
                   << (ok ? "OK" : "FAIL") << " state=" << std::hex << oa.final_checksum
-                  << " cont=" << oa.continuation_checksum << std::dec << "\n";
+                  << " cont=" << oa.continuation_checksum << std::dec
+                  << " ai_executions=" << (oa.ai_executions + ob.ai_executions) << "\n";
         return ok ? 0 : 1;
     }
     if (cmd == "record") {
@@ -264,6 +267,31 @@ int main(int argc, char** argv) {
                   << " replay_v=" << data.version
                   << " checksum=" << std::hex << out.final_checksum << std::dec << "\n";
         return ok ? 0 : 1;
+    }
+    if (cmd == "skirmish") {
+        // Gate de fase (SPEC-005 §8.3): partida humano-scripted (owner=0) vs
+        // IA real (owner=1) que debe TERMINAR en victoria (< 36000 ticks).
+        chunsa::SkirmishOpts o{};
+        o.ticks = static_cast<uint32_t>(opt_u64(args, "--ticks", 36000));
+        o.seed = opt_u64(args, "--seed", 20260724ull);
+        o.defender_soldiers = static_cast<uint32_t>(opt_u64(args, "--defenders", 4));
+        o.attacker_soldiers = static_cast<uint32_t>(opt_u64(args, "--attackers", 6));
+        chunsa::SkirmishOut out{};
+        const uint64_t alloc_before = ::g_chunsa_allocs;
+        const int code = chunsa::drive_skirmish_fresh(o, out);
+        const uint64_t alloc_delta = ::g_chunsa_allocs - alloc_before;
+        const bool concluded = (out.game_over == 1u && out.winner != 0xFFu && out.end_tick < 36000u);
+        std::cout << "skirmish: " << (concluded ? "OK" : "NO-CONCLUYENTE")
+                  << " end_tick=" << out.end_tick
+                  << " game_over=" << static_cast<unsigned>(out.game_over)
+                  << " winner=" << static_cast<unsigned>(out.winner)
+                  << " ai_executions=" << out.ai_executions
+                  << " state=" << std::hex << out.final_checksum
+                  << " cont=" << out.continuation_checksum << std::dec
+                  << " fatal=" << chunsa::fatal_reason_name(out.fatal)
+                  << " alloc_delta_total=" << alloc_delta << "\n";
+        if (code != 0) return code;
+        return concluded ? 0 : 1;
     }
     if (cmd == "loadtest") {
         // Harness de fuzzing: cargar un save arbitrario JAMÁS debe crashear.
