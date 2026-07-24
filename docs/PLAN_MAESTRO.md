@@ -70,7 +70,8 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | SPEC_ARQUITECTURA_BASE v1.1.1 | Constitución técnica; ADRs 008–020 | APPROVED | — (enmienda ADR-021 en 0.3-cierre) | — |
 | SPEC-001 v1.1 | Kernel determinista (§1–§16, gates G1–G5) | APPROVED, ejecutado | — | — |
 | **SPEC-002** | Datos y schemas: `unit`/`building`/`tech`/`civ`/`map`/`ai-profile` → blob determinista; `chunsa_data_compiler` completo; procedencia y verificación (ADR-014); versionado de blobs | POR ESCRIBIR | Sprint 0.4 | Arquitecto |
-| **SPEC-004** | Sistemas de partida: construcción (placement/colisión/HP), producción (colas/costes), tech y epoch-up (ADR-015 doble gate), población, win-conditions | POR ESCRIBIR | Sprint 1.1 (construcción) + 1.2 (producción/tech) | Arquitecto |
+| **1.2** | ✅ COMPLETO (`86cb7e7`) | **Producción y tecnología**: SPEC-004 Parte II · K1 replay v3 + save v9 + checksum v4 + ventana de setup (cierra D8) · datos (2 cuarteles + 4 techs) · K2 kernel (TRAIN_UNIT/SET_RALLY/RESEARCH_TECH/EPOCH_UP, colas, tech=capacidad, epoch-up doble gate ADR-015, save v10/checksum v5; auditoría Opus SIN P0) · UI Godot (HUD, colas, investigación, época). ctest 16/16, demo `buildings=4`. `docs/REPORTE_SPRINT_1.2.md`. |
+| **SPEC-004** | Sistemas de partida: construcción (I, ejecutada 1.1) + producción/tech/epoch-up/población (II, ejecutada 1.2) + win-conditions (III, pendiente) | Partes I–II APPROVED+ejecutadas | 1.1 + 1.2 | Arquitecto |
 | **SPEC-006** | UI/HUD y game feel: contrato ejecutable desde doc 34 (HUD, control groups, minimapa, cámara, atajos, juice) | POR ESCRIBIR | Sprint 1.3 | Arquitecto |
 | **SPEC-005** | IA oponente: contrato ejecutable de las 3 capas del doc 30 sobre el mailbox determinista de SPEC-001 §7 (utility AI estratégica → behavior trees tácticos → LOD) | POR ESCRIBIR | Sprint 1.4 | Arquitecto |
 | **SPEC-003** | Pipeline de assets y render: formatos, presupuesto de arte por época (doc 37), integración con modo (c) de ADR-009, audio | BORRADOR en 1.1, FINAL en 1.5 | Sprint 1.5 | Arquitecto |
@@ -134,7 +135,11 @@ kernel (no MiniMax standalone — MiniMax hizo los datos); el render lo hizo Cod
 - **Delegación**: SPEC-004 = **Arquitecto**. Kernel placement/HP/destrucción = **Sonnet**. Módulo constructor autocontenido = **MiniMax**. Render+ghost+input de placement = **Kimi**.
 - **DoD**: partida donde ciudadanos construyen un dropoff y un edificio militar, los edificios bloquean el pathfinding, y destruirlos los elimina · save v8 · gates verdes.
 
-#### Sprint 1.2 — producción y tecnología
+#### Sprint 1.2 — producción y tecnología ✅ COMPLETO (2026-07-24, ver §1 y REPORTE_SPRINT_1.2)
+Desviaciones del plan original: se abrió con **replay v3 + save v9** (deuda D8, pieza K1) antes
+de la producción; se añadió **SET_RALLY** y **EPOCH_UP** al enum; la UI la hizo Codex/Luna Max
+(Kimi sigue sin cuota); las techs son paquetes de capacidad sin efectos de stats (eso pasa a
+Parte III). save v10 / checksum v5. La época es catálogo-ancha (no por civ) — deuda Fase 2.
 - **Objetivo**: los edificios producen unidades y la tecnología avanza — el bucle económico-militar completo.
 - **Entregables**:
   1. **SPEC-004 (parte producción/tech)**: colas de entrenamiento (coste en recursos, tiempo en ticks, rally point), árbol tecnológico M1 del slice (doc 23 → schema `tech` de SPEC-002; tecnología = paquete de capacidad, NO porcentajes), epoch-up con doble gate de ADR-015 (edificios visibles + tiempo de mundo).
