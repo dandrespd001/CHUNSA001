@@ -180,6 +180,27 @@ struct GameState {
 
     // Buffer de trabajo del tick (comandos debidos) — parte del estado por simplicidad POD.
     ScheduledCommand due[PENDING_CAP];
+
+    // Condición de victoria/derrota (Sprint 1.4, SPEC-005 §6). ESTADO:
+    // serializado + checksummeado. Son ESCALARES DEL PARTIDO (no por-slot,
+    // a diferencia de todos los arrays de arriba): se inicializan UNA vez en
+    // gs_init, NO se tocan en zero_components (que resetea componentes
+    // por-entidad al reciclar un slot).
+    uint8_t  game_over;         // 0 = en curso, 1 = terminado (congela: step ya no reevalúa)
+    uint8_t  winner;            // emisor ganador si game_over==1; 0xFF = empate o pendiente
+    // Máscara MONÓTONA (solo se pone a 1 bits, nunca se limpian) de qué
+    // emisores ALGUNA VEZ tuvieron al menos un edificio o un ciudadano vivo
+    // simultáneamente con game_over==0. Es la definición operativa de
+    // "jugador activo"/"jugador con entidades iniciales" de SPEC-005 §6 (ver
+    // RESULT del sprint, sección "jugador activo"): sin esto, un emisor
+    // configurado en cfg.player_count que nunca recibió unidades reales
+    // (p.ej. un slot de jugador vacío en un fixture de test, o el emisor 1 en
+    // una corrida sin IA) contaría como "derrotado desde tick 0" y podría
+    // declarar ganador espurio al otro jugador, o forzar un empate espurio —
+    // exactamente lo que SPEC-005 §6 prohíbe ("no marques ganador a un
+    // emisor que nunca jugó"). Bit p = 1 << p; solo bits [0, MAX_EMITTERS)
+    // tienen sentido (MAX_EMITTERS == 16, cabe exacto en 16 bits).
+    uint16_t participants_mask;
 };
 
 inline void zero_components(GameState& g, uint32_t i) noexcept {
@@ -295,6 +316,13 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
         for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
         g.research_tech[i] = INVALID_TECH_ID;
     }
+    // Sprint 1.4 (SPEC-005 §6): game_over/participants_mask ya quedan en 0
+    // por el memset de arriba (correcto: "en curso"/"nadie ha participado
+    // todavía"); winner SÍ exige el centinela explícito 0xFF — 0 significaría
+    // "ya ganó el jugador 0", igual que unit_id/building_id necesitan su
+    // propio INVALID_* explícito más arriba en esta función.
+    g.game_over = 0;
+    g.winner = 0xFFu;
 }
 
 // Enlaza el catálogo de datos al GameState (Sprint 0.4). Binding runtime puro:

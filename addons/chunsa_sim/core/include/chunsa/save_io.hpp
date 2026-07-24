@@ -52,7 +52,15 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // game_state.hpp), añadidos al final del stream STATE. Mismo patrón que
 // v7/v8/v9: envelope/header sin cambios, solo el payload crece. Sin
 // migración v9→v10 (mismo precedente D7/v8→v9).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 10;
+// v11 (Sprint 1.4, SPEC-005 §6/§7): +game_over/winner/participants_mask
+// (condición de victoria/derrota + la definición operativa de "jugador
+// activo" — ver step.hpp::detail::victory_check y game_state.hpp),
+// añadidos al final del stream STATE. Mismo patrón que v7..v10:
+// envelope/header sin cambios (CHECKSUM_ALGO_VERSION SÍ cambia — ver
+// checksum.hpp v6 — pero ese campo del header ya se comprobaba antes de
+// este sprint, no es un cambio de layout del envelope/header en sí), solo
+// el payload crece. Sin migración v10→v11 (mismo precedente D7).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 11;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B
