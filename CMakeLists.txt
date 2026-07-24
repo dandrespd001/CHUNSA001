@@ -102,6 +102,13 @@ target_compile_definitions(chunsa_test_production_tech PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME production_tech COMMAND chunsa_test_production_tech)
 
+# --- Test Sprint 1.4 (K1): victoria/derrota + perfil de IA tipado (SPEC-005) ---
+add_executable(chunsa_test_victory_ai_profile tests/unit/test_victory_ai_profile.cpp)
+target_link_libraries(chunsa_test_victory_ai_profile PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_victory_ai_profile PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME victory_ai_profile COMMAND chunsa_test_victory_ai_profile)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
