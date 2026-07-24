@@ -109,6 +109,16 @@ target_compile_definitions(chunsa_test_victory_ai_profile PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME victory_ai_profile COMMAND chunsa_test_victory_ai_profile)
 
+# --- Test Sprint 1.4 (K2): IA de 3 capas — fixtures aislados (SPEC-005 §4/§8.4) ---
+add_executable(chunsa_test_ai_layers tests/unit/test_ai_layers.cpp)
+target_link_libraries(chunsa_test_ai_layers PRIVATE chunsa_sim_core)
+add_test(NAME ai_layers COMMAND chunsa_test_ai_layers)
+
+# --- Test Sprint 1.4 (K2): gate de fase — skirmish (SPEC-005 §8.3) -------------
+add_executable(chunsa_test_ai_skirmish tests/unit/test_ai_skirmish.cpp)
+target_link_libraries(chunsa_test_ai_skirmish PRIVATE chunsa_sim_core)
+add_test(NAME ai_skirmish COMMAND chunsa_test_ai_skirmish)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
