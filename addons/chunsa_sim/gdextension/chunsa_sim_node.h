@@ -60,6 +60,9 @@ public:
         uint8_t fleeing[1024];  // 1 = en pánico
         int32_t hp[1024];
         int32_t max_hp[1024];
+        int32_t attack[1024];       // daño base de la unidad
+        int32_t range_mt[1024];     // alcance en mili-tiles (1000 = 1 tile)
+        int32_t speed_mtpt[1024];   // velocidad en mili-tiles por tick
         uint8_t entity_kind[1024]; // 0=unidad, 1=edificio
         uint32_t building_id[1024];
         uint32_t build_progress[1024];

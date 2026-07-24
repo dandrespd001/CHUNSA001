@@ -289,6 +289,9 @@ void ChunsaSimNode::sim_loop() {
                 s->fleeing[i] = gs->fleeing[i];
                 s->hp[i] = gs->hp[i];
                 s->max_hp[i] = gs->max_hp[i];
+                s->attack[i] = gs->attack[i];
+                s->range_mt[i] = gs->range_mt[i];
+                s->speed_mtpt[i] = gs->speed_mtpt[i];
                 s->entity_kind[i] = gs->entity_kind[i];
                 s->building_id[i] = gs->building_id[i];
                 s->build_progress[i] = gs->build_progress[i];
@@ -1311,6 +1314,10 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
         else if (snap_curr.unit_class[i] < 6u) ++class_counts[snap_curr.unit_class[i]];
     }
 
+    const bool single_combat_unit = count == 1 && first >= 0 &&
+            snap_curr.entity_kind[static_cast<uint32_t>(first)] == 0u &&
+            snap_curr.unit_class[static_cast<uint32_t>(first)] <= 2u;
+
     if (count == 1 && first >= 0) {
         draw_string(font, panel.position + godot::Vector2(16, 49),
                     slot_display_name(static_cast<uint32_t>(first)) + "  · owner " +
@@ -1340,6 +1347,17 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 "HP " + godot::String::num_int64(hp_sum) + "/" +
                         godot::String::num_int64(max_hp_sum),
                 static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+
+    if (single_combat_unit) {
+        const uint32_t unit = static_cast<uint32_t>(first);
+        const godot::String stats = "ATQ " +
+                godot::String::num_int64(snap_curr.attack[unit]) +
+                " · ALC " + godot::String::num_int64(snap_curr.range_mt[unit]) +
+                " mili-tiles · VEL " +
+                godot::String::num_int64(snap_curr.speed_mtpt[unit]) + " mt/tick";
+        draw_string(font, panel.position + godot::Vector2(16, 106), stats,
+                    static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
+    }
 
     const int32_t selected_building = selected_single_building_slot();
     if (selected_building >= 0 &&
@@ -1415,7 +1433,8 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
         }
     } else {
-        draw_string(font, panel.position + godot::Vector2(16, 116),
+        const float actions_y = single_combat_unit ? 126.0f : 116.0f;
+        draw_string(font, panel.position + godot::Vector2(16, actions_y),
                     "Acciones: clic derecho mueve · B construye · R rally",
                     static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
