@@ -20,7 +20,8 @@ dropoff_resources:
   - A
   - B
   - Me
-trains: []
+trains:
+  - egipto:work_crew
 researches:
   - egipto:corvee_logistics
 required_capabilities: []
