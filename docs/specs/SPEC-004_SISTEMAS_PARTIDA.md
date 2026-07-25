@@ -1,8 +1,8 @@
-# SPEC-004 — Sistemas de partida · Partes I–II
+# SPEC-004 — Sistemas de partida · Partes I–III
 
-Versión 0.2 (Parte I EJECUTADA en Sprint 1.1; Parte II DRAFT ejecutable para Sprint 1.2) · 2026-07-23 · Autor: Arquitecto (Claude)
+Versión 0.3 (Partes I–II EJECUTADAS en Sprints 1.1/1.2; Parte III DRAFT ejecutable para Sprint 1.6B) · 2026-07-24 · Autor: Arquitecto (Claude)
 Jerarquía: INDICE_MAESTRO → SPEC_ARQUITECTURA_BASE v1.1.1 → SPEC-001 v1.1 → SPEC-002 → **este documento**.
-Partes futuras (III win-conditions y efectos de stats por tech, IV+) se añadirán en sprints posteriores **append-only**.
+Partes futuras (efectos de stats por tech, recetas M2–M3, IV+) se añadirán en sprints posteriores **append-only**.
 
 ---
 # PARTE I — Construcción (Sprint 1.1, EJECUTADA — ver REPORTE_SPRINT_1.1)
@@ -355,3 +355,119 @@ PLACE_BUILDING (camino normal, no exento) y TRAIN_UNIT validan además:
 - **MiniMax**: datos YAML (cuarteles con `trains`, techs M1 de Egipto/Roma con
   procedencia ADR-014) — en paralelo, validados por el gate `data_compile`.
 - **Codex/Luna Max**: UI de producción/tech/época — al final, contra main con K2.
+
+---
+# PARTE III — Apertura económica completa (Sprint 1.6B)
+
+Versión 0.3 · 2026-07-24 · Autor: Arquitecto (Claude). Append-only sobre las Partes I–II.
+Objetivo del sprint (PLAN_MAESTRO v1.2 §4): **empezar con centro + aldeanos y llegar a
+producción militar sin nada inyectado tras el setup**. Hoy la economía arranca con 6 depósitos
+hardcodeados (`gs_init_economy`), los centros no producen aldeanos (`trains: []`), y el kernel
+no sabe de qué civilización es cada dato (`civ_id` no tipado) — esta parte cierra los tres.
+
+## §15 Datos: lo que el blob debe traer (y el loader tipificar)
+### §15.1 `resource_spawns` del mapa (el schema YA lo exige; hoy va vacío)
+`data/maps/base_demo_desert_basin.yaml` tiene `resource_spawns: []`. Debe poblarse con los
+depósitos reales del escenario: `{kind: resource, id: <A|B|Me>, x_millitiles, y_millitiles,
+amount}`. Diseño del slice: depósitos simétricos alrededor de las dos `starting_positions`
+existentes (slot 0 en 20.5/128.5 tiles, slot 1 en 235.5/128.5) para que la apertura sea justa,
+más algunos neutrales al centro. **La simetría es requisito de balance, no estético.**
+### §15.2 Los centros producen aldeanos
+`egipto:settlement_center` y `rome:forum_center` tienen `trains: []`. Deben entrenar el aldeano
+de su civilización (`egipto:work_crew`, `rome:camp_work_crew`) — igual que poblé `researches` en
+el Sprint 1.2. Sin esto no hay apertura económica posible.
+### §15.3 `civ_id` tipado en el loader (deuda de Fase 1, ahora bloqueante)
+El schema declara `civ_id` en unit/building/tech, pero el loader C++ **no lo tipa** (solo lo
+valida el compilador Python). Se añade al patrón endurecido:
+```cpp
+using CivId = uint32_t;  inline constexpr CivId INVALID_CIV_ID = 0xFFFFFFFFu;
+// tabla de civilizaciones (kind=civ, hoy solo estructural) + índice por record_id
+CivId catalog_find_civ(cat, name, name_len);
+// UnitDefinitionV1 / BuildingDefinitionV1 / TechDefinitionV1 ganan: CivId civ_id;
+```
+Referencia `civ_id` no resoluble ⇒ rechazo del catálogo entero (patrón SPEC-002 §7). El formato
+del blob NO cambia (los records civ ya viajan).
+
+## §16 Depósitos desde el mapa (reemplaza el patrón fijo)
+- El catálogo tipifica los `resource_spawns` del mapa activo:
+  `struct ResourceSpawnV1 { uint8_t resource_idx; /*0=A,1=B,2=Me*/ int64_t x_raw, y_raw; int32_t amount; };`
+  (`x_millitiles → raw` = `mt * FX_ONE_RAW / 1000`, exacto en enteros).
+- `gs_init_economy` pasa a poblar `deposits[]` **desde el mapa**, en el orden canónico del blob
+  (ascendente, ya garantizado), hasta `ECO_MAX_DEPOSITS`; si el mapa trae más, se rechaza la
+  carga (no se truncan datos en silencio).
+- **Compatibilidad**: si no hay catálogo enlazado o el mapa no trae spawns, se conserva el
+  patrón fijo de 6 depósitos **exacto** como fixture legacy — los escenarios golden previos
+  (sintéticos, tests de economía de 0.3) deben quedar **bit-idénticos**. Es la misma disciplina
+  de fallback que el dropoff-edificio de §6.
+- El `dropoff` sigue resolviéndose por §6 (edificio propio, fallback al punto fijo).
+
+## §17 Identidad de civilización y época por jugador
+Estado nuevo en `GameState` (ESTADO: serializado + checksummeado):
+```cpp
+CivId player_civ[MAX_EMITTERS];   // INVALID_CIV_ID = sin asignar
+```
+- Se fija en el setup del escenario (comando o init explícito del host, análogo a
+  `gs_init_epoch_from_catalog`), NO se infiere en caliente.
+- **Época inicial POR JUGADOR** (cierra la deuda de K2 del 1.2, que la calculaba
+  catálogo-ancha): con `civ_id` tipado, la época inicial de un jugador es el mínimo
+  `epoch_window[0]` de los datos **de SU civilización**. `gs_init_epoch_from_catalog` gana una
+  variante por-jugador; la catálogo-ancha se conserva para escenarios sin civ asignada.
+- **Gates de civilización** (retro-aplican a Partes I–II): `PLACE_BUILDING`, `TRAIN_UNIT` y
+  `RESEARCH_TECH` rechazan con **ILLEGAL_STATE** si `def.civ_id != g.player_civ[emitter]`
+  (cuando el jugador tiene civ asignada; si es `INVALID_CIV_ID`, el gate no aplica —
+  compatibilidad con los escenarios/tests existentes). Exento en la ventana de setup del tick 0,
+  igual que los demás gates (§4.1.2).
+
+## §18 Recolección explícita: comando GATHER
+Hoy los aldeanos recolectan **solos** (state machine autónoma SEEK/HARVEST/RETURN del Sprint
+0.3). Para una apertura jugable el jugador debe poder dirigirlos.
+- **`GATHER = 13`** (append-only): `p.handle` = ciudadano propio; `p.x_raw/p.y_raw` = punto raw
+  del depósito objetivo. Validación en orden: handle vivo/propio (**INVALID_ENTITY**/
+  **NOT_OWNER**) · `unit_class == 3` (**ILLEGAL_STATE**) · resolver depósito: el de índice más
+  bajo cuyo `remaining > 0` y cuya distancia al punto sea ≤ `GATHER_PICK_RADIUS_RAW` (1 tile);
+  si ninguno ⇒ **INVALID_ENTITY**. Efecto: `eco_assigned_deposit = ese índice`,
+  `eco_state = SEEK`, y `build_target = BUILD_NO_TARGET` (una orden de recolectar cancela la de
+  construir — decisión explícita).
+- **Órdenes de grupo**: el host emite un GATHER por ciudadano seleccionado (N comandos), como ya
+  hace con MOVE_TO. El kernel no agrupa (mantiene un comando = una entidad).
+- **Agotamiento y reasignación deterministas**: cuando `remaining <= 0`, el aldeano asignado
+  reasigna al depósito **vivo más cercano del mismo recurso** (métrica `dist_sq` entera, empate
+  por menor índice); si no queda ninguno de ese recurso, al más cercano de cualquier recurso; si
+  no queda ninguno, queda ocioso (`ECO_NO_DEPOSIT`) sin consumir CPU. Esto ya existe
+  parcialmente en `economy.hpp::eco_find_nearest_deposit` — se endurece para respetar la
+  preferencia de recurso y se documenta.
+
+## §19 La IA juega la apertura (extiende SPEC-005 §4.1)
+La capa estratégica gana consciencia económica, **sin romper la regla de oro** (§0 de SPEC-005:
+función pura, cero `g.tick`/float/heap/RNG fuera de `AI_TIEBREAK`):
+- Cuenta aldeanos por recurso asignado y stock A/B/Me; si el stock de un recurso está por debajo
+  del umbral que su intención requiere, emite GATHER redirigiendo aldeanos ociosos/excedentes a
+  ese recurso (demanda adaptativa).
+- **Repone aldeanos**: si `citizens < AI_ECON_TARGET_CITIZENS` y el centro puede entrenar,
+  `TRAIN_UNIT` del aldeano de su civilización (ahora posible por §15.2).
+- Progresa desde la apertura: aldeanos → recursos → edificio militar → ejército (el camino ya
+  existe en las capas de K2; ahora arranca desde cero en vez de con ejército inyectado).
+
+## §20 Persistencia, checksum y gates (Parte III)
+- **Save v12** (`player_civ` + los campos nuevos al final, append; sin migración, precedente D7)
+  y dominio de checksum → `CHUNSA_STATE_V7` con regen por el procedimiento establecido.
+- **Trayectoria**: los escenarios sin civ asignada y sin spawns de mapa (sintéticos, economía
+  0.3, skirmish militar) deben quedar **bit-idénticos** — dump pre/post obligatorio. Los que
+  cambien (economía con mapa real) se documentan.
+- **DoD del sprint** (PLAN_MAESTRO): un escenario `centro + 3 aldeanos → recolectar → construir
+  edificio militar → entrenar ejército` **sin ninguna mutación privilegiada** (todo por
+  comandos); la IA recorre el mismo camino; save/load/replay a mitad de recolección;
+  golden 1074/1074, G1 alloc_delta=0, G3/G4/G5, ctest completo, `-Werror`, cero float/heap.
+
+## §21 Reparto Parte III
+- **Arquitecto**: este contrato, el gate de civ/época, revisión e integración.
+- **MiniMax M3**: datos (§15.1 `resource_spawns` simétricos + §15.2 `trains` de los centros),
+  brief cerrado, validado por el gate `data_compile`.
+- **Sonnet K1**: §15.3 (`civ_id`/`CivId` tipado + `ResourceSpawnV1`) + §16 (depósitos desde el
+  mapa con fallback legacy) + §17 (civ/época por jugador + gates) + save v12/checksum v7.
+- **Sonnet K2**: §18 (GATHER + agotamiento/reasignación) + §19 (la IA juega la apertura) + el
+  escenario del DoD + tests. Sobre el main con K1 integrado.
+- **Opus**: auditoría del parsing nuevo (`resource_spawns`/`civ_id`, entrada no confiable) y del
+  determinismo de la extensión de la IA.
+- **Codex/Luna Max**: adaptador Godot (órdenes de recolección por clic, HUD de aldeanos por
+  recurso, escenario de apertura jugable) — al final, contra main con K2.
