@@ -1502,13 +1502,22 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                             || !amt_v || !amt_v->is_int()) {
                             fail(CatalogLoadCode::SchemaMismatch);
                         }
-                        // SPEC-004 §16 (literal del brief K1): `id` textual
-                        // A/B/Me -> resource_idx 0/1/2; CUALQUIER OTRO VALOR
-                        // (incluido kind=="material", o kind=="resource" con
-                        // un id fuera de A/B/Me) rechaza el catálogo entero —
-                        // el kernel v1 de economía solo rastrea A/B/Me (misma
-                        // política que parse_resource_costs/dropoff_mask).
+                        // P3 de la auditoría Opus (Sprint 1.6B): `kind` es un
+                        // enum del schema {resource, material}. Rechazar el
+                        // catálogo ante `material` sería una bomba de
+                        // compatibilidad: los materiales son contenido LEGÍTIMO
+                        // de Fase 2 (recetas), explícitamente excluidos del
+                        // alcance de este sprint por el PLAN_MAESTRO. Semántica
+                        // v1: los spawns de material se IGNORAN (no son un
+                        // error; son datos para una feature futura que el kernel
+                        // de economía v1 —solo A/B/Me— todavía no consume).
+                        // `reserve` de arriba es cota superior, así que saltar
+                        // entradas es seguro.
+                        if (kind_v->s == "material") continue;
                         if (kind_v->s != "resource") fail(CatalogLoadCode::InvalidMap);
+                        // Con kind=="resource", un `id` fuera de A/B/Me SÍ es un
+                        // error de datos y rechaza el catálogo entero (misma
+                        // política que parse_resource_costs/dropoff_mask).
                         uint8_t ridx;
                         if (id_v->s == "A") ridx = 0u;
                         else if (id_v->s == "B") ridx = 1u;
@@ -1525,6 +1534,19 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                         // raw = mt * FX_ONE_RAW / 1000.
                         rs.x_raw = (x_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
                         rs.y_raw = (y_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
+                        // P1 de la auditoría Opus (Sprint 1.6B): el rango del
+                        // schema (2^31-1 mt ≈ 262x la cota del mundo) NO implica
+                        // que el raw resultante esté DENTRO del mundo. Un blob
+                        // con un depósito fuera de cota congelaba el kernel:
+                        // dist_sq_raw marca FatalReason::WORLD_BOUNDS en el
+                        // primer tick que un ciudadano lo evalúa y step() queda
+                        // muerto para siempre. Como es entrada NO CONFIABLE, la
+                        // política es rechazar el catálogo entero (SPEC-002 §7),
+                        // no degradar en caliente.
+                        if (rs.x_raw < 0 || rs.x_raw >= WORLD_RAW_MAX
+                            || rs.y_raw < 0 || rs.y_raw >= WORLD_RAW_MAX) {
+                            fail(CatalogLoadCode::InvalidMap);
+                        }
                         rs.amount = static_cast<int32_t>(amt_v->i);
                         impl->map_resource_spawns.push_back(rs);
                     }
@@ -1690,6 +1712,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         impl->ai_profile_names.push_back(ni);
     }
 
+    // P3 de la auditoría Opus (Sprint 1.6B): reserve exacto, paridad con
+    // unit_names/building_names/tech_names/ai_profile_names (la estabilidad de
+    // los c_str() ya la da el reserve de civ_ids, pero el espejo del patrón
+    // endurecido debe ser exacto para que futuras revisiones no duden).
+    impl->civ_names.reserve(impl->civ_ids.size());
     // ---- civ_names: mismo orden que civ_ids (Sprint 1.6B, ya ascendente
     // por el chequeo genérico de orden de record_id) ----
     for (size_t i = 0; i < impl->civ_ids.size(); ++i) {

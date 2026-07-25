@@ -477,7 +477,12 @@ inline void gs_init_economy_from_catalog(GameState& g) noexcept {
     if (g.catalog == nullptr) return;
     const DataCatalogV1& cat = *g.catalog;
     if (cat.map_resource_spawn_count == 0) return;
-    const uint32_t n = cat.map_resource_spawn_count;
+    // P2 de la auditoría Opus (Sprint 1.6B): defensa en profundidad. Hoy el
+    // loader hace irrepresentable n > ECO_MAX_DEPOSITS (rechaza el catálogo),
+    // pero esa garantía vive en OTRO archivo: si alguien relaja ese cap, aquí
+    // se convertiría en escritura fuera de g.deposits[]. El clamp cuesta nada.
+    uint32_t n = cat.map_resource_spawn_count;
+    if (n > ECO_MAX_DEPOSITS) n = ECO_MAX_DEPOSITS;
     g.n_deposits = n;
     for (uint32_t i = 0; i < n; ++i) {
         g.deposits[i].x_raw = cat.map_resource_spawns[i].x_raw;

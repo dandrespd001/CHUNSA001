@@ -422,10 +422,30 @@ static void test_map_resource_spawns() {
         const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
         CHECK(c == CatalogLoadCode::InvalidMap);
     }
-    // 3e) Rechazo: kind == "material" (kernel v1 solo rastrea "resource").
+    // 3e) `kind == "material"` se IGNORA, NO rechaza (endurecimiento del
+    //     Arquitecto tras la auditoría Opus, P3 del Sprint 1.6B): el enum del
+    //     schema admite {resource, material} y los materiales son contenido
+    //     LEGÍTIMO de Fase 2 (recetas), excluidos del alcance de este sprint.
+    //     Rechazar el catálogo entero por un valor válido del schema sería una
+    //     bomba de compatibilidad. El spawn se salta: el catálogo carga y no
+    //     aporta depósitos.
     {
         const std::vector<civ_chdb::SpawnSpec> spawns = { {"material", "A", 1000, 1000, 10} };
         auto map = civ_chdb::map_obj("test:map3", spawns);
+        auto blob = civ_chdb::build({}, {}, map, true);
+        DataCatalogStorageV1 s;
+        const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
+        CHECK(c == CatalogLoadCode::Ok);
+        CHECK(s.valid());
+        if (s.valid()) CHECK(s.catalog().map_resource_spawn_count == 0u);
+    }
+    // 3f) Rechazo: depósito FUERA de la cota del mundo (P1 de la auditoría
+    //     Opus). El schema permite hasta 2^31-1 mili-tiles (~262x el mundo);
+    //     un blob así congelaba el kernel (FatalReason::WORLD_BOUNDS en el
+    //     primer tick). Entrada no confiable ⇒ rechazo del catálogo entero.
+    {
+        const std::vector<civ_chdb::SpawnSpec> spawns = { {"resource", "A", 2147483647, 1000, 10} };
+        auto map = civ_chdb::map_obj("test:map4", spawns);
         auto blob = civ_chdb::build({}, {}, map, true);
         DataCatalogStorageV1 s;
         const auto c = catalog_load_bytes_v1(blob.data(), blob.size(), CatalogLoadProfile::Verified, s);
