@@ -60,7 +60,14 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // checksum.hpp v6 — pero ese campo del header ya se comprobaba antes de
 // este sprint, no es un cambio de layout del envelope/header en sí), solo
 // el payload crece. Sin migración v10→v11 (mismo precedente D7).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 11;
+// v12 (Sprint 1.6B, SPEC-004 §17/§20): +player_civ (identidad de
+// civilización por jugador — ver game_state.hpp/gs_set_player_civ),
+// añadido al final del stream STATE. Mismo patrón que v7..v11:
+// envelope/header sin cambios (CHECKSUM_ALGO_VERSION SÍ cambia — ver
+// checksum.hpp v7 — mismo motivo que en v11: ya se comprobaba antes de
+// este sprint, no es un cambio de layout del envelope/header en sí), solo
+// el payload crece. Sin migración v11→v12 (mismo precedente D7).
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 12;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B
