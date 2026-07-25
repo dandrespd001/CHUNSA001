@@ -11,6 +11,12 @@
 // de 3 capas real. Bump AI_ALGO_VERSION 1->2 (el procedimiento cambió por
 // completo).
 //
+// Sprint 1.6B (SPEC-004 §18/§19, brief SONNET_K2_GATHER_APERTURA): la IA
+// gana consciencia económica sobre GATHER (redirige ociosos/excedentes por
+// stock bajo) y `ai_find_trainer_type` se endurece con civ_id (dos civs
+// reales en el mismo catálogo exigían filtrar por la civ del jugador — ver
+// su comentario). Bump AI_ALGO_VERSION 2->3.
+//
 // REGLA DE ORO (SPEC-005 §0, criterio de rechazo #1 — auditado por Opus):
 // ai_execute(box, g) es función PURA de (g, box.source_tick,
 // box.runtime_before). CERO g.tick / reloj real / float / double / heap /
@@ -39,7 +45,14 @@ namespace chunsa {
 // cambia el procedimiento de decisión, bump AI_ALGO_VERSION y mantener
 // compat en ai_deserialize.
 // ---------------------------------------------------------------------------
-inline constexpr uint32_t AI_ALGO_VERSION     = 2;   // K2: IA de 3 capas real (SPEC-005 §4/§5)
+// Sprint 1.6B (SPEC-004 §19): 2->3. El procedimiento de decisión cambió: (a)
+// ai_find_trainer_type gana el filtro por civ_id (bug real con 2 civs reales
+// en el mismo catálogo — antes resolvía SIEMPRE el primer edificio del
+// catálogo sin importar la civ del jugador); (b) nueva capa 1.5 (económica
+// adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
+// ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
+// exactamente el caso que exige el bump.
+inline constexpr uint32_t AI_ALGO_VERSION     = 3;
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -56,6 +69,13 @@ inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
 inline constexpr int32_t  AI_ECON_TARGET_CITIZENS     = 6;
 inline constexpr int32_t  AI_BASE_SEARCH_RADIUS_TILES = 24;
 inline constexpr int64_t  AI_REACTIVE_RADIUS_MT       = 20000;  // 20 tiles
+
+// Sprint 1.6B (SPEC-004 §19): umbral entero de stock "bajo" para la capa
+// económica adaptativa — deriva de economy_focus_bp (basis points del
+// perfil, mismo patrón bp que el resto de capas: MÁS foco económico ⇒
+// umbral MÁS alto ⇒ la IA se sobre-abastece antes/más). Con el perfil v1
+// (economy_focus_bp=5000, 50%) el umbral efectivo es la MITAD de la base.
+inline constexpr int32_t AI_GATHER_STOCK_THRESHOLD_BASE = 150;
 
 // Estados del ciclo de vida de UN job de IA. EMPTY = slot libre;
 // DISPATCHED/RUNNING = en vuelo; COMPLETED = resultado disponible;
@@ -238,20 +258,131 @@ inline bool ai_find_unassigned_site(const GameState& g, uint8_t ai_player, uint3
     return false;
 }
 
+// ---------------------------------------------------------------------------
+// Capa económica adaptativa (Sprint 1.6B, SPEC-004 §19): cuenta aldeanos
+// propios por recurso ASIGNADO (para redirigir ociosos/excedentes cuando el
+// stock de un recurso está bajo). Un único barrido ascendente adicional
+// (mismo estilo que ai_scan_macro; separado de él porque su condición de
+// "ocioso" es distinta — build_target==NO_TARGET es sobre TODOS los
+// ciudadanos sin build_target, aquí importa además su estado de recolección).
+//
+// `skip_index`/`has_skip`: excluye un índice ya consumido este mismo ciclo
+// por otra emisión (ASSIGN_BUILD, paso 1) — evita que el mismo ciudadano
+// reciba DOS órdenes contradictorias en el mismo tick (ASSIGN_BUILD fija
+// build_target; GATHER lo cancela, SPEC-004 §18). Sin este guard, un
+// ciudadano recién asignado a un sitio de construcción podría ser
+// "redirigido" a recolectar en la MISMA decisión, deshaciendo la asignación
+// que la capa 1 acababa de emitir — desperdicio determinista, no un bug de
+// determinismo, pero evitable con este chequeo barato.
+struct AiEcoStateV1 {
+    int32_t  resource_count[3] = {0, 0, 0};  // ciudadanos gathering activo, por recurso (0=A,1=B,2=Me)
+    bool     has_idle = false;               // primer ciudadano SIN depósito vivo asignado (ascendente)
+    uint32_t idle_index = 0;
+    uint32_t idle_gen   = 0;
+    // Primer (menor índice) ciudadano gathering cada recurso — candidato
+    // "donante" si ese recurso resulta ser el más abundante y hay que pulsar
+    // uno hacia el recurso escaso.
+    bool     has_first_of[3] = {false, false, false};
+    uint32_t first_of_index[3] = {0, 0, 0};
+    uint32_t first_of_gen[3]   = {0, 0, 0};
+};
+
+inline void ai_scan_economy(const GameState& g, uint8_t ai_player,
+                            bool has_skip, uint32_t skip_index,
+                            AiEcoStateV1& e) noexcept {
+    e = AiEcoStateV1{};
+    const uint32_t cap = g.entities.capacity;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] != ai_player) continue;
+        if (g.unit_class[i] != 3u) continue;
+        if (g.build_target[i] != BUILD_NO_TARGET) continue;   // en obra: fuera de la economía
+        if (has_skip && i == skip_index) continue;             // ya consumido este ciclo (ASSIGN_BUILD)
+
+        const uint32_t dep = g.eco_assigned_deposit[i];
+        const bool valid = (dep != ECO_NO_DEPOSIT) && (dep < g.n_deposits)
+                         && (g.deposits[dep].remaining > 0);
+        if (!valid) {
+            if (!e.has_idle) {
+                e.has_idle   = true;
+                e.idle_index = i;
+                e.idle_gen   = g.entities.generation[i];
+            }
+            continue;
+        }
+        const uint8_t r = g.deposits[dep].resource_idx;
+        if (r < 3u) {
+            ++e.resource_count[r];
+            if (!e.has_first_of[r]) {
+                e.has_first_of[r]   = true;
+                e.first_of_index[r] = i;
+                e.first_of_gen[r]   = g.entities.generation[i];
+            }
+        }
+    }
+}
+
+// Depósito VIVO de `resource_idx` más cercano a (from_x,from_y) — dist_sq
+// entera, empate por menor índice (mismo criterio que
+// economy.hpp::eco_find_nearest_deposit/find_building_dropoff/combat/aggro).
+struct AiDepositPickV1 {
+    bool     found = false;
+    uint32_t index = 0;
+    int64_t  x = 0, y = 0;
+};
+
+inline AiDepositPickV1 ai_find_deposit_for_resource(const GameState& g, uint8_t resource_idx,
+                                                    int64_t from_x, int64_t from_y) noexcept {
+    AiDepositPickV1 r{};
+    uint64_t best_d2 = 0;
+    const Vec2Fx here{Fx{from_x}, Fx{from_y}};
+    for (uint32_t d = 0; d < g.n_deposits; ++d) {
+        if (g.deposits[d].remaining <= 0) continue;
+        if (g.deposits[d].resource_idx != resource_idx) continue;
+        FatalReason local_fatal{};  // descartado a propósito, mismo patrón que combat/aggro/eco
+        const Vec2Fx there{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
+        const uint64_t d2 = dist_sq_raw(here, there, local_fatal);
+        if (!r.found || d2 < best_d2) {
+            r.found = true;
+            r.index = d;
+            r.x = g.deposits[d].x_raw;
+            r.y = g.deposits[d].y_raw;
+            best_d2 = d2;
+        }
+    }
+    return r;
+}
+
 // "Tipo entrenador" (SPEC-005 §4.1): primer edificio del catálogo (id
 // ascendente) cuyo `trains[]` (índice ascendente) contiene una unidad de la
 // clase pedida (ciudadano o no-ciudadano). Puro function-of-catalog: mismo
 // resultado para cualquier `g` que comparta catálogo.
+//
+// Sprint 1.6B (SPEC-004 §19, endurecimiento): gana el parámetro `civ`. Antes
+// de este sprint el catálogo real solo tenía datos de UNA civilización
+// jugable a la vez (los fixtures sintéticos de skirmish.hpp/skirmish_eco.hpp,
+// o el golden de Sprint 1.4 con un único bando); con `civ_id` tipado (K1) y
+// DOS civs reales en el mismo catálogo (egipto + rome), un barrido
+// civ-agnóstico devolvía SIEMPRE el primer edificio del catálogo por id
+// ascendente sin importar de quién es el jugador — para el jugador de la
+// SEGUNDA civ (mayor id) esto resolvía el edificio/unidad EQUIVOCADOS
+// (el gate de civilización de TRAIN_UNIT/PLACE_BUILDING, SPEC-004 §17, los
+// habría rechazado con ILLEGAL_STATE en cada ciclo, dejando a ese jugador sin
+// economía/ejército posible). `civ == INVALID_CIV_ID` (sin asignar) preserva
+// el barrido civ-agnóstico original — compatibilidad con todos los fixtures/
+// tests previos que nunca llaman a gs_set_player_civ.
 struct AiTrainerTypeV1 {
     bool     found         = false;
     BuildingId building_type = INVALID_BUILDING_ID;
     UnitId     unit_to_train = INVALID_UNIT_ID;
 };
 
-inline AiTrainerTypeV1 ai_find_trainer_type(const DataCatalogV1& cat, bool citizen_kind) noexcept {
+inline AiTrainerTypeV1 ai_find_trainer_type(const DataCatalogV1& cat, CivId civ,
+                                            bool citizen_kind) noexcept {
     AiTrainerTypeV1 r{};
     for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
         const BuildingDefinitionV1& bdef = cat.buildings[bt];
+        if (civ != INVALID_CIV_ID && bdef.civ_id != civ) continue;
         for (uint8_t k = 0; k < bdef.train_count; ++k) {
             const UnitId uid = bdef.trains[k];
             if (uid >= cat.unit_count) continue;
@@ -442,6 +573,12 @@ inline bool ai_enemy_near_base(const GameState& g, uint8_t ai_player, int64_t an
 //      1) Mantenimiento: ASSIGN_BUILD si hay un sitio propio sin ciudadano
 //         asignado y uno ocioso disponible — independiente de la intención
 //         estratégica del ciclo (SPEC-005 §4.1).
+//      1.5) Capa ECONÓMICA ADAPTATIVA (Sprint 1.6B, SPEC-004 §19): cuenta
+//         aldeanos por recurso asignado + stock A/B/Me; si el recurso con
+//         mayor déficit bajo el umbral (bp del perfil) tiene CERO aldeanos
+//         asignados o hay uno ocioso, emite GATHER redirigiendo un ocioso
+//         (prioridad) o un excedente (del recurso con más aldeanos) hacia
+//         ese recurso. Como máximo UN GATHER por ciclo (v1, conservador).
 //      2) Capa ESTRATÉGICA (§4.1): utility entera (bp) sobre 4 intenciones
 //         mutuamente excluyentes — economía (TRAIN_UNIT ciudadano) / construir
 //         (PLACE_BUILDING) / militarizar (TRAIN_UNIT combate) / tech-época
@@ -502,10 +639,11 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
     const AiProfileV1 profile = ai_resolve_profile(g);
 
     // ---- 1. Mantenimiento: ASSIGN_BUILD (SPEC-005 §4.1) --------------------
+    bool build_assign_emitted = false;
     {
         uint32_t unassigned_site = 0;
         if (macro.has_idle_citizen && ai_find_unassigned_site(g, ai_player, unassigned_site)) {
-            emit(CommandType::ASSIGN_BUILD,
+            build_assign_emitted = emit(CommandType::ASSIGN_BUILD,
                  EntityHandle{macro.idle_citizen_index, macro.idle_citizen_gen},
                  static_cast<int64_t>(g.bld_anchor_tx[unassigned_site]),
                  static_cast<int64_t>(g.bld_anchor_ty[unassigned_site]),
@@ -513,10 +651,75 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         }
     }
 
+    // ---- 1.5. Capa económica adaptativa (Sprint 1.6B, SPEC-004 §19) -------
+    {
+        AiEcoStateV1 eco{};
+        ai_scan_economy(g, ai_player, build_assign_emitted, macro.idle_citizen_index, eco);
+
+        // Umbral entero derivado de economy_focus_bp (mismo patrón bp que el
+        // resto de capas): sin float, basis points 0..10000. Reutiliza
+        // `profile`, ya resuelto en el paso 0 (mismo perfil que el resto de
+        // capas de este ciclo — no re-consultar el catálogo dos veces).
+        const int64_t threshold = (static_cast<int64_t>(AI_GATHER_STOCK_THRESHOLD_BASE)
+                                   * profile.economy_focus_bp) / 10000;
+
+        // Recurso con MAYOR déficit (umbral - stock, solo si positivo);
+        // empate -> menor índice de recurso (0=A,1=B,2=Me, recorrido ascendente).
+        int32_t best_r = -1;
+        int64_t best_deficit = 0;
+        for (uint8_t r = 0; r < 3u; ++r) {
+            const int64_t deficit = threshold - g.player_stock[ai_player][r];
+            if (deficit > 0 && deficit > best_deficit) { best_deficit = deficit; best_r = static_cast<int32_t>(r); }
+        }
+
+        if (best_r >= 0) {
+            const uint8_t need_r = static_cast<uint8_t>(best_r);
+            bool     do_redirect = false;
+            uint32_t redirect_idx = 0, redirect_gen = 0;
+            if (eco.has_idle) {
+                do_redirect  = true;
+                redirect_idx = eco.idle_index;
+                redirect_gen = eco.idle_gen;
+            } else {
+                // Excedente: tomar del recurso (!= need_r) con MÁS aldeanos
+                // asignados, empate -> menor índice de recurso; exige > 1
+                // asignado (no vaciar por completo esa recolección).
+                int32_t donor_r = -1;
+                int32_t donor_count = 0;
+                for (uint8_t r = 0; r < 3u; ++r) {
+                    if (r == need_r) continue;
+                    if (eco.resource_count[r] > 1 && eco.resource_count[r] > donor_count) {
+                        donor_count = eco.resource_count[r];
+                        donor_r = static_cast<int32_t>(r);
+                    }
+                }
+                if (donor_r >= 0 && eco.has_first_of[static_cast<uint8_t>(donor_r)]) {
+                    const uint8_t dr = static_cast<uint8_t>(donor_r);
+                    do_redirect  = true;
+                    redirect_idx = eco.first_of_index[dr];
+                    redirect_gen = eco.first_of_gen[dr];
+                }
+            }
+
+            if (do_redirect) {
+                const AiDepositPickV1 pick = ai_find_deposit_for_resource(
+                        g, need_r, g.pos_x[redirect_idx], g.pos_y[redirect_idx]);
+                if (pick.found) {
+                    emit(CommandType::GATHER, EntityHandle{redirect_idx, redirect_gen},
+                         pick.x, pick.y, 0u);
+                }
+            }
+        }
+    }
+
     // ---- 2. Capa estratégica (SPEC-005 §4.1) ------------------------------
     if (g.catalog != nullptr) {
         const DataCatalogV1& cat = *g.catalog;
         const uint8_t epoch = g.player_epoch[ai_player];
+        // Sprint 1.6B (SPEC-004 §19): civ del jugador IA — ver el comentario
+        // de ai_find_trainer_type sobre por qué esto es ahora indispensable
+        // con dos civs reales en el mismo catálogo.
+        const CivId ai_civ = g.player_civ[ai_player];
 
         // Candidato ECONOMÍA: entrenar un ciudadano en el primer edificio
         // propio COMPLETO capaz de hacerlo.
@@ -524,7 +727,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         uint32_t econ_building = 0;
         UnitId   econ_unit = INVALID_UNIT_ID;
         if (macro.citizen_count < AI_ECON_TARGET_CITIZENS) {
-            const AiTrainerTypeV1 tt = ai_find_trainer_type(cat, /*citizen_kind=*/true);
+            const AiTrainerTypeV1 tt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/true);
             if (tt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, tt.building_type);
                 if (own.has_complete) {
@@ -547,7 +750,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         BuildingId build_type = INVALID_BUILDING_ID;
         AiFreeCellV1 build_cell{};
         {
-            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, /*citizen_kind=*/false);
+            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false);
             if (mt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, mt.building_type);
                 if (!own.any_owned && macro.has_anchor) {
@@ -573,7 +776,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         uint32_t mil_building = 0;
         UnitId   mil_unit = INVALID_UNIT_ID;
         {
-            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, /*citizen_kind=*/false);
+            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false);
             if (mt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, mt.building_type);
                 if (own.has_complete) {

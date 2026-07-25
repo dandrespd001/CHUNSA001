@@ -15,6 +15,10 @@ inline constexpr uint32_t ECO_NO_DEPOSIT = 0xFFFFFFFFu;
 inline constexpr int32_t  ECO_HARVEST_PER_TICK = 5;
 inline constexpr int32_t  ECO_CARRY_CAP = 50;
 inline constexpr int64_t  ECO_ARRIVE_RADIUS_RAW = 65536; // 1 tile
+// Sprint 1.6B (SPEC-004 §18): sentinela "sin preferencia de recurso" para
+// eco_find_nearest_deposit — mismo patrón que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
+// 0/1/2 son los índices reales (A/B/Me); 0xFF nunca choca con ellos.
+inline constexpr uint8_t  ECO_ANY_RESOURCE = 0xFFu;
 
 enum class EcoState : uint8_t { SEEK = 0, HARVEST = 1, RETURN = 2 };
 
@@ -48,13 +52,40 @@ struct EcoCitizenOut {
     uint8_t  dropoff_resource_idx;
 };
 
-// Depósito con remaining>0 más cercano a (x_raw,y_raw). Desempate: menor índice (recorrido ascendente).
+// Depósito con remaining>0 más cercano a (x_raw,y_raw). Desempate: menor índice
+// (recorrido ascendente, `d_sq < best_d_sq` estricto conserva el primer
+// mínimo). Sprint 1.6B (SPEC-004 §18): endurecido con `preferred_resource_idx`
+// — dos pasadas deterministas, mismo criterio dist_sq/desempate en ambas:
+//   1) si preferred_resource_idx != ECO_ANY_RESOURCE, solo depósitos vivos de
+//      ESE recurso; si hay alguno, gana (agotamiento -> reasignar al mismo
+//      recurso, SPEC-004 §18).
+//   2) si no se pidió preferencia, o la pasada 1 no encontró ninguno, cae al
+//      criterio legacy (cualquier recurso vivo) — preserva bit a bit el
+//      comportamiento de todo caller que no pasa preferencia (ECO_ANY_RESOURCE),
+//      incluidos los escenarios sintéticos/golden previos a este sprint.
 inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_deposits,
                                          int64_t x_raw, int64_t y_raw,
+                                         uint8_t preferred_resource_idx,
                                          FatalReason& f) noexcept {
+    Vec2Fx here{Fx{x_raw}, Fx{y_raw}};
+    if (preferred_resource_idx != ECO_ANY_RESOURCE) {
+        uint32_t best = ECO_NO_DEPOSIT;
+        uint64_t best_d_sq = UINT64_MAX;
+        for (uint32_t i = 0; i < n_deposits; ++i) {
+            if (deposits[i].remaining <= 0) continue;
+            if (deposits[i].resource_idx != preferred_resource_idx) continue;
+            Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
+            uint64_t d_sq = dist_sq_raw(here, there, f);
+            if (d_sq < best_d_sq) {
+                best_d_sq = d_sq;
+                best = i;
+            }
+        }
+        if (best != ECO_NO_DEPOSIT) return best;
+        // Ninguno vivo de ese recurso: cae a la pasada 2 (cualquiera).
+    }
     uint32_t best = ECO_NO_DEPOSIT;
     uint64_t best_d_sq = UINT64_MAX;
-    Vec2Fx here{Fx{x_raw}, Fx{y_raw}};
     for (uint32_t i = 0; i < n_deposits; ++i) {
         if (deposits[i].remaining <= 0) continue;
         Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
@@ -138,7 +169,20 @@ inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
                              || (in.assigned_deposit >= n_deposits)
                              || (deposits[in.assigned_deposit].remaining <= 0);
         if (need_reassign) {
-            uint32_t idx = eco_find_nearest_deposit(deposits, n_deposits, in.pos_x, in.pos_y, f);
+            // SPEC-004 §18: preferencia de recurso SOLO cuando el índice
+            // previo es válido (memoria legible) — es el caso "el depósito
+            // asignado se agotó" (remaining<=0), que es exactamente el
+            // agotamiento que el contrato pide reasignar al MISMO recurso
+            // primero. Los otros dos casos de need_reassign (ECO_NO_DEPOSIT /
+            // índice fuera de rango) no tienen un recurso previo del que
+            // partir — se mantiene ECO_ANY_RESOURCE, IDÉNTICO al
+            // comportamiento legacy (preserva bit a bit los escenarios que
+            // nunca llaman a GATHER).
+            uint8_t pref = ECO_ANY_RESOURCE;
+            if (in.assigned_deposit != ECO_NO_DEPOSIT && in.assigned_deposit < n_deposits) {
+                pref = deposits[in.assigned_deposit].resource_idx;
+            }
+            uint32_t idx = eco_find_nearest_deposit(deposits, n_deposits, in.pos_x, in.pos_y, pref, f);
             if (idx == ECO_NO_DEPOSIT) {
                 out.assigned_deposit = ECO_NO_DEPOSIT;
                 out.vel_x = 0;
