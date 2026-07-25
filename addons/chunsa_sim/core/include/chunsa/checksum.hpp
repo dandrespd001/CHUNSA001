@@ -73,7 +73,23 @@ namespace chunsa {
 // quedan en su valor inicial (0/0xFF/0) durante toda la corrida. Se mantiene
 // el símbolo `state_checksum_v1` por la misma razón que en sprints
 // anteriores (no tocar call sites).
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 6;
+//
+// Sprint 1.6B (SPEC-004 §17/§20): bump a v7 — el stream gana `player_civ`
+// (identidad de civilización por jugador), añadido AL FINAL tras todo lo v6
+// (orden intencional). Cambio de dominio DELIBERADO: mismo precedente que
+// los bumps v1→v6 anteriores — no hay golden-checksum de estado persistido
+// en este repo, todos los tests de estado comparan dos corridas EN VIVO
+// entre sí (nunca contra un valor de checksum hardcodeado de `main`), así
+// que "regenerar" el golden no requiere tocar ningún archivo aparte de este
+// bump. La TRAYECTORIA de los escenarios que no asignan civ (sintéticos,
+// economía 0.3, skirmish militar y eco) NO cambia — player_civ queda en
+// INVALID_CIV_ID (gs_init) durante toda la corrida para esos escenarios, así
+// que el ÚNICO efecto observable del bump es el valor del checksum en sí
+// (esperado e intencional), no la trayectoria subyacente (posiciones/hp/
+// stock), que sigue siendo bit-idéntica — ver RESULT del sprint para el
+// dump pre/post. Se mantiene el símbolo `state_checksum_v1` por la misma
+// razón que en sprints anteriores (no tocar call sites).
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 7;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -100,7 +116,7 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V6", 15);
+    h.bytes("CHUNSA_STATE_V7", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -232,6 +248,10 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     h.u8(g.game_over);
     h.u8(g.winner);
     h.u16(g.participants_mask);
+    // Civilización por jugador (Sprint 1.6B, SPEC-004 §17/§20): AL FINAL,
+    // tras todo lo v6. Escalar por jugador (no por-entidad), todos los
+    // MAX_EMITTERS slots (misma convención que pop_used/player_epoch).
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u32(g.player_civ[e]);
     return h.digest();
 }
 

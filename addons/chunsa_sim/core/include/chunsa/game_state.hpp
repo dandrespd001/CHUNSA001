@@ -160,6 +160,19 @@ struct GameState {
     uint32_t research_tech[ENTITY_HARD_CAP];   // INVALID_TECH_ID = ocioso
     uint32_t research_progress[ENTITY_HARD_CAP];
 
+    // Identidad de civilización por jugador (Sprint 1.6B, SPEC-004 §17).
+    // ESTADO: serializado + checksummeado. ESCALAR DEL PARTIDO por jugador
+    // (no por-entidad, mismo espíritu que pop_used/player_epoch): se fija
+    // UNA vez en gs_init (a INVALID_CIV_ID) y luego explícitamente por el
+    // host vía gs_set_player_civ (setup, fuera de Step()) — NO se toca en
+    // zero_components (que resetea componentes POR-ENTIDAD al reciclar un
+    // slot; player_civ es por-jugador, como game_over/winner/participants_mask).
+    // INVALID_CIV_ID ("sin asignar") exime los gates de civilización de
+    // step.hpp (PLACE_BUILDING/TRAIN_UNIT/RESEARCH_TECH) — compatibilidad
+    // con todos los escenarios/tests existentes que nunca llaman a
+    // gs_set_player_civ.
+    CivId player_civ[MAX_EMITTERS];
+
     // Economía mínima (Sprint 0.3, base §3.4). ESTADO: serializado + checksummeado.
     // Módulo economy.hpp es autocontenido (sin GameState); el wiring vive aquí y
     // en step.hpp. Depósitos: posiciones fijas deterministas (gs_init_deposits);
@@ -323,6 +336,11 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     // propio INVALID_* explícito más arriba en esta función.
     g.game_over = 0;
     g.winner = 0xFFu;
+    // Sprint 1.6B (SPEC-004 §17): player_civ, mismo motivo que winner arriba
+    // — memset ya dejó 0, que bajo la semántica de CivId significaría "civ 0
+    // asignada", no "sin asignar"; forzar el centinela explícito. El host
+    // lo sobreescribe explícitamente vía gs_set_player_civ (setup).
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.player_civ[e] = INVALID_CIV_ID;
 }
 
 // Enlaza el catálogo de datos al GameState (Sprint 0.4). Binding runtime puro:
@@ -374,6 +392,118 @@ inline void gs_init_epoch_from_catalog(GameState& g) noexcept {
         g.player_epoch[e] = initial;
         g.epoch_initial[e] = initial;
     }
+}
+
+// Sprint 1.6B (SPEC-004 §17): fija `player_civ[player]`. Es la forma EXPLÍCITA
+// elegida para asignar la civilización en el setup del escenario (el brief
+// K1 ofrece dos alternativas — "comando o init explícito del host" — y este
+// incremento elige la segunda, análoga a gs_bind_catalog/
+// gs_init_epoch_from_catalog: ambas ya son funciones de setup llamadas por
+// el host FUERA de Step(), nunca comandos que viajen por el replay/agenda;
+// un CommandType nuevo habría mezclado "identidad de civ, fija para toda la
+// partida" con el sistema de comandos pensado para acciones repetibles del
+// jugador DURANTE la partida — ver RESULT del sprint). NO se infiere en
+// caliente: llamar explícitamente, host/tests, ANTES de
+// gs_init_epoch_from_catalog_per_player (que lee player_civ) y de cualquier
+// Step() con gates de civilización. `player >= MAX_EMITTERS` es no-op
+// defensivo (mismo estilo silencioso que el resto de setters de setup de
+// este archivo, p.ej. gs_bind_catalog no valida su argumento).
+inline void gs_set_player_civ(GameState& g, uint32_t player, CivId civ) noexcept {
+    if (player >= MAX_EMITTERS) return;
+    g.player_civ[player] = civ;
+}
+
+// Sprint 1.6B (SPEC-004 §17): variante POR JUGADOR de gs_init_epoch_from_catalog
+// — cierra la deuda del Sprint 1.2 (K2), que calculaba la época inicial
+// catálogo-ancha para TODOS los jugadores por igual. Con `civ_id` ya tipado
+// (§15.3), la época inicial de un jugador CON civ asignada es el mínimo
+// `epoch_min`/`epoch` de los datos DE SU CIVILIZACIÓN (unit.epoch_min,
+// building.epoch_min, tech.epoch cuyo civ_id == player_civ[e]); un jugador
+// CON `INVALID_CIV_ID` (sin asignar) usa la MISMA fórmula catálogo-ancha que
+// gs_init_epoch_from_catalog (conserva ese comportamiento para escenarios
+// sin civ — SPEC-004 §17). gs_init_epoch_from_catalog ORIGINAL se conserva
+// SIN TOCAR (no se llama desde aquí ni al revés): son dos entry points
+// independientes, mismo precedente de "no fusionar setters de setup en
+// silencio" que ya documenta gs_init_epoch_from_catalog sobre gs_bind_catalog.
+// Llamar EXPLÍCITAMENTE tras gs_bind_catalog Y tras gs_set_player_civ (el
+// orden con gs_set_player_civ importa: esta función LEE player_civ). Requiere
+// g.catalog != nullptr; no hace nada si no lo es.
+inline void gs_init_epoch_from_catalog_per_player(GameState& g) noexcept {
+    if (g.catalog == nullptr) return;
+    const DataCatalogV1& cat = *g.catalog;
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        const CivId civ = g.player_civ[e];
+        uint8_t min_epoch = 15;
+        bool found = false;
+        for (uint32_t i = 0; i < cat.unit_count; ++i) {
+            if (civ != INVALID_CIV_ID && cat.units[i].civ_id != civ) continue;
+            if (!found || cat.units[i].epoch_min < min_epoch) { min_epoch = cat.units[i].epoch_min; found = true; }
+        }
+        for (uint32_t i = 0; i < cat.building_count; ++i) {
+            if (civ != INVALID_CIV_ID && cat.buildings[i].civ_id != civ) continue;
+            if (!found || cat.buildings[i].epoch_min < min_epoch) { min_epoch = cat.buildings[i].epoch_min; found = true; }
+        }
+        for (uint32_t i = 0; i < cat.tech_count; ++i) {
+            if (civ != INVALID_CIV_ID && cat.techs[i].civ_id != civ) continue;
+            if (!found || cat.techs[i].epoch < min_epoch) { min_epoch = cat.techs[i].epoch; found = true; }
+        }
+        const uint8_t initial = found ? min_epoch : 1u;
+        g.player_epoch[e] = initial;
+        g.epoch_initial[e] = initial;
+    }
+}
+
+// Sprint 1.6B (SPEC-004 §16): puebla deposits[]/n_deposits DESDE EL CATÁLOGO
+// YA ENLAZADO — llamar EXPLÍCITAMENTE tras gs_bind_catalog, mismo patrón que
+// gs_init_epoch_from_catalog(_per_player) (NO se invoca automáticamente
+// desde gs_init: en gs_init(), g.catalog SIEMPRE es nullptr todavía —
+// gs_bind_catalog ocurre después, aparte — así que gs_init_economy (que SÍ
+// corre dentro de gs_init) ya dejó el fallback legacy fijo de 6 depósitos;
+// fusionar los dos cambiaría en silencio el comportamiento de TODOS los call
+// sites existentes que nunca llaman a esta función — mismo razonamiento que
+// ya documenta gs_init_epoch_from_catalog sobre gs_bind_catalog).
+//
+// Si no hay catálogo enlazado o su "mapa activo" no trae resource_spawns
+// (cat.map_resource_spawn_count == 0) es un NO-OP: deja intacto el patrón
+// fijo de 6 depósitos que gs_init_economy ya dejó en gs_init — fallback
+// legacy EXACTO, bit-idéntico a los escenarios previos (SPEC-004 §16).
+//
+// cat.map_resource_spawn_count > ECO_MAX_DEPOSITS es IRREPRESENTABLE en este
+// punto: el loader (data_catalog.hpp) ya rechazó la carga completa del
+// catálogo si el mapa traía más spawns que ECO_MAX_DEPOSITS (§16, "no se
+// truncan datos en silencio") — g.catalog jamás apunta a un catálogo que
+// haya superado ese cap y cargado con éxito.
+inline void gs_init_economy_from_catalog(GameState& g) noexcept {
+    if (g.catalog == nullptr) return;
+    const DataCatalogV1& cat = *g.catalog;
+    if (cat.map_resource_spawn_count == 0) return;
+    // P2 de la auditoría Opus (Sprint 1.6B): defensa en profundidad. Hoy el
+    // loader hace irrepresentable n > ECO_MAX_DEPOSITS (rechaza el catálogo),
+    // pero esa garantía vive en OTRO archivo: si alguien relaja ese cap, aquí
+    // se convertiría en escritura fuera de g.deposits[]. El clamp cuesta nada.
+    uint32_t n = cat.map_resource_spawn_count;
+    if (n > ECO_MAX_DEPOSITS) n = ECO_MAX_DEPOSITS;
+    g.n_deposits = n;
+    for (uint32_t i = 0; i < n; ++i) {
+        g.deposits[i].x_raw = cat.map_resource_spawns[i].x_raw;
+        g.deposits[i].y_raw = cat.map_resource_spawns[i].y_raw;
+        g.deposits[i].resource_idx = cat.map_resource_spawns[i].resource_idx;
+        g.deposits[i].remaining = cat.map_resource_spawns[i].amount;
+    }
+    // Slots [n, ECO_MAX_DEPOSITS) pueden conservar el patrón legacy fijo que
+    // gs_init_economy ya escribió (si n < 6); se limpian explícitamente para
+    // que checksum.hpp (que recorre TODOS los ECO_MAX_DEPOSITS slots, no solo
+    // n_deposits) sea determinista y no dependa de basura de un patrón que
+    // ya no es el activo.
+    for (uint32_t i = n; i < ECO_MAX_DEPOSITS; ++i) {
+        g.deposits[i].x_raw = 0;
+        g.deposits[i].y_raw = 0;
+        g.deposits[i].resource_idx = 0;
+        g.deposits[i].remaining = 0;
+    }
+    // El dropoff NO cambia aquí (SPEC-004 §16: "El dropoff sigue
+    // resolviéndose por §6" — edificio propio, con el MISMO fallback fijo
+    // dropoff_x/y que gs_init_economy ya dejó).
 }
 
 }  // namespace chunsa

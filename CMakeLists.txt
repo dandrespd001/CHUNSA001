@@ -125,6 +125,14 @@ add_executable(chunsa_test_ai_skirmish_eco tests/unit/test_ai_skirmish_eco.cpp)
 target_link_libraries(chunsa_test_ai_skirmish_eco PRIVATE chunsa_sim_core)
 add_test(NAME ai_skirmish_eco COMMAND chunsa_test_ai_skirmish_eco)
 
+# --- Test Sprint 1.6B (K1): civ_id tipado + depósitos desde el mapa (SPEC-004
+# Parte III §15.3/§16/§17/§20) ---------------------------------------------------
+add_executable(chunsa_test_civ_deposits tests/unit/test_civ_deposits.cpp)
+target_link_libraries(chunsa_test_civ_deposits PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_civ_deposits PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME civ_deposits COMMAND chunsa_test_civ_deposits)
+
 # --- Test Sprint 1.5A: política pura de fog para presentación -------------------
 add_executable(chunsa_test_fog_view tests/unit/test_fog_view.cpp)
 target_link_libraries(chunsa_test_fog_view PRIVATE chunsa_sim_core)

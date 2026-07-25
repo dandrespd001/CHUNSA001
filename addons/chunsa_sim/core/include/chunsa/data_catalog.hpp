@@ -12,6 +12,12 @@
 #include <new>
 
 #include "chunsa/sha256.hpp"
+// Sprint 1.6B (SPEC-004 §16): conversión mt→raw de resource_spawns (FX_ONE_RAW)
+// y el cap kernel de depósitos por mapa (ECO_MAX_DEPOSITS) — single source of
+// truth en vez de duplicar el número mágico 32/65536 en este loader. Ninguno
+// de los dos módulos incluye de vuelta data_catalog.hpp (sin ciclo).
+#include "chunsa/fixed64.hpp"
+#include "chunsa/economy.hpp"
 
 // chunsa_sim_core — data_catalog: loader CHDB v1 NO CONFIABLE (SPEC-002 §§6-8).
 // Sprint 0.4 (Sonnet 5, brief docs/briefs/SONNET_KERNEL_DATOS_SPEC002.md §2/§5).
@@ -29,12 +35,15 @@
 // Simplificaciones documentadas frente a SPEC-002 (ver RESULT del sprint):
 //  - El loader valida estructuralmente TODAS las secciones (header, directorio,
 //    CVE, orden de record_id) pero solo reconstruye tipado semántico completo
-//    para UNIT (kind=2); building/tech/civ/map/ai-profile solo se validan
+//    para UNIT/BUILDING/TECH/AI-PROFILE; CIV (kind=5) solo aporta su tabla
+//    nombre-índice (CivNameIndexV1, Sprint 1.6B — sin definición propia) y
+//    MAP (kind=6) solo tipa `resource_spawns` del primer record ("mapa
+//    activo", Sprint 1.6B, SPEC-004 §16) — el resto de sus campos, y el resto
+//    de campos no listados de unit/building/tech/ai-profile, solo se validan
 //    estructuralmente + su "id"/"package_id" para el orden canónico. La
-//    validación semántica completa de esos kinds (referencias, ventanas de
+//    validación semántica completa de esos campos (referencias, ventanas de
 //    época, etc.) ya la ejerce `chunsa_data_compiler.py` (gate `data_compile`);
-//    duplicarla en C++ para kinds que el kernel 0.4 no consume es está fuera
-//    de alcance de este incremento.
+//    duplicarla en C++ para lo que el kernel no consume está fuera de alcance.
 //  - NFC (revisado tras auditoría de seguridad, P1-B): se valida UTF-8 bien
 //    formado, ausencia de NUL, y un chequeo NFC PARCIAL — se rechaza toda
 //    marca diacrítica combinante suelta (U+0300–U+036F), que es la forma
@@ -64,6 +73,30 @@ namespace chunsa {
 
 using UnitId = uint32_t;
 inline constexpr UnitId INVALID_UNIT_ID = 0xFFFFFFFFu;
+
+// Sprint 1.6B (SPEC-004 §15.3): identidad de civilización tipada. CivId ==
+// índice en DataCatalogV1::civ_names[] (mismo patrón que UnitId/BuildingId/
+// TechId/AiProfileId — todas las tablas de nombre-índice de este loader
+// comparten la convención "id == posición en la tabla ya ordenada
+// ascendente por record_id"). CivNameIndexV1 es una tabla MÍNIMA (solo
+// record_id + índice, sin reconstrucción de definición propia — igual que
+// CapabilityNameIndexV1): el kernel v1 no consume ningún otro campo del
+// record civ (historical_window/epoch_window/institutions/playable_periods/
+// unit_ids/building_ids/tech_ids/...) — esa validación semántica completa
+// (incluidas las referencias cruzadas civ↔unit/building/tech del propio
+// record civ) la sigue ejerciendo chunsa_data_compiler.py, igual que
+// documenta el resto de kinds no tipados de este loader (civ/map antes de
+// este sprint). Lo que SÍ tipa este sprint es la referencia INVERSA:
+// unit.civ_id/building.civ_id/tech.available_to, resueltos contra esta
+// tabla (ver UnitDefinitionV1/BuildingDefinitionV1/TechDefinitionV1 más abajo).
+using CivId = uint32_t;
+inline constexpr CivId INVALID_CIV_ID = 0xFFFFFFFFu;
+
+struct CivNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    CivId id;
+};
 
 struct ContentHashV1 {
     uint8_t bytes[32];
@@ -100,6 +133,12 @@ struct UnitDefinitionV1 {
     int32_t cost_a, cost_b, cost_me;
     int32_t pop_cost;
     uint8_t epoch_min, epoch_max;  // 1..15, epoch_min <= epoch_max
+    // Sprint 1.6B (SPEC-004 §15.3/§17): civ_id resuelto (unit.schema.json lo
+    // declara `required`, referencia record_id a un record kind=civ) —
+    // referencia diferida (la sección civ, kind=5, va DESPUÉS de unit en el
+    // blob); resolución en el mismo paso que building.trains/tech.prereqs,
+    // ver load_impl. No resoluble ⇒ catálogo entero rechazado (InvalidUnit).
+    CivId civ_id;
 };
 
 struct UnitNameIndexV1 {
@@ -158,6 +197,10 @@ struct BuildingDefinitionV1 {
     uint8_t  research_count;
     CapabilityId required_capabilities[BUILDING_REQCAP_MAX];
     uint8_t  required_capabilities_count;
+    // Sprint 1.6B (SPEC-004 §15.3/§17): civ_id resuelto (building.schema.json
+    // lo declara `required`), misma disciplina de referencia diferida que
+    // trains/researches/required_capabilities — ver load_impl.
+    CivId civ_id;
     // resto de campos del schema (recipes/grants_capabilities/...) NO tipados
 };
 
@@ -186,6 +229,18 @@ struct TechDefinitionV1 {
     // inversa, ver §11.1), no por este campo (deviación documentada en el
     // RESULT — el compilador Python sí valida required_buildings, el kernel
     // C++ no lo consume en Parte II).
+    // Sprint 1.6B (SPEC-004 §15.3/§17, DESVIACIÓN D1 del RESULT — conservador
+    // ante un hueco de contrato): tech.schema.json NO declara un `civ_id`
+    // escalar como unit/building — declara `available_to` (record_id_set de
+    // civs, potencialmente MÚLTIPLES). El literal de §15.3 contrata un único
+    // `CivId civ_id` también para TechDefinitionV1; para conciliarlo con el
+    // schema real sin inventar semántica no especificada, el kernel v1 SOLO
+    // soporta techs de UNA civ: `civ_id` es el único elemento de
+    // `available_to` si `available_to.size()==1`; si tiene 0 o >1 elementos,
+    // el catálogo entero se rechaza (InvalidTech) — ver load_impl. Las 4
+    // techs reales del repo (Sprint 1.2) ya tienen exactamente 1 elemento en
+    // `available_to`, así que esto no afecta al golden actual.
+    CivId civ_id;
 };
 
 struct TechNameIndexV1 {
@@ -233,6 +288,23 @@ struct CapabilityNameIndexV1 {
     CapabilityId id;
 };
 
+// Sprint 1.6B (SPEC-004 §16): depósito de recurso tipado desde el mapa
+// activo (`resource_spawns` del record kind=map, schema map.schema.json).
+// "Mapa activo" = el PRIMER record map (record_id ascendente, ya validado
+// por el chequeo genérico de orden) del catálogo — el slice real trae
+// EXACTAMENTE 1 mapa; el loader no implementa mecanismo de selección
+// multi-mapa (fuera de alcance de este sprint, ver comentario de load_impl
+// y el RESULT — desviación D2). `resource_idx` 0=A/1=B/2=Me; el orden del
+// array es el orden canónico del blob (el compilador Python ya reordena
+// `resource_spawns` por (y,x,kind,id,amount) antes de escribirlo — ver
+// `_normalize` en chunsa_data_compiler.py — así que el loader NO reordena,
+// solo consume tal cual).
+struct ResourceSpawnV1 {
+    uint8_t resource_idx;  // 0=A, 1=B, 2=Me
+    int64_t x_raw, y_raw;  // raw = x_millitiles * FX_ONE_RAW / 1000 (exacto en enteros)
+    int32_t amount;
+};
+
 struct DataCatalogV1 {
     ContentHashV1 content_hash;
     ContentHashAlgorithmId hash_algorithm;
@@ -264,6 +336,17 @@ struct DataCatalogV1 {
     uint32_t ai_profile_count;
     const AiProfileV1* ai_profiles;
     const AiProfileNameIndexV1* ai_profile_names;
+    // Sprint 1.6B (SPEC-004 §15.3): tabla de civilizaciones (kind=civ),
+    // espejo mínimo de unit_count/units/unit_names (sin `civs`: no hay
+    // definición propia reconstruida, ver CivNameIndexV1).
+    uint32_t civ_count;
+    const CivNameIndexV1* civ_names;
+    // Sprint 1.6B (SPEC-004 §16): resource_spawns tipados del mapa activo
+    // (ver ResourceSpawnV1). count==0 ⇒ sin catálogo de mapa útil (el caller,
+    // game_state.hpp::gs_init_economy_from_catalog, hace NO-OP y conserva el
+    // fallback legacy fijo — SPEC-004 §16).
+    uint32_t map_resource_spawn_count;
+    const ResourceSpawnV1* map_resource_spawns;
 };
 
 enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
@@ -281,6 +364,7 @@ enum class CatalogLoadCode : uint8_t {
     InvalidBuilding,  // Sprint 1.1 (SPEC-004 §2); append-only, no renumerar.
     InvalidTech,      // Sprint 1.2 (SPEC-004 §12.1); append-only, no renumerar.
     InvalidAiProfile, // Sprint 1.4 (SPEC-005 §3); append-only, no renumerar.
+    InvalidMap,       // Sprint 1.6B (SPEC-004 §16); append-only, no renumerar.
 };
 
 class DataCatalogStorageV1 {
@@ -666,11 +750,22 @@ inline bool resolve_id(const std::vector<std::string>& ids, const std::string& t
 
 // Reconstruye y valida un UnitDefinitionV1 desde su objeto CVE ya parseado
 // (SPEC-002 §8.1: rangos exactos del schema; ver data/schemas/unit.schema.json).
-inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
+// Sprint 1.6B (SPEC-004 §15.3): `civ_id_raw_out` recibe el record_id textual
+// del campo `civ_id` (SIN resolver — la sección civ, kind=5, va después de
+// unit en el blob; load_impl resuelve tras parsear todas las secciones,
+// mismo patrón que las referencias diferidas de building/tech).
+inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
+                                              std::string& civ_id_raw_out) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
     for (const auto& kv : obj.obj) {
         if (!is_known_unit_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
     }
+
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id, record_id textual (referencia
+    // diferida, ver comentario de la firma más arriba).
+    const CveValue* civ_v = obj.find("civ_id");
+    if (!civ_v || !civ_v->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+    civ_id_raw_out = civ_v->s;
 
     const CveValue* cls = obj.find("class");
     if (!cls || !cls->is_str()) fail(CatalogLoadCode::SchemaMismatch);
@@ -739,6 +834,7 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id) {
             def.bonus_vs_bp[idx] = static_cast<int32_t>(kv.second.i);
         }
     }
+    def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     return def;
 }
 
@@ -774,6 +870,10 @@ struct BuildingRawRefs {
     std::vector<std::string> trains;
     std::vector<std::string> researches;
     std::vector<std::string> required_capabilities;
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id, record_id textual sin resolver
+    // (mismo motivo que researches: la sección civ, kind=5, va DESPUÉS de
+    // building en el blob).
+    std::string civ_id;
 };
 
 // Reconstruye y valida un BuildingDefinitionV1 desde su objeto CVE ya parseado
@@ -848,8 +948,15 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         }
     }
 
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id, record_id textual (referencia
+    // diferida, resuelta más tarde por load_impl).
+    const CveValue* civ_v = obj.find("civ_id");
+    if (!civ_v || !civ_v->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+    raw_out.civ_id = civ_v->s;
+
     BuildingDefinitionV1 def{};
     def.id = id;
+    def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     def.hp = static_cast<int32_t>(hpv->i);
     def.footprint_w = static_cast<uint8_t>(w->i);
     def.footprint_h = static_cast<uint8_t>(h->i);
@@ -890,6 +997,10 @@ struct TechRawRefs {
     std::vector<std::string> prerequisites;
     std::vector<std::string> mutually_exclusive_with;
     std::vector<std::string> grants_capabilities;
+    // Sprint 1.6B (SPEC-004 §15.3, desviación D1 — ver TechDefinitionV1):
+    // `available_to` crudo (record_id_set de civs); load_impl exige tamaño
+    // exacto 1 para derivar el `civ_id` escalar.
+    std::vector<std::string> available_to;
 };
 
 // Reconstruye y valida un TechDefinitionV1 desde su objeto CVE ya parseado
@@ -911,6 +1022,7 @@ inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, Te
 
     TechDefinitionV1 def{};
     def.id = id;
+    def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     def.epoch = static_cast<uint8_t>(epoch_v->i);
     def.research_time_ticks = static_cast<uint32_t>(rtt->i);
     parse_resource_costs(obj, def.cost_a, def.cost_b, def.cost_me, CatalogLoadCode::InvalidTech);
@@ -925,6 +1037,10 @@ inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, Te
     const CveValue* grants_obj = obj.find("grants");
     if (!grants_obj || !grants_obj->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
     raw_out.grants_capabilities = parse_string_array(*grants_obj, "capabilities");
+
+    // Sprint 1.6B (SPEC-004 §15.3, desviación D1): `available_to` crudo
+    // (tech.schema.json lo declara `required`); load_impl exige tamaño == 1.
+    raw_out.available_to = parse_string_array(obj, "available_to");
 
     return def;
 }
@@ -1036,14 +1152,26 @@ struct DataCatalogStorageV1::Impl {
     std::vector<std::string> ai_profile_ids;
     std::vector<AiProfileV1> ai_profiles;
     std::vector<AiProfileNameIndexV1> ai_profile_names;
+    // Sprint 1.6B (SPEC-004 §15.3): civ_ids necesita direcciones estables,
+    // mismo motivo que unit_ids/building_ids/tech_ids/ai_profile_ids. Sin
+    // definición propia reconstruida (ver CivNameIndexV1) — solo la tabla
+    // nombre-índice.
+    std::vector<std::string> civ_ids;
+    std::vector<CivNameIndexV1> civ_names;
+    // Sprint 1.6B (SPEC-004 §16): resource_spawns tipados del mapa activo
+    // (ver ResourceSpawnV1 y el comentario de load_impl sobre "mapa activo").
+    std::vector<ResourceSpawnV1> map_resource_spawns;
     // Referencias diferidas (resueltas tras parsear TODAS las secciones, ver
-    // el comentario de `load_impl`); índice paralelo a buildings/techs.
+    // el comentario de `load_impl`); índice paralelo a units/buildings/techs.
+    std::vector<std::string> pending_unit_civ;
     std::vector<std::vector<std::string>> pending_building_trains;
     std::vector<std::vector<std::string>> pending_building_researches;
     std::vector<std::vector<std::string>> pending_building_reqcaps;
+    std::vector<std::string> pending_building_civ;
     std::vector<std::vector<std::string>> pending_tech_prereqs;
     std::vector<std::vector<std::string>> pending_tech_mutex;
     std::vector<std::vector<std::string>> pending_tech_grants_caps;
+    std::vector<std::vector<std::string>> pending_tech_available_to;
     std::vector<uint8_t> binding_bytes;
     DataCatalogV1 cat{};
 };
@@ -1184,6 +1312,8 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->unit_ids.reserve(dir[1].count);
     impl->units.reserve(dir[1].count);
     impl->unit_names.reserve(dir[1].count);
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id crudo de unit, paralelo a units.
+    impl->pending_unit_civ.reserve(dir[1].count);
     // Sprint 1.1 (SPEC-004 §2): building_ids necesita direcciones estables,
     // mismo motivo que unit_ids. dir[2] es la sección building (kind=3).
     impl->building_ids.reserve(dir[2].count);
@@ -1192,6 +1322,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->pending_building_trains.reserve(dir[2].count);
     impl->pending_building_researches.reserve(dir[2].count);
     impl->pending_building_reqcaps.reserve(dir[2].count);
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id crudo de building, paralelo a
+    // buildings, mismo motivo.
+    impl->pending_building_civ.reserve(dir[2].count);
     // Sprint 1.2 (SPEC-004 §12.1): tech_ids necesita direcciones estables,
     // mismo motivo. dir[3] es la sección tech (kind=4). TECH_HARD_CAP es un
     // cap del KERNEL más estricto que el cap 65535 del blob (mismo espíritu
@@ -1204,6 +1337,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->pending_tech_prereqs.reserve(dir[3].count);
     impl->pending_tech_mutex.reserve(dir[3].count);
     impl->pending_tech_grants_caps.reserve(dir[3].count);
+    // Sprint 1.6B (SPEC-004 §15.3): available_to crudo de tech, paralelo a
+    // techs, mismo motivo.
+    impl->pending_tech_available_to.reserve(dir[3].count);
     // Sprint 1.4 (SPEC-005 §3): ai_profile_ids necesita direcciones estables,
     // mismo motivo que unit_ids/building_ids/tech_ids. dir[6] es la sección
     // ai-profile (kind=7, último del KIND_INFO). Cap ya acotado por
@@ -1214,8 +1350,20 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     impl->ai_profile_ids.reserve(dir[6].count);
     impl->ai_profiles.reserve(dir[6].count);
     impl->ai_profile_names.reserve(dir[6].count);
+    // Sprint 1.6B (SPEC-004 §15.3): civ_ids necesita direcciones estables,
+    // mismo motivo que unit_ids/building_ids/tech_ids/ai_profile_ids. dir[4]
+    // es la sección civ (kind=5). Sin cap adicional del kernel más allá del
+    // 1024 de kKindTable (no hay bitmask por-jugador dimensionado en
+    // múltiplos de 64 que dependa del número de civs, a diferencia de
+    // TECH_HARD_CAP/CAP_HARD_CAP — mismo espíritu que ai-profile).
+    impl->civ_ids.reserve(dir[4].count);
 
     bool have_package_id = false;
+    // Sprint 1.6B (SPEC-004 §16): "mapa activo" = el PRIMER record map
+    // (record_id ascendente) encontrado en la sección kind=6 — ver el
+    // comentario de ResourceSpawnV1 sobre la desviación de selección
+    // multi-mapa.
+    bool map_active_seen = false;
 
     for (uint32_t k = 0; k < section_count; ++k) {
         const KindSpec& spec = kKindTable[k];
@@ -1290,9 +1438,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
             } else if (spec.kind == 2) {
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const UnitId uid = static_cast<UnitId>(impl->units.size());
-                UnitDefinitionV1 def = build_unit_definition(value, uid);
+                std::string civ_raw;
+                UnitDefinitionV1 def = build_unit_definition(value, uid, civ_raw);
                 impl->unit_ids.push_back(record_id);
                 impl->units.push_back(def);
+                impl->pending_unit_civ.push_back(std::move(civ_raw));
             } else if (spec.kind == 3) {
                 // Sprint 1.1 (SPEC-004 §2): building, ahora tipado (antes solo
                 // estructural). Mismo patrón que kind==2. Sprint 1.2 añade las
@@ -1307,6 +1457,7 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->pending_building_trains.push_back(std::move(raw.trains));
                 impl->pending_building_researches.push_back(std::move(raw.researches));
                 impl->pending_building_reqcaps.push_back(std::move(raw.required_capabilities));
+                impl->pending_building_civ.push_back(std::move(raw.civ_id));
             } else if (spec.kind == 4) {
                 // Sprint 1.2 (SPEC-004 §12.1): tech, tipado. Mismo patrón.
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
@@ -1318,6 +1469,88 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->pending_tech_prereqs.push_back(std::move(raw.prerequisites));
                 impl->pending_tech_mutex.push_back(std::move(raw.mutually_exclusive_with));
                 impl->pending_tech_grants_caps.push_back(std::move(raw.grants_capabilities));
+                impl->pending_tech_available_to.push_back(std::move(raw.available_to));
+            } else if (spec.kind == 5) {
+                // Sprint 1.6B (SPEC-004 §15.3): civ, tabla mínima (solo
+                // nombre-índice, ver comentario de CivNameIndexV1 — sin
+                // reconstrucción semántica completa del resto del record).
+                if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
+                impl->civ_ids.push_back(record_id);
+            } else if (spec.kind == 6) {
+                // Sprint 1.6B (SPEC-004 §16): map — tipifica `resource_spawns`
+                // SOLO del primer record map ("mapa activo", ver comentario de
+                // ResourceSpawnV1); el resto de campos del record (terrain_rle/
+                // cost_rle/starting_positions/...) sigue sin tipar (misma
+                // deviación estructural-only que antes de este sprint).
+                if (!map_active_seen) {
+                    map_active_seen = true;
+                    const CveValue* spawns = value.find("resource_spawns");
+                    if (!spawns || !spawns->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+                    // SPEC-004 §16: "si el mapa trae más [de ECO_MAX_DEPOSITS],
+                    // se rechaza la carga (no se truncan datos en silencio)".
+                    if (spawns->arr.size() > ECO_MAX_DEPOSITS) fail(CatalogLoadCode::InvalidMap);
+                    impl->map_resource_spawns.reserve(spawns->arr.size());
+                    for (const auto& item : spawns->arr) {
+                        if (!item.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+                        const CveValue* kind_v = item.find("kind");
+                        const CveValue* id_v = item.find("id");
+                        const CveValue* x_v = item.find("x_millitiles");
+                        const CveValue* y_v = item.find("y_millitiles");
+                        const CveValue* amt_v = item.find("amount");
+                        if (!kind_v || !kind_v->is_str() || !id_v || !id_v->is_str()
+                            || !x_v || !x_v->is_int() || !y_v || !y_v->is_int()
+                            || !amt_v || !amt_v->is_int()) {
+                            fail(CatalogLoadCode::SchemaMismatch);
+                        }
+                        // P3 de la auditoría Opus (Sprint 1.6B): `kind` es un
+                        // enum del schema {resource, material}. Rechazar el
+                        // catálogo ante `material` sería una bomba de
+                        // compatibilidad: los materiales son contenido LEGÍTIMO
+                        // de Fase 2 (recetas), explícitamente excluidos del
+                        // alcance de este sprint por el PLAN_MAESTRO. Semántica
+                        // v1: los spawns de material se IGNORAN (no son un
+                        // error; son datos para una feature futura que el kernel
+                        // de economía v1 —solo A/B/Me— todavía no consume).
+                        // `reserve` de arriba es cota superior, así que saltar
+                        // entradas es seguro.
+                        if (kind_v->s == "material") continue;
+                        if (kind_v->s != "resource") fail(CatalogLoadCode::InvalidMap);
+                        // Con kind=="resource", un `id` fuera de A/B/Me SÍ es un
+                        // error de datos y rechaza el catálogo entero (misma
+                        // política que parse_resource_costs/dropoff_mask).
+                        uint8_t ridx;
+                        if (id_v->s == "A") ridx = 0u;
+                        else if (id_v->s == "B") ridx = 1u;
+                        else if (id_v->s == "Me") ridx = 2u;
+                        else fail(CatalogLoadCode::InvalidMap);
+                        // Rangos estructurales del schema (map.schema.json):
+                        // x/y_millitiles 0..2^31-1, amount 1..1000000.
+                        if (x_v->i < 0 || x_v->i > 2147483647ll) fail(CatalogLoadCode::InvalidMap);
+                        if (y_v->i < 0 || y_v->i > 2147483647ll) fail(CatalogLoadCode::InvalidMap);
+                        if (amt_v->i < 1 || amt_v->i > 1000000) fail(CatalogLoadCode::InvalidMap);
+                        ResourceSpawnV1 rs{};
+                        rs.resource_idx = ridx;
+                        // Conversión exacta en enteros (SPEC-004 §16):
+                        // raw = mt * FX_ONE_RAW / 1000.
+                        rs.x_raw = (x_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
+                        rs.y_raw = (y_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
+                        // P1 de la auditoría Opus (Sprint 1.6B): el rango del
+                        // schema (2^31-1 mt ≈ 262x la cota del mundo) NO implica
+                        // que el raw resultante esté DENTRO del mundo. Un blob
+                        // con un depósito fuera de cota congelaba el kernel:
+                        // dist_sq_raw marca FatalReason::WORLD_BOUNDS en el
+                        // primer tick que un ciudadano lo evalúa y step() queda
+                        // muerto para siempre. Como es entrada NO CONFIABLE, la
+                        // política es rechazar el catálogo entero (SPEC-002 §7),
+                        // no degradar en caliente.
+                        if (rs.x_raw < 0 || rs.x_raw >= WORLD_RAW_MAX
+                            || rs.y_raw < 0 || rs.y_raw >= WORLD_RAW_MAX) {
+                            fail(CatalogLoadCode::InvalidMap);
+                        }
+                        rs.amount = static_cast<int32_t>(amt_v->i);
+                        impl->map_resource_spawns.push_back(rs);
+                    }
+                }
             } else if (spec.kind == 7) {
                 // Sprint 1.4 (SPEC-005 §3): ai-profile, ahora tipado (antes
                 // solo estructural, igual que building/tech antes de sus
@@ -1329,8 +1562,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 impl->ai_profile_ids.push_back(record_id);
                 impl->ai_profiles.push_back(def);
             }
-            // civ/map: validados estructural + orden (deviación documentada
-            // arriba); no se reconstruye tipo semántico.
+            // civ (kind=5)/map (kind=6): Sprint 1.6B tipa civ_ids (tabla
+            // nombre-índice) y resource_spawns del mapa activo (ramas de
+            // arriba); el RESTO de sus campos sigue solo estructural +
+            // orden (deviación documentada arriba de este archivo) — no se
+            // reconstruye ninguna otra definición semántica.
         }
         if (section.pos != section.len) fail(CatalogLoadCode::NonCanonical);  // trailing de sección
     }
@@ -1344,6 +1580,16 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     // el blob — por eso building.researches no podía resolverse en el mismo
     // pase que building.trains/required_capabilities). Cualquier referencia
     // no resoluble o que exceda el cap del kernel ⇒ catálogo entero rechazado.
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id de unit. civ_ids (sección kind=5)
+    // ya está completa en este punto (parseada tras unit en el blob).
+    for (size_t ui = 0; ui < impl->units.size(); ++ui) {
+        uint32_t civ_idx = 0;
+        if (!resolve_id(impl->civ_ids, impl->pending_unit_civ[ui], civ_idx)) {
+            fail(CatalogLoadCode::InvalidUnit);
+        }
+        impl->units[ui].civ_id = static_cast<CivId>(civ_idx);
+    }
+
     for (size_t bi = 0; bi < impl->buildings.size(); ++bi) {
         BuildingDefinitionV1& bd = impl->buildings[bi];
 
@@ -1373,6 +1619,13 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
             if (!resolve_id(impl->capability_ids, reqcaps_raw[k], idx)) fail(CatalogLoadCode::InvalidBuilding);
             bd.required_capabilities[k] = static_cast<CapabilityId>(idx);
         }
+
+        // Sprint 1.6B (SPEC-004 §15.3): civ_id de building.
+        uint32_t civ_idx = 0;
+        if (!resolve_id(impl->civ_ids, impl->pending_building_civ[bi], civ_idx)) {
+            fail(CatalogLoadCode::InvalidBuilding);
+        }
+        bd.civ_id = static_cast<CivId>(civ_idx);
     }
     for (size_t ti = 0; ti < impl->techs.size(); ++ti) {
         TechDefinitionV1& td = impl->techs[ti];
@@ -1403,6 +1656,15 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
             if (!resolve_id(impl->capability_ids, grants_raw[k], idx)) fail(CatalogLoadCode::InvalidTech);
             td.grants[k] = static_cast<CapabilityId>(idx);
         }
+
+        // Sprint 1.6B (SPEC-004 §15.3, desviación D1): civ_id de tech desde
+        // `available_to` — el kernel v1 SOLO soporta techs de UNA civ; 0 o
+        // >1 elementos rechaza el catálogo entero (ver TechDefinitionV1).
+        const auto& avail_raw = impl->pending_tech_available_to[ti];
+        if (avail_raw.size() != 1) fail(CatalogLoadCode::InvalidTech);
+        uint32_t civ_idx = 0;
+        if (!resolve_id(impl->civ_ids, avail_raw[0], civ_idx)) fail(CatalogLoadCode::InvalidTech);
+        td.civ_id = static_cast<CivId>(civ_idx);
     }
 
     // ---- unit_names: mismo orden que units (ya ascendente por record_id) ----
@@ -1450,6 +1712,21 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         impl->ai_profile_names.push_back(ni);
     }
 
+    // P3 de la auditoría Opus (Sprint 1.6B): reserve exacto, paridad con
+    // unit_names/building_names/tech_names/ai_profile_names (la estabilidad de
+    // los c_str() ya la da el reserve de civ_ids, pero el espejo del patrón
+    // endurecido debe ser exacto para que futuras revisiones no duden).
+    impl->civ_names.reserve(impl->civ_ids.size());
+    // ---- civ_names: mismo orden que civ_ids (Sprint 1.6B, ya ascendente
+    // por el chequeo genérico de orden de record_id) ----
+    for (size_t i = 0; i < impl->civ_ids.size(); ++i) {
+        CivNameIndexV1 ni{};
+        ni.record_id_utf8 = impl->civ_ids[i].c_str();
+        ni.record_id_bytes = static_cast<uint16_t>(impl->civ_ids[i].size());
+        ni.id = static_cast<CivId>(i);
+        impl->civ_names.push_back(ni);
+    }
+
     // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
     static constexpr char kHashDomain[] = "CHUNSA_CONTENT_V1";
     ContentHashV1 hash{};
@@ -1495,6 +1772,10 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.ai_profile_count = static_cast<uint32_t>(impl->ai_profiles.size());
     cat.ai_profiles = impl->ai_profiles.data();
     cat.ai_profile_names = impl->ai_profile_names.data();
+    cat.civ_count = static_cast<uint32_t>(impl->civ_ids.size());
+    cat.civ_names = impl->civ_names.data();
+    cat.map_resource_spawn_count = static_cast<uint32_t>(impl->map_resource_spawns.size());
+    cat.map_resource_spawns = impl->map_resource_spawns.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier
     // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
@@ -1625,6 +1906,21 @@ inline AiProfileId catalog_find_ai_profile(const DataCatalogV1& cat, const char*
         else hi = mid;
     }
     return INVALID_AI_PROFILE_ID;
+}
+
+// Sprint 1.6B (SPEC-004 §15.3): espejo de catalog_find_unit para CivId.
+inline CivId catalog_find_civ(const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.civ_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const CivNameIndexV1& e = cat.civ_names[mid];
+        const size_t n = (e.record_id_bytes < name_len) ? e.record_id_bytes : name_len;
+        int c = (n == 0) ? 0 : std::memcmp(e.record_id_utf8, name, n);
+        if (c == 0 && e.record_id_bytes == name_len) return e.id;
+        if (c < 0 || (c == 0 && e.record_id_bytes < name_len)) lo = mid + 1;
+        else hi = mid;
+    }
+    return INVALID_CIV_ID;
 }
 
 }  // namespace chunsa

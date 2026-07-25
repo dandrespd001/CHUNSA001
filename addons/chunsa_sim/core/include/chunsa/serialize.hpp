@@ -308,6 +308,12 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     w.u8(g.winner);
     w.u16(g.participants_mask);
 
+    // (o) Civilización por jugador (Sprint 1.6B, SPEC-004 §17/§20 — save
+    // v12): AL FINAL, tras todo lo v11 (precedente D7: append-only, sin
+    // migración). Escalar por jugador (no por-slot de entidad), todos los
+    // MAX_EMITTERS.
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.u32(g.player_civ[e]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -596,6 +602,17 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     if (r.fail) return false;
     if ((pmask >> cfg.player_count) != 0u) return false;
     g.participants_mask = pmask;
+
+    // (o) Civilización por jugador (Sprint 1.6B, SPEC-004 §17/§20 — save
+    // v12): mismo orden que gs_serialize. NOTA (deviación documentada, mismo
+    // espíritu que unit_id/building_id/build_target en este archivo):
+    // player_civ NO se revalida aquí contra `catalog.civ_count` (gs_deserialize
+    // no recibe un DataCatalogV1 — mismo motivo que unit_id en Sprint 0.4);
+    // acepta cualquier u32, incluido INVALID_CIV_ID. El binding real
+    // (`g.catalog`) se re-enlaza aparte vía gs_bind_catalog; los gates de
+    // civilización de step.hpp ya comprueban bounds/igualdad en caliente.
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.player_civ[e] = r.u32();
+    if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes
     g.destroy_count = 0;

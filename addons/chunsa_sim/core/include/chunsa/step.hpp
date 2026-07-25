@@ -314,6 +314,18 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
                         return RejectReason::ILLEGAL_STATE;
                     }
                 }
+                // Sprint 1.6B (SPEC-004 §17): gate de civilización — rechaza
+                // si el edificio es de OTRA civ que la asignada al jugador.
+                // Exención doble (ambas obligatorias, brief K1): (a)
+                // INVALID_CIV_ID ("sin asignar") NO aplica el gate —
+                // compatibilidad con todos los escenarios/tests existentes
+                // que nunca llaman a gs_set_player_civ; (b) la MISMA ventana
+                // de setup del tick 0 que el resto de gates de este bloque
+                // (scenario_exempt ya cubre esta rama entera).
+                if (g.player_civ[c.emitter] != INVALID_CIV_ID
+                    && def.civ_id != g.player_civ[c.emitter]) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
             }
 
             // Resto de campos de stats del payload == 0 (misma disciplina
@@ -469,6 +481,17 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
                 return RejectReason::ILLEGAL_STATE;
             }
 
+            // Sprint 1.6B (SPEC-004 §17): gate de civilización, mismo
+            // patrón/exención que PLACE_BUILDING (INVALID_CIV_ID no aplica).
+            // TRAIN_UNIT no tiene ventana de setup de tick 0 (§4.1.2 es
+            // exclusiva de PLACE_BUILDING — los edificios iniciales del
+            // escenario, nunca unidades entrenadas), así que no hace falta
+            // ninguna exención adicional aquí.
+            if (g.player_civ[c.emitter] != INVALID_CIV_ID
+                && udef.civ_id != g.player_civ[c.emitter]) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+
             if (g.prod_count[bi] >= PROD_QUEUE_CAP) return RejectReason::ILLEGAL_STATE;
 
             const int32_t pop_cost = udef.pop_cost;  // constante v1 = 1
@@ -555,6 +578,13 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             }
 
             if (tdef.epoch > g.player_epoch[c.emitter]) return RejectReason::ILLEGAL_STATE;
+
+            // Sprint 1.6B (SPEC-004 §17): gate de civilización, mismo
+            // patrón/exención que PLACE_BUILDING/TRAIN_UNIT.
+            if (g.player_civ[c.emitter] != INVALID_CIV_ID
+                && tdef.civ_id != g.player_civ[c.emitter]) {
+                return RejectReason::ILLEGAL_STATE;
+            }
 
             if (g.research_tech[bi] != INVALID_TECH_ID) return RejectReason::ILLEGAL_STATE;  // edificio ocupado
 
