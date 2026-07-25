@@ -1,13 +1,12 @@
 #include "chunsa_sim_node.h"
+#include "fog_view.hpp"
 
-// chunsa_sim — ChunsaSimNode (Sprint 0.3, demo showcase: combate + moral +
-// economía visibles). Escenario showcase_v1 (seed fija) avanzando a 20 Hz en
-// un hilo: caballería (owner 0) y artillería (owner 1) convergen en (128,128)
-// y se enzarzan (combat/morale systems del kernel, autónomos), mientras
-// ciudadanos (owner 0) recolectan Alimentos (economy_system, autónomo). El
-// hilo de presentación lee el último snapshot publicado sin bloquear al
-// writer, interpola posiciones entre snapshots (60+ FPS) y colorea por
-// bando/clase/pánico leyendo el snapshot actual.
+// chunsa_sim — ChunsaSimNode (Sprint 1.4, skirmish jugable: humano contra IA,
+// combate + moral + economía visibles). El kernel avanza a 20 Hz en un hilo;
+// el owner 0 queda bajo control del jugador y el owner 1 recibe sus órdenes
+// del AiJobBox. El hilo de presentación lee el último snapshot publicado sin
+// bloquear al writer, interpola posiciones entre snapshots (60+ FPS) y
+// colorea por bando/clase/pánico leyendo el snapshot actual.
 //
 // Presentación (ADR-009, modo (c) — rig reutilizado del SPIKE-RENDER-0):
 // quads 3D con Camera3D ortográfica mirando al plano del mapa,
@@ -57,8 +56,26 @@ namespace {
 constexpr uint64_t DEMO_SEED = 20260716ull;
 constexpr auto TICK_PERIOD = std::chrono::milliseconds(50);  // 20 Hz
 constexpr int64_t MAP_TILES = 256;
+constexpr uint32_t SKIRMISH_ARMY_COUNT = 8;
+constexpr uint32_t SKIRMISH_CITIZEN_COUNT = 4;
+constexpr int64_t SKIRMISH_HUMAN_TX = 20;
+constexpr int64_t SKIRMISH_AI_TX = 80;
+constexpr int64_t SKIRMISH_BASE_TY = 128;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
+
+godot::Color fog_overlay_color(chunsa::presentation::FogLevel level) {
+    using chunsa::presentation::FogLevel;
+    switch (level) {
+        case FogLevel::VISIBLE:
+            return godot::Color(0.0, 0.0, 0.0, 0.0);
+        case FogLevel::EXPLORED:
+            return godot::Color(0.015, 0.025, 0.05, 0.38);
+        case FogLevel::UNEXPLORED:
+        default:
+            return godot::Color(0.005, 0.008, 0.02, 0.84);
+    }
+}
 
 const char* receipt_result_text(uint16_t result) {
     using chunsa::RejectReason;
@@ -108,7 +125,7 @@ void ChunsaSimNode::_ready() {
     // no hace falta el hack delay=0 de Sprint 1.1: command_effective_tick
     // ahora da eff=0 a cualquier comando con target_tick==0 ingerido en el
     // PRIMER Step (t==0) SIN importar el delay — los PLACE_BUILDING de setup
-    // (los dos centros del showcase, build_showcase_batch en t==0) siguen
+    // (los dos centros del skirmish, build_skirmish_batch en t==0) siguen
     // entrando con target_tick=0 y activando la exención de SPEC-004 §4.1.2/
     // §4.3 exactamente igual que antes. La UI sigue usando el mismo command
     // stream; no hay camino privilegiado (el contrato del host es: NUNCA
@@ -118,6 +135,14 @@ void ChunsaSimNode::_ready() {
                                      DEMO_SEED, 0};
     gs = new chunsa::GameState();
     chunsa::gs_init(*gs, cfg);
+    // El escenario jugable separa las bases y conserva la simetría económica:
+    // el dropoff del owner 1 queda en el mismo ancla que su centro.
+    gs->dropoff_x[1] = SKIRMISH_AI_TX * chunsa::FX_ONE_RAW
+            + chunsa::FX_ONE_RAW / 2;
+    gs->dropoff_y[1] = SKIRMISH_BASE_TY * chunsa::FX_ONE_RAW
+            + chunsa::FX_ONE_RAW / 2;
+    chunsa::ai_box_init(ai_box, 1);
+    ai_rt = chunsa::AiRuntimeV1{0u, 0u};
     // --- Sprint 0.4: cargar el catálogo de datos y bindearlo al GameState ---
     {
         godot::String blob_path = os_ptr->get_environment("CHUNSA_BLOB");
@@ -203,13 +228,14 @@ void ChunsaSimNode::_ready() {
 void ChunsaSimNode::sim_loop() {
     using clock = std::chrono::steady_clock;
     // +512: margen para las órdenes del jugador (Sprint 0.3+) que se drenan
-    // de pending_player_commands cada tick, además del batch del showcase.
+    // de pending_player_commands cada tick, además del batch del skirmish.
     std::vector<chunsa::RawCommand> batch(std::max<uint32_t>(demo_units, 700u) + 512u);
 
     auto next_tick = clock::now();
+    bool game_over_reported = false;
     while (running.load(std::memory_order_relaxed)) {
         const uint32_t t = gs->tick;
-        uint32_t n = build_showcase_batch(batch.data(), t);
+        uint32_t n = build_skirmish_batch(batch.data(), t);
         // La primera llamada a step(t==0) solo admite setup generado por el
         // escenario. Una orden humana capturada durante ese arranque se
         // conserva para t==1 y no usa accidentalmente la exención de setup.
@@ -221,7 +247,24 @@ void ChunsaSimNode::sim_loop() {
             }
             pending_player_commands.clear();
         }
+
+        // t = gs->tick, batch/n ya contienen setup + órdenes del jugador.
+        // Este pump copia literalmente el ciclo de driver.hpp::drive con IA.
+        if (chunsa::ai_should_dispatch(ai_box, t)) chunsa::ai_dispatch(ai_box, t, ai_rt);
+        if (ai_box.state == chunsa::AiJobState::DISPATCHED) chunsa::ai_execute(ai_box, *gs);
+        if (chunsa::ai_stalled(ai_box, t)) chunsa::ai_execute(ai_box, *gs);
+        if (chunsa::ai_due(ai_box, t)) {
+            for (uint32_t k = 0; k < ai_box.result_count && n < batch.size(); ++k)
+                batch[n++] = ai_box.result[k];
+            chunsa::ai_commit(ai_box, ai_rt);
+        }
+
         chunsa::step(*gs, batch.data(), n);
+
+        // Las secuencias de setup del emisor 1 también pasan por el kernel.
+        // El runtime empieza en {0,0} por contrato y, una vez consumido el
+        // setup de t==0, continúa desde la última secuencia aceptada.
+        if (t == 0u) ai_rt.ai_sequence = gs->last_seq[1];
 
         DemoSnapshot* s = ring->begin_write();
         if (s != nullptr) {
@@ -230,9 +273,15 @@ void ChunsaSimNode::sim_loop() {
             const uint32_t cap =
                     gs->entities.capacity < 1024u ? gs->entities.capacity : 1024u;
             s->capacity = cap;
+            s->map_w = gs->vision.w;
+            s->map_h = gs->vision.h;
+            std::copy_n(gs->vision.visible[0], chunsa::VIS_WORDS, s->visible);
+            std::copy_n(gs->vision.explored[0], chunsa::VIS_WORDS, s->explored);
             for (uint32_t i = 0; i < cap; ++i) {
                 s->alive[i] = gs->entities.alive[i];
                 s->generation[i] = gs->entities.generation[i];
+                s->x_raw[i] = gs->pos_x[i];
+                s->y_raw[i] = gs->pos_y[i];
                 s->x[i] = static_cast<float>(gs->pos_x[i]) / 65536.0f;
                 s->y[i] = static_cast<float>(gs->pos_y[i]) / 65536.0f;
                 s->owner[i] = gs->owner[i];
@@ -240,6 +289,9 @@ void ChunsaSimNode::sim_loop() {
                 s->fleeing[i] = gs->fleeing[i];
                 s->hp[i] = gs->hp[i];
                 s->max_hp[i] = gs->max_hp[i];
+                s->attack[i] = gs->attack[i];
+                s->range_mt[i] = gs->range_mt[i];
+                s->speed_mtpt[i] = gs->speed_mtpt[i];
                 s->entity_kind[i] = gs->entity_kind[i];
                 s->building_id[i] = gs->building_id[i];
                 s->build_progress[i] = gs->build_progress[i];
@@ -262,6 +314,8 @@ void ChunsaSimNode::sim_loop() {
             s->stock_me = gs->player_stock[0][2];
             s->player_epoch = gs->player_epoch[0];
             s->pop_used = gs->pop_used[0];
+            s->game_over = gs->game_over;
+            s->winner = gs->winner;
             const chunsa::ReceiptMailbox& mailbox = gs->mailbox[0];
             if (mailbox.count > 0u) {
                 const uint32_t last =
@@ -279,23 +333,39 @@ void ChunsaSimNode::sim_loop() {
             ring->publish();
         }
 
-        // Diagnóstico del showcase (Sprint 0.3) cada 100 ticks, desde el hilo
-        // de simulación: vivos por clase + stock de Alimentos del owner 0.
+        if (gs->game_over != 0u && !game_over_reported) {
+            game_over_reported = true;
+            godot::UtilityFunctions::print(
+                    "CHUNSA game_over winner=", static_cast<int64_t>(gs->winner),
+                    " tick=", static_cast<int64_t>(t));
+            running.store(false, std::memory_order_relaxed);
+        }
+
+        // Diagnóstico del skirmish cada 100 ticks, desde el hilo de simulación:
+        // vivos por clase, stock del owner 0 y progreso observable de la IA.
         if (t % 100u == 0u) {
             uint32_t n_cav_alive = 0, n_art_alive = 0, n_cit_alive = 0,
                      n_buildings_alive = 0;
+            int64_t ai_first_x = -1;
             for (uint32_t i = 0; i < gs->entities.capacity; ++i) {
                 if (gs->entities.alive[i] == 0u) continue;
                 if (gs->entity_kind[i] == 1u) ++n_buildings_alive;
                 else if (gs->unit_class[i] == 1u) ++n_cav_alive;
                 else if (gs->unit_class[i] == 2u) ++n_art_alive;
                 else if (gs->unit_class[i] == 3u) ++n_cit_alive;
+                if (ai_first_x < 0 && gs->owner[i] == 1u &&
+                    gs->entity_kind[i] == 0u && gs->unit_class[i] <= 2u) {
+                    ai_first_x = gs->pos_x[i] / chunsa::FX_ONE_RAW;
+                }
             }
             godot::UtilityFunctions::print("CHUNSA cav=", n_cav_alive,
                                            " art=", n_art_alive,
                                            " citizens=", n_cit_alive,
                                            " buildings=", n_buildings_alive,
-                                           " stock_A=", gs->player_stock[0][0]);
+                                           " stock_A=", gs->player_stock[0][0],
+                                           " ai_seq=", ai_rt.ai_sequence,
+                                           " ai_last_seq=", gs->last_seq[1],
+                                           " ai_x=", ai_first_x);
         }
 
         next_tick += TICK_PERIOD;
@@ -327,16 +397,12 @@ void ChunsaSimNode::_process(double delta) {
                     alive_in_curr += snap_curr.alive[i] != 0u ? 1u : 0u;
                     if (is_selected[i] &&
                         (snap_curr.alive[i] == 0u ||
-                         snap_curr.generation[i] != selection_generation[i])) {
+                         snap_curr.generation[i] != selection_generation[i] ||
+                         !presentation_entity_visible(i))) {
                         is_selected[i] = false;
                     }
                 }
-                if (snap_curr.tick % 100u == 0u &&
-                    snap_curr.tick != last_reported_tick) {
-                    last_reported_tick = snap_curr.tick;
-                    godot::UtilityFunctions::print("CHUNSA tick=", snap_curr.tick,
-                                                   " units=", alive_in_curr);
-                }
+                update_fog_from_snapshot();
                 if (snap_curr.last_receipt_sequence != UINT64_MAX &&
                     snap_curr.last_receipt_sequence >= 1000000ull &&
                     snap_curr.last_receipt_sequence != last_feedback_sequence) {
@@ -417,6 +483,36 @@ void ChunsaSimNode::_draw() {
 
     draw_selection_panel(font, text, muted);
     draw_minimap(font, text);
+
+    if (snap_curr.game_over != 0u) {
+        const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+        const float panel_width = std::min(620.0f, viewport_size.x - 32.0f);
+        const float panel_height = 176.0f;
+        const godot::Rect2 panel(
+                godot::Vector2((viewport_size.x - panel_width) * 0.5f,
+                               (viewport_size.y - panel_height) * 0.5f),
+                godot::Vector2(panel_width, panel_height));
+
+        godot::String outcome = "EMPATE";
+        godot::Color outcome_color(1.0, 0.85, 0.35, 1.0);
+        if (snap_curr.winner == 0u) {
+            outcome = "VICTORIA";
+            outcome_color = godot::Color(0.35, 1.0, 0.55, 1.0);
+        } else if (snap_curr.winner == 1u) {
+            outcome = "DERROTA";
+            outcome_color = godot::Color(1.0, 0.35, 0.35, 1.0);
+        }
+
+        draw_rect(panel, godot::Color(0.015, 0.025, 0.05, 0.94));
+        draw_string(font, panel.position + godot::Vector2(0, 76), outcome,
+                    static_cast<godot::HorizontalAlignment>(1), panel.size.x,
+                    48, outcome_color);
+        const godot::String detail = "Partida finalizada · tick " +
+                godot::String::num_int64(static_cast<int64_t>(snap_curr.tick));
+        draw_string(font, panel.position + godot::Vector2(0, 122), detail,
+                    static_cast<godot::HorizontalAlignment>(1), panel.size.x,
+                    16, muted);
+    }
 }
 
 // Selección, colocación y órdenes del jugador (Sprint 1.1). Todo lo que sale
@@ -603,6 +699,7 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         float best_d2 = 1.0e30f;
         for (uint32_t i = 0; i < cap; ++i) {
             if (snap_curr.alive[i] == 0u) continue;
+            if (!presentation_entity_visible(i)) continue;
             if (snap_curr.owner[i] != 0u) continue;
             if (snap_curr.entity_kind[i] == 0u && snap_curr.unit_class[i] > 3u) continue;
 
@@ -789,6 +886,115 @@ int32_t ChunsaSimNode::selected_count() const {
     return count;
 }
 
+bool ChunsaSimNode::presentation_entity_visible(uint32_t slot) const {
+    if (!have_curr || slot >= 1024u || slot >= snap_curr.capacity ||
+        snap_curr.alive[slot] == 0u) {
+        return false;
+    }
+    if (snap_curr.owner[slot] == 0u) return true;
+
+    // Un edificio aparece cuando cualquier celda de su footprint está
+    // visible. Usar sólo el centro haría parpadear edificios grandes en el
+    // borde del fog y contradiría SPEC-006 §12.
+    if (snap_curr.entity_kind[slot] == 1u) {
+        const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+        if (snap_curr.building_id[slot] >= catalog.building_count) return false;
+        const chunsa::BuildingDefinitionV1& def =
+                catalog.buildings[snap_curr.building_id[slot]];
+        const uint32_t anchor_x = snap_curr.bld_anchor_tx[slot];
+        const uint32_t anchor_y = snap_curr.bld_anchor_ty[slot];
+        for (uint32_t dy = 0; dy < def.footprint_h; ++dy) {
+            for (uint32_t dx = 0; dx < def.footprint_w; ++dx) {
+                if (chunsa::presentation::fog_level_at(
+                            snap_curr.visible, snap_curr.explored,
+                            snap_curr.map_w, snap_curr.map_h,
+                            anchor_x + dx, anchor_y + dy) ==
+                    chunsa::presentation::FogLevel::VISIBLE) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    return chunsa::presentation::entity_visible_to_player(
+            snap_curr.owner[slot], 0u, snap_curr.visible, snap_curr.map_w,
+            snap_curr.map_h, snap_curr.x_raw[slot], snap_curr.y_raw[slot]);
+}
+
+bool ChunsaSimNode::presentation_tile_visible(int64_t x_raw,
+                                               int64_t y_raw) const {
+    if (!have_curr || x_raw < 0 || y_raw < 0) return false;
+    const int64_t tx = x_raw >> 16;
+    const int64_t ty = y_raw >> 16;
+    if (tx < 0 || ty < 0 ||
+        tx >= static_cast<int64_t>(snap_curr.map_w) ||
+        ty >= static_cast<int64_t>(snap_curr.map_h) ||
+        tx >= static_cast<int64_t>(chunsa::VIS_AXIS) ||
+        ty >= static_cast<int64_t>(chunsa::VIS_AXIS)) {
+        return false;
+    }
+    return chunsa::presentation::fog_level_at(
+                   snap_curr.visible, snap_curr.explored, snap_curr.map_w,
+                   snap_curr.map_h, static_cast<uint32_t>(tx),
+                   static_cast<uint32_t>(ty)) ==
+            chunsa::presentation::FogLevel::VISIBLE;
+}
+
+void ChunsaSimNode::update_fog_from_snapshot() {
+    if (!have_curr || mmi_fog3d == nullptr) return;
+    const godot::Ref<godot::MultiMesh> mm_fog = mmi_fog3d->get_multimesh();
+    if (mm_fog.is_null()) return;
+
+    uint32_t visible_blocks = 0;
+    uint32_t explored_blocks = 0;
+    uint32_t unexplored_blocks = 0;
+    for (uint32_t by = 0; by < FOG_BLOCK_AXIS; ++by) {
+        for (uint32_t bx = 0; bx < FOG_BLOCK_AXIS; ++bx) {
+            const chunsa::presentation::FogLevel level =
+                    chunsa::presentation::fog_block_level(
+                            snap_curr.visible, snap_curr.explored,
+                            snap_curr.map_w, snap_curr.map_h,
+                            bx * FOG_BLOCK_TILES, by * FOG_BLOCK_TILES,
+                            FOG_BLOCK_TILES);
+            switch (level) {
+                case chunsa::presentation::FogLevel::VISIBLE:
+                    ++visible_blocks;
+                    break;
+                case chunsa::presentation::FogLevel::EXPLORED:
+                    ++explored_blocks;
+                    break;
+                case chunsa::presentation::FogLevel::UNEXPLORED:
+                default:
+                    ++unexplored_blocks;
+                    break;
+            }
+            const int32_t instance = static_cast<int32_t>(by * FOG_BLOCK_AXIS + bx);
+            mm_fog->set_instance_color(instance, fog_overlay_color(level));
+        }
+    }
+
+    uint32_t enemy_presented = 0;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] != 0u && snap_curr.owner[i] != 0u &&
+            presentation_entity_visible(i)) {
+            ++enemy_presented;
+        }
+    }
+
+    if (snap_curr.tick % 100u == 0u &&
+        snap_curr.tick != last_reported_tick) {
+        last_reported_tick = snap_curr.tick;
+        godot::UtilityFunctions::print(
+                "CHUNSA tick=", snap_curr.tick, " units=", alive_in_curr,
+                " fog_visible_blocks=", visible_blocks,
+                " fog_explored_blocks=", explored_blocks,
+                " fog_unexplored_blocks=", unexplored_blocks,
+                " fog_enemy_presented=", enemy_presented);
+    }
+}
+
 int32_t ChunsaSimNode::selected_single_building_slot() const {
     if (selected_count() != 1) return -1;
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
@@ -804,7 +1010,8 @@ int32_t ChunsaSimNode::selected_single_building_slot() const {
 bool ChunsaSimNode::selected_slot_is_current(uint32_t slot) const {
     return slot < 1024u && is_selected[slot] && have_curr &&
             snap_curr.alive[slot] != 0u &&
-            snap_curr.generation[slot] == selection_generation[slot];
+            snap_curr.generation[slot] == selection_generation[slot] &&
+            presentation_entity_visible(slot);
 }
 
 godot::String ChunsaSimNode::catalog_name(const char* name, uint16_t bytes) const {
@@ -989,7 +1196,7 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
     const godot::Rect2 map = minimap_world_rect();
     const float scale = map.size.x / MAP_PX;
     draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
-    draw_string(font, panel.position + godot::Vector2(12, 19), "MINIMAPA · sin fog",
+    draw_string(font, panel.position + godot::Vector2(12, 19), "MINIMAPA · fog activo",
                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
     draw_rect(map, godot::Color(0.13, 0.17, 0.2, 1.0));
 
@@ -1003,10 +1210,40 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
                                godot::Color(0.45, 0.48, 0.52, 1.0));
     }
 
+    const uint32_t map_w = std::min(snap_curr.map_w,
+                                    static_cast<uint32_t>(MAP_TILES));
+    const uint32_t map_h = std::min(snap_curr.map_h,
+                                    static_cast<uint32_t>(MAP_TILES));
+    for (uint32_t by = 0; by < FOG_BLOCK_AXIS; ++by) {
+        for (uint32_t bx = 0; bx < FOG_BLOCK_AXIS; ++bx) {
+            const uint32_t tx = bx * FOG_BLOCK_TILES;
+            const uint32_t ty = by * FOG_BLOCK_TILES;
+            if (tx >= map_w || ty >= map_h) continue;
+            const chunsa::presentation::FogLevel level =
+                    chunsa::presentation::fog_block_level(
+                            snap_curr.visible, snap_curr.explored,
+                            snap_curr.map_w, snap_curr.map_h, tx, ty,
+                            FOG_BLOCK_TILES);
+            if (level == chunsa::presentation::FogLevel::VISIBLE) continue;
+            const uint32_t width_tiles = std::min(FOG_BLOCK_TILES, map_w - tx);
+            const uint32_t height_tiles = std::min(FOG_BLOCK_TILES, map_h - ty);
+            draw_rect(
+                    godot::Rect2(
+                            map.position + godot::Vector2(
+                                    static_cast<float>(tx) * TILE_PX * scale,
+                                    static_cast<float>(ty) * TILE_PX * scale),
+                            godot::Vector2(
+                                    static_cast<float>(width_tiles) * TILE_PX * scale,
+                                    static_cast<float>(height_tiles) * TILE_PX * scale)),
+                    fog_overlay_color(level));
+        }
+    }
+
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     for (uint32_t i = 0; i < cap; ++i) {
         if (snap_curr.alive[i] == 0u) continue;
+        if (!presentation_entity_visible(i)) continue;
         const godot::Color color = snap_curr.entity_kind[i] == 1u
                 ? (snap_curr.owner[i] == 0u ? godot::Color(0.15, 0.55, 0.95, 1.0)
                                             : godot::Color(0.9, 0.25, 0.16, 1.0))
@@ -1077,6 +1314,10 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
         else if (snap_curr.unit_class[i] < 6u) ++class_counts[snap_curr.unit_class[i]];
     }
 
+    const bool single_combat_unit = count == 1 && first >= 0 &&
+            snap_curr.entity_kind[static_cast<uint32_t>(first)] == 0u &&
+            snap_curr.unit_class[static_cast<uint32_t>(first)] <= 2u;
+
     if (count == 1 && first >= 0) {
         draw_string(font, panel.position + godot::Vector2(16, 49),
                     slot_display_name(static_cast<uint32_t>(first)) + "  · owner " +
@@ -1106,6 +1347,17 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 "HP " + godot::String::num_int64(hp_sum) + "/" +
                         godot::String::num_int64(max_hp_sum),
                 static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+
+    if (single_combat_unit) {
+        const uint32_t unit = static_cast<uint32_t>(first);
+        const godot::String stats = "ATQ " +
+                godot::String::num_int64(snap_curr.attack[unit]) +
+                " · ALC " + godot::String::num_int64(snap_curr.range_mt[unit]) +
+                " mili-tiles · VEL " +
+                godot::String::num_int64(snap_curr.speed_mtpt[unit]) + " mt/tick";
+        draw_string(font, panel.position + godot::Vector2(16, 106), stats,
+                    static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
+    }
 
     const int32_t selected_building = selected_single_building_slot();
     if (selected_building >= 0 &&
@@ -1181,7 +1433,8 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
         }
     } else {
-        draw_string(font, panel.position + godot::Vector2(16, 116),
+        const float actions_y = single_combat_unit ? 126.0f : 116.0f;
+        draw_string(font, panel.position + godot::Vector2(16, actions_y),
                     "Acciones: clic derecho mueve · B construye · R rally",
                     static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
@@ -1205,7 +1458,12 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
 
     for (uint32_t i = 0; i < cap; ++i) {
         if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u ||
-            snap_curr.rally_set[i] == 0u || snap_curr.building_id[i] >= catalog.building_count) {
+            snap_curr.rally_set[i] == 0u || snap_curr.building_id[i] >= catalog.building_count ||
+            !presentation_entity_visible(i)) {
+            continue;
+        }
+        if (snap_curr.owner[i] != 0u &&
+            !presentation_tile_visible(snap_curr.rally_x[i], snap_curr.rally_y[i])) {
             continue;
         }
         const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[i]];
@@ -1226,7 +1484,8 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
     }
 
     for (uint32_t i = 0; i < cap; ++i) {
-        if (!selected_slot_is_current(i) || snap_curr.max_hp[i] <= 0) continue;
+        if (!selected_slot_is_current(i) || !presentation_entity_visible(i) ||
+            snap_curr.max_hp[i] <= 0) continue;
         float px = snap_curr.x[i] * 4.0f;
         float py = snap_curr.y[i] * 4.0f;
         float width = 28.0f;
@@ -1255,7 +1514,8 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
     // snapshot; el catálogo solo aporta nombres y tiempos estáticos.
     for (uint32_t i = 0; i < cap; ++i) {
         if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u ||
-            snap_curr.entity_kind[i] != 1u || snap_curr.building_id[i] >= catalog.building_count) {
+            snap_curr.entity_kind[i] != 1u || snap_curr.building_id[i] >= catalog.building_count ||
+            !presentation_entity_visible(i)) {
             continue;
         }
         const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[i]];
@@ -1315,13 +1575,21 @@ void ChunsaSimNode::render_interpolated() {
     const godot::Ref<godot::MultiMesh> mm = mmi_units3d->get_multimesh();
     int32_t k = 0;
     for (uint32_t i = 0; i < cap; ++i) {
-        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 0u) {
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 0u ||
+            !presentation_entity_visible(i)) {
             continue;
         }
         float fx = snap_curr.x[i];
         float fy = snap_curr.y[i];
+        const bool prev_was_presented =
+                i < pcap && snap_prev.alive[i] != 0u &&
+                (snap_prev.owner[i] == 0u ||
+                 chunsa::presentation::entity_visible_to_player(
+                         snap_prev.owner[i], 0u, snap_prev.visible,
+                         snap_prev.map_w, snap_prev.map_h,
+                         snap_prev.x_raw[i], snap_prev.y_raw[i]));
         if (have_prev && i < pcap && snap_prev.alive[i] != 0u &&
-            snap_prev.entity_kind[i] == 0u) {
+            snap_prev.entity_kind[i] == 0u && prev_was_presented) {
             fx = snap_prev.x[i] + (snap_curr.x[i] - snap_prev.x[i]) * alpha;
             fy = snap_prev.y[i] + (snap_curr.y[i] - snap_prev.y[i]) * alpha;
         }
@@ -1330,7 +1598,8 @@ void ChunsaSimNode::render_interpolated() {
         const godot::Basis sc(godot::Vector3(8, 0, 0), godot::Vector3(0, 8, 0),
                               godot::Vector3(0, 0, 1));
         mm->set_instance_transform(k, godot::Transform3D(
-                                              sc, godot::Vector3(px, -py, py)));
+                                              sc, godot::Vector3(
+                                                      px, -py, py + ENTITY_Z_BIAS)));
         // Color por selección/bando + pánico (Sprint 0.3+): se lee del
         // snapshot actual (snap_curr, sin interpolar — solo la posición se
         // interpola). La selección tiene prioridad MÁXIMA sobre el resto.
@@ -1357,7 +1626,8 @@ void ChunsaSimNode::render_interpolated() {
         const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
         int32_t building_k = 0;
         for (uint32_t i = 0; i < cap; ++i) {
-            if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u) continue;
+            if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u ||
+                !presentation_entity_visible(i)) continue;
             if (snap_curr.building_id[i] >= catalog.building_count) continue;
             const chunsa::BuildingDefinitionV1& def =
                     catalog.buildings[snap_curr.building_id[i]];
@@ -1378,7 +1648,9 @@ void ChunsaSimNode::render_interpolated() {
                                   godot::Vector3(0, 0, box_depth));
             mm_buildings->set_instance_transform(
                     building_k, godot::Transform3D(
-                                       sc, godot::Vector3(px, -py, py + box_depth * 0.5f)));
+                                       sc, godot::Vector3(
+                                               px, -py,
+                                               py + box_depth * 0.5f + ENTITY_Z_BIAS)));
 
             godot::Color color;
             if (selected_slot_is_current(i)) {
@@ -1418,7 +1690,9 @@ void ChunsaSimNode::render_interpolated() {
             const float py = (static_cast<float>(ty) +
                               static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
             mm_ghost->set_instance_transform(
-                    0, godot::Transform3D(sc, godot::Vector3(px, -py, py + 2.0f)));
+                    0, godot::Transform3D(
+                            sc, godot::Vector3(px, -py,
+                                               py + 2.0f + ENTITY_Z_BIAS)));
             mm_ghost->set_instance_color(
                     0, valid ? godot::Color(0.2, 1.0, 0.35, 0.45)
                              : godot::Color(1.0, 0.15, 0.1, 0.45));
@@ -1465,6 +1739,93 @@ uint32_t ChunsaSimNode::build_flow_batch(chunsa::RawCommand* batch, uint32_t t) 
         c.p.y_raw = static_cast<int64_t>(128) * 65536 + 32768;
         n = 1;
     }
+    return n;
+}
+
+// ---------------------------------------------------------------------------
+// Escenario jugable Sprint 1.4: skirmish humano contra IA
+// ---------------------------------------------------------------------------
+
+// El setup usa exclusivamente comandos de escenario y record_id ya resueltos
+// desde el blob real en _ready. Ambos bandos reciben la misma composición:
+// centro, cuartel, ejército y ciudadanos vulnerables. El jugador 0 no recibe
+// órdenes posteriores del escenario; sus unidades quedan disponibles para el
+// HUD. El owner 1 recibe sus órdenes únicamente del AiJobBox en sim_loop.
+uint32_t ChunsaSimNode::build_skirmish_batch(chunsa::RawCommand* batch, uint32_t t) {
+    using namespace chunsa;
+    if (t != 0u) return 0u;
+
+    uint32_t n = 0;
+    uint64_t seq0 = 0;
+    uint64_t seq1 = 0;
+
+    auto place_center = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                            BuildingId building_id) {
+        RawCommand& c = batch[n++];
+        std::memset(&c, 0, sizeof(RawCommand));
+        c.target_tick = 0;
+        c.emitter = emitter;
+        c.type = CommandType::PLACE_BUILDING;
+        c.sequence = ++sequence;
+        c.p.unit_id = building_id;
+        c.p.x_raw = tx;
+        c.p.y_raw = SKIRMISH_BASE_TY;
+    };
+
+    auto place_barracks = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                              BuildingId building_id) {
+        RawCommand& c = batch[n++];
+        std::memset(&c, 0, sizeof(RawCommand));
+        c.target_tick = 0;
+        c.emitter = emitter;
+        c.type = CommandType::PLACE_BUILDING;
+        c.sequence = ++sequence;
+        c.p.unit_id = building_id;
+        c.p.x_raw = tx + 4;
+        c.p.y_raw = SKIRMISH_BASE_TY - 4;
+    };
+
+    auto spawn_army = [&](uint16_t emitter, uint64_t& sequence, int64_t tx,
+                          bool approach_from_right, UnitId unit_id) {
+        for (uint32_t i = 0; i < SKIRMISH_ARMY_COUNT; ++i) {
+            RawCommand& c = batch[n++];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0;
+            c.emitter = emitter;
+            c.type = CommandType::SPAWN_UNIT;
+            c.sequence = ++sequence;
+            c.p.unit_id = unit_id;
+            const int64_t offset = static_cast<int64_t>(i);
+            c.p.x_raw = (approach_from_right ? tx - 4 - offset : tx + 4 + offset)
+                    * FX_ONE_RAW;
+            c.p.y_raw = SKIRMISH_BASE_TY * FX_ONE_RAW;
+        }
+    };
+
+    auto spawn_citizens = [&](uint16_t emitter, uint64_t& sequence, int64_t tx) {
+        for (uint32_t i = 0; i < SKIRMISH_CITIZEN_COUNT; ++i) {
+            RawCommand& c = batch[n++];
+            std::memset(&c, 0, sizeof(RawCommand));
+            c.target_tick = 0;
+            c.emitter = emitter;
+            c.type = CommandType::SPAWN_CITIZEN;
+            c.sequence = ++sequence;
+            c.p.unit_id = uid_citizen;
+            c.p.x_raw = (tx + 2 + static_cast<int64_t>(i)) * FX_ONE_RAW;
+            c.p.y_raw = (SKIRMISH_BASE_TY + 3) * FX_ONE_RAW;
+        }
+    };
+
+    place_center(0, seq0, SKIRMISH_HUMAN_TX, bid_settlement_center);
+    place_barracks(0, seq0, SKIRMISH_HUMAN_TX, bid_chariotry_stable);
+    spawn_army(0, seq0, SKIRMISH_HUMAN_TX, false, uid_cavalry);
+    spawn_citizens(0, seq0, SKIRMISH_HUMAN_TX);
+
+    place_center(1, seq1, SKIRMISH_AI_TX, bid_forum_center);
+    place_barracks(1, seq1, SKIRMISH_AI_TX, bid_castra_barracks);
+    spawn_army(1, seq1, SKIRMISH_AI_TX, true, uid_artillery);
+    spawn_citizens(1, seq1, SKIRMISH_AI_TX);
+
     return n;
 }
 
@@ -1730,6 +2091,58 @@ void ChunsaSimNode::setup_3d() {
         mmi_wall3d->set_multimesh(mm_wall);
         add_child(mmi_wall3d);
     }
+
+    // Velo de presentación: una instancia por bloque de 8x8 tiles (32x32 px).
+    // La profundidad queda por delante del terreno/muro y, mediante el sesgo
+    // constante de las entidades, por detrás de unidades y edificios propios.
+    godot::Ref<godot::StandardMaterial3D> fog_mat;
+    fog_mat.instantiate();
+    fog_mat->set_shading_mode(godot::BaseMaterial3D::SHADING_MODE_UNSHADED);
+    fog_mat->set_flag(godot::BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+    fog_mat->set_albedo(godot::Color(1, 1, 1));
+    fog_mat->set_cull_mode(godot::BaseMaterial3D::CULL_DISABLED);
+    fog_mat->set_transparency(godot::BaseMaterial3D::TRANSPARENCY_ALPHA);
+    fog_mat->set_depth_draw_mode(godot::BaseMaterial3D::DEPTH_DRAW_DISABLED);
+    fog_mat->set_flag(godot::BaseMaterial3D::FLAG_DISABLE_DEPTH_TEST, false);
+    fog_mat->set_render_priority(-1);
+
+    godot::Ref<godot::QuadMesh> fog_quad;
+    fog_quad.instantiate();
+    fog_quad->set_size(godot::Vector2(1, 1));
+    fog_quad->set_material(fog_mat);
+
+    godot::Ref<godot::MultiMesh> mm_fog;
+    mm_fog.instantiate();
+    mm_fog->set_transform_format(godot::MultiMesh::TRANSFORM_3D);
+    mm_fog->set_use_colors(true);
+    mm_fog->set_mesh(fog_quad);
+    mm_fog->set_instance_count(static_cast<int32_t>(FOG_BLOCK_COUNT));
+    const godot::Basis fog_scale(
+            godot::Vector3(static_cast<float>(FOG_BLOCK_TILES) * TILE_PX, 0, 0),
+            godot::Vector3(0, static_cast<float>(FOG_BLOCK_TILES) * TILE_PX, 0),
+            godot::Vector3(0, 0, 1));
+    for (uint32_t by = 0; by < FOG_BLOCK_AXIS; ++by) {
+        for (uint32_t bx = 0; bx < FOG_BLOCK_AXIS; ++bx) {
+            const uint32_t index = by * FOG_BLOCK_AXIS + bx;
+            const float base_x = static_cast<float>(bx * FOG_BLOCK_TILES) * TILE_PX;
+            const float base_y = static_cast<float>(by * FOG_BLOCK_TILES) * TILE_PX;
+            const float center = static_cast<float>(FOG_BLOCK_TILES) * TILE_PX * 0.5f;
+            mm_fog->set_instance_transform(
+                    static_cast<int32_t>(index),
+                    godot::Transform3D(
+                            fog_scale,
+                            godot::Vector3(base_x + center, -base_y - center,
+                                           base_y + static_cast<float>(FOG_BLOCK_TILES) * TILE_PX -
+                                                   0.5f)));
+            mm_fog->set_instance_color(
+                    static_cast<int32_t>(index),
+                    fog_overlay_color(chunsa::presentation::FogLevel::UNEXPLORED));
+        }
+    }
+    mm_fog->set_visible_instance_count(static_cast<int32_t>(FOG_BLOCK_COUNT));
+    mmi_fog3d = memnew(godot::MultiMeshInstance3D);
+    mmi_fog3d->set_multimesh(mm_fog);
+    add_child(mmi_fog3d);
 }
 
 bool ChunsaSimNode::screen_to_tile(const godot::Vector2& screen, int64_t& tx,
@@ -1768,7 +2181,8 @@ bool ChunsaSimNode::placement_valid(chunsa::BuildingId building_id, int64_t tx,
 
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
     for (uint32_t i = 0; i < cap; ++i) {
-        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u) continue;
+        if (snap_curr.alive[i] == 0u || snap_curr.entity_kind[i] != 1u ||
+            !presentation_entity_visible(i)) continue;
         if (snap_curr.building_id[i] >= catalog.building_count) continue;
         const chunsa::BuildingDefinitionV1& other =
                 catalog.buildings[snap_curr.building_id[i]];

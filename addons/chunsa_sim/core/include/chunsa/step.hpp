@@ -828,9 +828,12 @@ inline int32_t rps_mult_vs_citizen_bp(uint8_t atk_class) noexcept {
     return 10000;
 }
 
-// Sistema de combate (Sprint 0.3). Cada tick, período 1: cada unidad viva en
-// orden ascendente busca al enemigo más cercano en rango (celda propia + 8
-// vecinas del spatial hash), le inflige daño RPS y entra en cooldown.
+// Sistema de combate (Sprint 0.3/1.6A). Cada tick, período 1: cada unidad viva
+// en orden ascendente busca al enemigo más cercano en rango, le inflige daño
+// RPS y entra en cooldown. La consulta recorre todas las celdas que intersectan
+// el AABB del círculo de range_mt; el filtro final por dist_sq conserva el
+// círculo exacto. No hay un límite fijo de 3x3: armas de alcance mayor que una
+// celda del spatial hash siguen encontrando blancos válidos.
 // Determinismo: el daño se aplica inmediatamente en orden ascendente de i.
 inline void combat_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
@@ -839,27 +842,37 @@ inline void combat_system(GameState& g) noexcept {
         if (g.hp[i] <= 0) continue;
         if (g.unit_class[i] > 2) continue;  // ciudadanos (Sprint 0.3): no atacan
         if (g.fleeing[i]) { if (g.atk_cd[i] > 0) --g.atk_cd[i]; continue; }
-        if (g.atk_cd[i] > 0) { --g.atk_cd[i]; continue; }
-
-        const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
-        const uint32_t cx = cell_i % g.shash.cells_x;
-        const uint32_t cy = cell_i / g.shash.cells_x;
+        // ATK_COOLDOWN_TICKS es el número exacto de ticks ENTRE impactos:
+        // ataque en t=0 => cd=10; en t=1..9 queda 9..1; en t=10 pasa a 0 y
+        // puede atacar de nuevo en este mismo tick.
+        if (g.atk_cd[i] > 0) --g.atk_cd[i];
+        if (g.atk_cd[i] > 0) continue;
 
         const int64_t range_raw = static_cast<int64_t>(g.range_mt[i]) * 65536 / 1000;
         const uint64_t range_sq = static_cast<uint64_t>(range_raw) * static_cast<uint64_t>(range_raw);
+
+        // Las posiciones/rangos válidos de v1 caben holgadamente en int64_t.
+        // sh_cell_index aplica el clamp normativo a los límites reales del mapa;
+        // con ello también cubrimos unidades pegadas a cualquiera de los bordes.
+        const int64_t min_x = range_raw > g.pos_x[i] ? 0 : g.pos_x[i] - range_raw;
+        const int64_t min_y = range_raw > g.pos_y[i] ? 0 : g.pos_y[i] - range_raw;
+        const int64_t max_x = g.pos_x[i] + range_raw;
+        const int64_t max_y = g.pos_y[i] + range_raw;
+        const uint32_t min_x_cell = sh_cell_index(g.shash, min_x, g.pos_y[i]);
+        const uint32_t max_x_cell = sh_cell_index(g.shash, max_x, g.pos_y[i]);
+        const uint32_t min_y_cell = sh_cell_index(g.shash, g.pos_x[i], min_y);
+        const uint32_t max_y_cell = sh_cell_index(g.shash, g.pos_x[i], max_y);
+        const uint32_t min_cx = min_x_cell % g.shash.cells_x;
+        const uint32_t max_cx = max_x_cell % g.shash.cells_x;
+        const uint32_t min_cy = min_y_cell / g.shash.cells_x;
+        const uint32_t max_cy = max_y_cell / g.shash.cells_x;
 
         uint32_t best = SH_EMPTY;
         uint64_t best_d2 = 0;
         const Vec2Fx pos_i{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
 
-        for (int32_t dcy = -1; dcy <= 1; ++dcy) {
-            const int64_t ncy64 = static_cast<int64_t>(cy) + dcy;
-            if (ncy64 < 0 || ncy64 >= static_cast<int64_t>(g.shash.cells_y)) continue;
-            const uint32_t ncy = static_cast<uint32_t>(ncy64);
-            for (int32_t dcx = -1; dcx <= 1; ++dcx) {
-                const int64_t ncx64 = static_cast<int64_t>(cx) + dcx;
-                if (ncx64 < 0 || ncx64 >= static_cast<int64_t>(g.shash.cells_x)) continue;
-                const uint32_t ncx = static_cast<uint32_t>(ncx64);
+        for (uint32_t ncy = min_cy; ncy <= max_cy; ++ncy) {
+            for (uint32_t ncx = min_cx; ncx <= max_cx; ++ncx) {
                 const uint32_t cell = ncy * g.shash.cells_x + ncx;
 
                 for (uint32_t j = sh_first(g.shash, cell); j != SH_EMPTY; j = sh_next(g.shash, j)) {
@@ -916,10 +929,11 @@ inline void combat_system(GameState& g) noexcept {
 // del jugador en curso siempre tiene prioridad y jamás se redirige), viva, no
 // huyendo y con attack > 0 busca al enemigo más cercano en AGGRO_RANGE_MT
 // (anillo de ±AGGRO_RADIUS_CELLS del spatial hash, empate → j más bajo); si
-// está más allá de su rango de arma, fija tgt a la posición del enemigo y
-// movement_v1 la acerca en los ticks siguientes. Al llegar (movement_v1 hace
-// snap exacto a tgt) vuelve a estar ociosa y re-adquiere, de modo que persigue
-// blancos móviles por etapas. Sin estado nuevo: reutiliza tgt_x/tgt_y →
+// está más allá de su rango de arma, fija tgt en un punto de standoff frente al
+// enemigo (1 mili-tile dentro del alcance para absorber truncamiento Q47.16).
+// Así movement_v1 hace la aproximación sin reconsultar el hash cada tick y la
+// unidad queda ociosa al alcanzar su distancia de fuego. Sin estado nuevo:
+// reutiliza tgt_x/tgt_y →
 // checksum, serialización y versión de guardado intactos. Se ejecuta tras
 // combat_system (hash fresco; los muertos del tick ya están marcados y no se
 // adquieren). Determinismo: orden ascendente de i, lecturas post-movimiento.
@@ -981,11 +995,28 @@ inline void aggro_system(GameState& g) noexcept {
             }
         }
 
-        // Enemigo detectado fuera del rango de arma → perseguir. Dentro de
-        // rango: quieta (combat_system ya le dispara donde está).
+        // Enemigo detectado fuera del rango de arma → aproximarse directamente
+        // a un punto de standoff. Dentro de rango: quieta (combat_system ya le
+        // dispara donde está).
+        // Este bloque solo corre ociosa; una orden MOVE_TO humana en curso sigue
+        // teniendo prioridad porque deja pos != tgt.
         if (best != SH_EMPTY && best_d2 > range_sq) {
-            g.tgt_x[i] = g.pos_x[best];
-            g.tgt_y[i] = g.pos_y[best];
+            const int64_t step_fx = (static_cast<int64_t>(g.speed_mtpt[i]) * FX_ONE_RAW) / 1000;
+            if (step_fx <= 0) continue;
+            const Vec2Fx toward = normalize_v1(
+                Vec2Fx{Fx{g.pos_x[best] - g.pos_x[i]}, Fx{g.pos_y[best] - g.pos_y[i]}}, g.fatal);
+            const int64_t standoff_mt = g.range_mt[i] > 0 ? g.range_mt[i] - 1 : 0;
+            const int64_t standoff_raw = (standoff_mt * FX_ONE_RAW) / 1000;
+            int64_t next_x = fx_sub(
+                Fx{g.pos_x[best]}, fx_mul(toward.x, Fx{standoff_raw}, g.fatal), g.fatal).raw;
+            int64_t next_y = fx_sub(
+                Fx{g.pos_y[best]}, fx_mul(toward.y, Fx{standoff_raw}, g.fatal), g.fatal).raw;
+            if (next_x < 0) next_x = 0;
+            if (next_y < 0) next_y = 0;
+            if (next_x >= WORLD_RAW_MAX) next_x = WORLD_RAW_MAX - 1;
+            if (next_y >= WORLD_RAW_MAX) next_y = WORLD_RAW_MAX - 1;
+            g.tgt_x[i] = next_x;
+            g.tgt_y[i] = next_y;
         }
     }
 }

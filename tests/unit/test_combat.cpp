@@ -17,6 +17,41 @@ using namespace chunsa;
 
 static constexpr uint32_t N_PER_SIDE  = 60;
 static constexpr uint32_t TOTAL_TICKS = 400;
+static constexpr int64_t TILE_RAW = 65536;
+
+static RawCommand debug_combat_unit(uint32_t index, uint16_t owner,
+                                    int64_t x_raw, int64_t y_raw,
+                                    int32_t hp, int32_t attack,
+                                    int32_t range_mt, int32_t speed_mtpt) {
+    RawCommand c{};
+    c.target_tick = 0;
+    c.emitter = owner;
+    c.type = CommandType::SPAWN_UNIT;
+    c.sequence = 1;
+    c.p.handle = EntityHandle{index, 1u};
+    c.p.x_raw = x_raw;
+    c.p.y_raw = y_raw;
+    c.p.speed_mtpt = speed_mtpt;
+    c.p.hp = hp;
+    c.p.attack = attack;
+    c.p.range_mt = range_mt;
+    c.p.unit_class = 0;
+    c.p.unit_id = INVALID_UNIT_ID;
+    return c;
+}
+
+static RawCommand move_to(uint32_t tick, uint16_t owner, uint64_t sequence,
+                          EntityHandle handle, int64_t x_raw, int64_t y_raw) {
+    RawCommand c{};
+    c.target_tick = tick;
+    c.emitter = owner;
+    c.type = CommandType::MOVE_TO;
+    c.sequence = sequence;
+    c.p.handle = handle;
+    c.p.x_raw = x_raw;
+    c.p.y_raw = y_raw;
+    return c;
+}
 
 // Escenario: 60 caballería (owner 0) en x∈[120,130] y∈[120,136), y 60
 // artillería (owner 1) en x∈[126,136] y∈[120,136), solapando en la franja
@@ -240,6 +275,7 @@ static void test_aggro_targets_citizen() {
     batch[0].sequence = 1; batch[0].p.handle = EntityHandle{0u, 1u};
     batch[0].p.x_raw = 100 * 65536 + 32768; batch[0].p.y_raw = 100 * 65536 + 32768;
     batch[0].p.hp = 100; batch[0].p.attack = 20; batch[0].p.range_mt = 1000;
+    batch[0].p.speed_mtpt = 100;
     batch[0].p.unit_class = 0;
     batch[0].p.unit_id = INVALID_UNIT_ID;
 
@@ -261,12 +297,171 @@ static void test_aggro_targets_citizen() {
     }
     CHECK(atk_idx != g->entities.capacity && citizen_idx != g->entities.capacity);
 
-    // aggro_system ya corrió DENTRO de r0 (el atacante nace ocioso y el
-    // aldeano ya está en su radio de adquisición desde el spawn): el tgt del
-    // atacante apunta a la posición de spawn del aldeano.
-    CHECK(g->tgt_x[atk_idx] == citizen_x_raw);
+    // aggro_system ya corrió DENTRO de r0. Standoff v1 agenda el punto de
+    // aproximación a 999 mt del blanco (1 mt dentro del alcance de 1000).
+    const int64_t expected_standoff = static_cast<int64_t>(999) * TILE_RAW / 1000;
+    CHECK(g->tgt_x[atk_idx] == citizen_x_raw - expected_standoff);
     CHECK(g->tgt_y[atk_idx] == citizen_y_raw);
 
+    delete g;
+}
+
+// ============================================================================
+// Sprint 1.6A: contratos bloqueantes de alcance, cadencia, standoff y speed.
+// No hay proyectiles: estos tests congelan solamente el combate instantáneo v1.
+// ============================================================================
+
+// Un alcance de cuatro tiles debe consultar todas las celdas espaciales que
+// intersecta. Con celdas de dos tiles, x=100.5 y x=104.5 están separadas por
+// dos celdas: el objetivo queda fuera del vecindario fijo 3x3 (radio 1), pero
+// exactamente en el límite geométrico válido del arma.
+static void test_long_range_crosses_spatial_hash_neighborhood() {
+    auto* g = new GameState();
+    MatchConfig01A cfg{16u, 2u, 1u, 20u, 20u, 256u, 256u, 101ull, 1u};
+    gs_init(*g, cfg);
+
+    const int64_t y = 100 * TILE_RAW + TILE_RAW / 2;
+    RawCommand batch[2] = {
+        debug_combat_unit(0u, 0u, 100 * TILE_RAW + TILE_RAW / 2, y,
+                          100, 7, 4000, 0),
+        debug_combat_unit(1u, 1u, 104 * TILE_RAW + TILE_RAW / 2, y,
+                          100, 0, 0, 0),
+    };
+    const StepResult r = step(*g, batch, 2);
+
+    CHECK(r.accepted == 2u);
+    CHECK(g->fatal == FatalReason::NONE);
+    CHECK(g->hp[1] == 93);
+    CHECK(g->atk_cd[0] == ATK_COOLDOWN_TICKS);
+    delete g;
+}
+
+// Un raw por fuera de cuatro tiles basta para excluir el objetivo. Se usa la
+// misma disposición entre celdas que el caso anterior para que el resultado
+// dependa de la distancia exacta, no de un borde favorable del spatial hash.
+static void test_target_just_outside_range_takes_no_damage() {
+    auto* g = new GameState();
+    MatchConfig01A cfg{16u, 2u, 1u, 20u, 20u, 256u, 256u, 103ull, 1u};
+    gs_init(*g, cfg);
+
+    const int64_t x0 = 100 * TILE_RAW + TILE_RAW / 2;
+    const int64_t y = 100 * TILE_RAW + TILE_RAW / 2;
+    RawCommand batch[2] = {
+        debug_combat_unit(0u, 0u, x0, y, 100, 7, 4000, 0),
+        debug_combat_unit(1u, 1u, x0 + 4 * TILE_RAW + 1, y, 100, 0, 0, 0),
+    };
+    const StepResult r = step(*g, batch, 2);
+
+    CHECK(r.accepted == 2u);
+    CHECK(g->fatal == FatalReason::NONE);
+    CHECK(g->hp[1] == 100);
+    CHECK(g->atk_cd[0] == 0u);
+    delete g;
+}
+
+// El primer impacto ocurre en el tick de spawn. Después hay exactamente diez
+// ticks de separación (atk_cd 10→0); al llegar a cero en el décimo tick se
+// produce el segundo impacto. Esto evita ambigüedad off-by-one en la cadencia.
+static void test_attack_cooldown_blocks_exactly_ten_ticks() {
+    auto* g = new GameState();
+    MatchConfig01A cfg{16u, 2u, 1u, 20u, 20u, 256u, 256u, 107ull, 1u};
+    gs_init(*g, cfg);
+
+    const int64_t y = 100 * TILE_RAW + TILE_RAW / 2;
+    RawCommand batch[2] = {
+        debug_combat_unit(0u, 0u, 100 * TILE_RAW + TILE_RAW / 2, y,
+                          100, 5, 1500, 0),
+        debug_combat_unit(1u, 1u, 101 * TILE_RAW + TILE_RAW / 2, y,
+                          100, 0, 0, 0),
+    };
+    CHECK(step(*g, batch, 2).accepted == 2u);
+    CHECK(g->hp[1] == 95);
+    CHECK(g->atk_cd[0] == 10u);
+
+    for (uint16_t remaining = 9u; remaining != 0u; --remaining) {
+        step(*g, nullptr, 0);
+        CHECK(g->hp[1] == 95);
+        CHECK(g->atk_cd[0] == remaining);
+    }
+    step(*g, nullptr, 0);
+    CHECK(g->hp[1] == 90);
+    CHECK(g->atk_cd[0] == 10u);
+    CHECK(g->fatal == FatalReason::NONE);
+    delete g;
+}
+
+// Auto-aggro v1 debe acercar al atacante sólo hasta su alcance. Una vez que
+// entra a cuatro tiles, combate puede disparar y movement no debe seguir
+// cerrando distancia hacia la posición exacta del blanco.
+static void test_auto_aggro_stops_at_weapon_range() {
+    auto* g = new GameState();
+    MatchConfig01A cfg{16u, 2u, 1u, 20u, 20u, 256u, 256u, 109ull, 1u};
+    gs_init(*g, cfg);
+
+    const int64_t x0 = 100 * TILE_RAW + TILE_RAW / 2;
+    const int64_t enemy_x = x0 + 6 * TILE_RAW;
+    const int64_t y = 100 * TILE_RAW + TILE_RAW / 2;
+    RawCommand batch[2] = {
+        debug_combat_unit(0u, 0u, x0, y, 100, 5, 4000, 1000),
+        debug_combat_unit(1u, 1u, enemy_x, y, 100, 0, 0, 0),
+    };
+    CHECK(step(*g, batch, 2).accepted == 2u);
+    const int64_t standoff_x =
+        enemy_x - static_cast<int64_t>(3999) * TILE_RAW / 1000;
+    CHECK(g->tgt_x[0] == standoff_x);
+
+    // Dos pasos completos alcanzan el límite nominal y permiten disparar; el
+    // tercer tick hace snap al margen interior de 1 mt y desde ahí no avanza.
+    step(*g, nullptr, 0);
+    CHECK(g->hp[1] == 100);
+    step(*g, nullptr, 0);
+    CHECK(g->hp[1] == 95);
+    step(*g, nullptr, 0);
+    CHECK(g->pos_x[0] == standoff_x);
+    CHECK(g->tgt_x[0] == standoff_x);
+    for (int tick = 0; tick < 5; ++tick) {
+        step(*g, nullptr, 0);
+        CHECK(g->pos_x[0] == standoff_x);
+    }
+    CHECK(g->fatal == FatalReason::NONE);
+    delete g;
+}
+
+// Dos unidades bajo órdenes equivalentes recorren distancias determinadas por
+// speed_mtpt. Trayectoria axial evita error de normalización: 250 es 2.5×100.
+static void test_distinct_speeds_produce_proportional_distance() {
+    auto* g = new GameState();
+    MatchConfig01A cfg{16u, 1u, 0u, 20u, 20u, 256u, 256u, 113ull, 1u};
+    gs_init(*g, cfg);
+
+    const int64_t x0 = 20 * TILE_RAW + TILE_RAW / 2;
+    RawCommand spawn[2] = {
+        debug_combat_unit(0u, 0u, x0, 20 * TILE_RAW + TILE_RAW / 2,
+                          100, 0, 0, 100),
+        debug_combat_unit(1u, 0u, x0, 30 * TILE_RAW + TILE_RAW / 2,
+                          100, 0, 0, 250),
+    };
+    spawn[1].sequence = 2u;
+    CHECK(step(*g, spawn, 2).accepted == 2u);
+    const int64_t start_slow = g->pos_x[0];
+    const int64_t start_fast = g->pos_x[1];
+
+    RawCommand moves[2] = {
+        move_to(1u, 0u, 3u, EntityHandle{0u, 1u}, x0 + 20 * TILE_RAW, g->pos_y[0]),
+        move_to(1u, 0u, 4u, EntityHandle{1u, 1u}, x0 + 20 * TILE_RAW, g->pos_y[1]),
+    };
+    CHECK(step(*g, moves, 2).accepted == 2u);
+    for (int tick = 0; tick < 19; ++tick) step(*g, nullptr, 0);
+
+    const int64_t slow_distance = g->pos_x[0] - start_slow;
+    const int64_t fast_distance = g->pos_x[1] - start_fast;
+    const int64_t slow_step = static_cast<int64_t>(100) * TILE_RAW / 1000;
+    const int64_t fast_step = static_cast<int64_t>(250) * TILE_RAW / 1000;
+    CHECK(slow_distance > 0);
+    CHECK(fast_distance > slow_distance);
+    CHECK(slow_distance == slow_step * 20);
+    CHECK(fast_distance == fast_step * 20);
+    CHECK(g->fatal == FatalReason::NONE);
     delete g;
 }
 
@@ -305,6 +500,13 @@ int main() {
     test_citizen_is_vulnerable_target();
     test_citizen_attacker_guard_intact();
     test_aggro_targets_citizen();
+
+    // Sprint 1.6A: alcance largo, frontera, cooldown, standoff y velocidades.
+    test_long_range_crosses_spatial_hash_neighborhood();
+    test_target_just_outside_range_takes_no_damage();
+    test_attack_cooldown_blocks_exactly_ten_ticks();
+    test_auto_aggro_stops_at_weapon_range();
+    test_distinct_speeds_produce_proportional_distance();
 
     if (g_fails == 0) { std::printf("combat: OK\n"); return 0; }
     std::printf("combat: %d fallos\n", g_fails);

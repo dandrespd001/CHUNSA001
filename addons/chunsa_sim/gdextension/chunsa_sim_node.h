@@ -23,6 +23,7 @@
 #include <godot_cpp/variant/vector2.hpp>
 
 #include <chunsa/game_state.hpp>
+#include <chunsa/ai_stub.hpp>
 #include <chunsa/snapshot_ring.hpp>
 
 namespace godot {
@@ -44,8 +45,14 @@ public:
     struct DemoSnapshot {
         uint32_t tick;
         uint32_t capacity;      // gs->entities.capacity (cap a 1024)
+        uint32_t map_w;         // gs->vision.w (presentación, <= VIS_AXIS)
+        uint32_t map_h;         // gs->vision.h (presentación, <= VIS_AXIS)
+        uint64_t visible[chunsa::VIS_WORDS];   // visión de owner 0
+        uint64_t explored[chunsa::VIS_WORDS];  // exploración acumulada de owner 0
         float x[1024];
         float y[1024];
+        int64_t x_raw[1024];
+        int64_t y_raw[1024];
         uint8_t alive[1024];    // 1 = slot vivo este snapshot
         uint32_t generation[1024]; // generación del handle del slot
         uint8_t owner[1024];    // 0..7
@@ -53,6 +60,9 @@ public:
         uint8_t fleeing[1024];  // 1 = en pánico
         int32_t hp[1024];
         int32_t max_hp[1024];
+        int32_t attack[1024];       // daño base de la unidad
+        int32_t range_mt[1024];     // alcance en mili-tiles (1000 = 1 tile)
+        int32_t speed_mtpt[1024];   // velocidad en mili-tiles por tick
         uint8_t entity_kind[1024]; // 0=unidad, 1=edificio
         uint32_t building_id[1024];
         uint32_t build_progress[1024];
@@ -77,6 +87,8 @@ public:
         int64_t stock_me;
         uint8_t player_epoch;
         int32_t pop_used;
+        uint8_t game_over;
+        uint8_t winner;
 
         // Último receipt del mailbox del jugador 0. Es feedback de
         // presentación; la aceptación/rechazo autoritativa sigue en kernel.
@@ -91,6 +103,12 @@ private:
     static constexpr float ZOOM_MAX = 1200.0f;
     static constexpr uint32_t CONTROL_GROUPS = 10;
     static constexpr uint32_t ORDER_MARKERS_MAX = 32;
+    static constexpr uint32_t FOG_BLOCK_TILES = 8;
+    static constexpr uint32_t FOG_BLOCK_AXIS = 32;
+    static constexpr uint32_t FOG_BLOCK_COUNT = FOG_BLOCK_AXIS * FOG_BLOCK_AXIS;
+    static constexpr float TILE_PX = 4.0f;
+    static constexpr float ENTITY_Z_BIAS =
+            static_cast<float>(FOG_BLOCK_TILES) * TILE_PX;
 
     std::thread sim_thread;
     std::atomic<bool> running{false};
@@ -99,6 +117,8 @@ private:
     // _exit_tree() los deletea sin problema.
     chunsa::SnapshotRing<DemoSnapshot>* ring = nullptr;
     chunsa::GameState* gs = nullptr;
+    chunsa::AiJobBox ai_box;
+    chunsa::AiRuntimeV1 ai_rt{0, 0};
 
     // Sprint 0.4: catálogo de datos (CHDB). `catalog_storage` posee el catálogo
     // (RAII) y vive tanto como el nodo; `gs->catalog` apunta a su interior. Los
@@ -130,6 +150,7 @@ private:
     godot::MultiMeshInstance3D* mmi_buildings3d = nullptr;
     godot::MultiMeshInstance3D* mmi_ghost3d = nullptr;
     godot::MultiMeshInstance3D* mmi_wall3d = nullptr;
+    godot::MultiMeshInstance3D* mmi_fog3d = nullptr;
     godot::Camera3D* cam3d = nullptr;
 
     // Selección/órdenes del jugador (Sprint 0.3+): el input llega en el hilo
@@ -174,6 +195,7 @@ private:
     void sim_loop();  // cuerpo del hilo de simulación (20 Hz)
 
     void setup_3d();               // rig del modo (c), reutilizado del spike
+    void update_fog_from_snapshot();  // colores del velo sólo en snapshot nuevo
     void render_interpolated();    // cada frame: lerp(prev, curr, alpha)
     void maybe_screenshot();
     bool screen_to_tile(const godot::Vector2& screen, int64_t& tx,
@@ -200,6 +222,8 @@ private:
     godot::Rect2 selection_panel_rect() const;
     int32_t selected_count() const;
     int32_t selected_single_building_slot() const;
+    bool presentation_entity_visible(uint32_t slot) const;
+    bool presentation_tile_visible(int64_t x_raw, int64_t y_raw) const;
     bool selected_slot_is_current(uint32_t slot) const;
     godot::String slot_display_name(uint32_t slot) const;
     godot::String catalog_name(const char* name, uint16_t bytes) const;
@@ -227,6 +251,10 @@ public:
     // rodeando el muro. Ya no se usa en sim_loop (reemplazado por el showcase
     // del Sprint 0.3); se conserva como referencia del patrón rng/comandos.
     uint32_t build_flow_batch(chunsa::RawCommand* batch, uint32_t t);
+
+    // Escenario jugable Sprint 1.4: owner 0 humano contra owner 1 IA, ambos
+    // con centro, cuartel, ejército y aldeanos reales del catálogo.
+    uint32_t build_skirmish_batch(chunsa::RawCommand* batch, uint32_t t);
 
     // Escenario de demo Sprint 0.3 (showcase): dos ejércitos (caballería
     // owner 0 vs artillería owner 1) convergen en (128,128) — combate RPS +
