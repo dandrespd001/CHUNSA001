@@ -372,6 +372,12 @@ depósitos reales del escenario: `{kind: resource, id: <A|B|Me>, x_millitiles, y
 amount}`. Diseño del slice: depósitos simétricos alrededor de las dos `starting_positions`
 existentes (slot 0 en 20.5/128.5 tiles, slot 1 en 235.5/128.5) para que la apertura sea justa,
 más algunos neutrales al centro. **La simetría es requisito de balance, no estético.**
+**Regla de simetría (enmienda del Arquitecto, 2026-07-24)**: un recurso con conteo PAR entre los
+neutrales se coloca como pares espejados (`x_der = 256000 - x_izq`, misma Y, mismo `amount`,
+**mismo `id`** — espejar la posición pero no el recurso NO es simétrico: daría a cada jugador un
+recurso distinto más cerca). Un recurso con conteo IMPAR se coloca **sobre el eje central**
+(`x = 128000`, con la Y dentro del hueco del muro `y ∈ [124000, 132000)`), donde es equidistante
+de ambos jugadores. Así la composición deseada nunca fuerza una asimetría de balance.
 ### §15.2 Los centros producen aldeanos
 `egipto:settlement_center` y `rome:forum_center` tienen `trains: []`. Deben entrenar el aldeano
 de su civilización (`egipto:work_crew`, `rome:camp_work_crew`) — igual que poblé `researches` en

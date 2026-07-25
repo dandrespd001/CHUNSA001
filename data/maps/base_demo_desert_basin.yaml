@@ -66,13 +66,13 @@ resource_spawns:
     amount: 800
   - kind: resource
     id: B
-    x_millitiles: 118000
-    y_millitiles: 176000
+    x_millitiles: 128000
+    y_millitiles: 126000
     amount: 800
   - kind: resource
     id: Me
-    x_millitiles: 138000
-    y_millitiles: 176000
+    x_millitiles: 128000
+    y_millitiles: 130000
     amount: 800
 starting_positions:
   - slot: 0
