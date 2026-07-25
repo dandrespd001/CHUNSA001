@@ -139,6 +139,11 @@ struct BuildingSpec {
     std::vector<std::string> trains{};
     std::vector<std::string> researches{};
     std::vector<std::string> required_capabilities{};
+    // Sprint 1.6B (SPEC-004 §15.3): civ_id ahora REQUERIDO por el loader
+    // (building.schema.json ya lo exigía; el C++ no lo tipaba hasta este
+    // sprint) — record_id resuelto contra la sección civ de este mismo
+    // fixture (ver `build()`, sections[4]).
+    std::string civ_id = "test:civ";
     // Sprint 1.2 (SPEC-004 §12.1): capacidades declaradas en el manifest de
     // ESTE blob fixture (fuente de la tabla CapabilityId) — normalmente el
     // superconjunto de `required_capabilities` que el test quiera ejercitar.
@@ -147,8 +152,9 @@ struct BuildingSpec {
 
 inline std::vector<uint8_t> build(const BuildingSpec& spec) {
     // Objeto building — claves en orden ASCENDENTE estricto (build_time_ticks
-    // < constructible < dropoff_resources < epoch_window < footprint < id <
-    // required_capabilities < researches < resource_costs < stats < trains).
+    // < civ_id < constructible < dropoff_resources < epoch_window < footprint
+    // < id < required_capabilities < researches < resource_costs < stats <
+    // trains). Sprint 1.6B (SPEC-004 §15.3): +civ_id.
     auto footprint = cve_obj({
         {"height_cells", cve_int(spec.height)},
         {"width_cells", cve_int(spec.width)},
@@ -163,6 +169,7 @@ inline std::vector<uint8_t> build(const BuildingSpec& spec) {
     auto epoch_window = cve_arr_int({spec.epoch_min, spec.epoch_max});
     auto building_obj = cve_obj({
         {"build_time_ticks", cve_int(spec.build_time)},
+        {"civ_id", cve_str(spec.civ_id)},
         {"constructible", cve_bool(spec.constructible)},
         {"dropoff_resources", dropoff},
         {"epoch_window", epoch_window},
@@ -188,17 +195,26 @@ inline std::vector<uint8_t> build(const BuildingSpec& spec) {
     w_u32(building_record, static_cast<uint32_t>(building_obj.size()));
     append(building_record, building_obj);
 
+    // Sprint 1.6B (SPEC-004 §15.3): sección civ MÍNIMA (solo "id" — el
+    // loader no reconstruye ninguna otra definición semántica de civ, ver
+    // CivNameIndexV1 en data_catalog.hpp) para que `spec.civ_id` resuelva.
+    auto civ_obj = cve_obj({ {"id", cve_str(std::string("test:civ"))} });
+    std::vector<uint8_t> civ_record;
+    w_u32(civ_record, static_cast<uint32_t>(civ_obj.size()));
+    append(civ_record, civ_obj);
+
     // Orden kKindTable (data_catalog.hpp): manifest, unit, building, tech,
-    // civ, map, ai-profile. Solo manifest(1) y building(1) llevan contenido;
+    // civ, map, ai-profile. manifest(1)/building(1)/civ(1) llevan contenido;
     // el resto quedan vacías (0 records — el loader no exige mínimo salvo
     // manifest==1).
     std::vector<uint8_t> sections[7];
     sections[0] = manifest_record;
     sections[2] = building_record;
+    sections[4] = civ_record;
 
     struct KindRow { uint16_t kind, version; uint32_t count; };
     static constexpr KindRow ROWS[7] = {
-        {1, 1, 1}, {2, 2, 0}, {3, 1, 1}, {4, 1, 0}, {5, 1, 0}, {6, 1, 0}, {7, 1, 0},
+        {1, 1, 1}, {2, 2, 0}, {3, 1, 1}, {4, 1, 0}, {5, 1, 1}, {6, 1, 0}, {7, 1, 0},
     };
 
     const uint64_t directory_end = 40 + 7u * 24u;
