@@ -10,7 +10,70 @@ terrain_rle:
 cost_rle:
   - cost: 1
     run: 65536
-resource_spawns: []
+resource_spawns:
+  # --- Slot 0 (base en 20500, 128500) — 2 A + 1 B + 1 Me, radio 8–20 tiles ---
+  - kind: resource
+    id: A
+    x_millitiles: 28500
+    y_millitiles: 122500
+    amount: 500
+  - kind: resource
+    id: A
+    x_millitiles: 12500
+    y_millitiles: 122500
+    amount: 500
+  - kind: resource
+    id: B
+    x_millitiles: 8500
+    y_millitiles: 136500
+    amount: 500
+  - kind: resource
+    id: Me
+    x_millitiles: 28500
+    y_millitiles: 134500
+    amount: 500
+  # --- Slot 1 (base en 235500, 128500) — espejo x_slot1 = 256000 - x_slot0 ---
+  - kind: resource
+    id: A
+    x_millitiles: 227500
+    y_millitiles: 122500
+    amount: 500
+  - kind: resource
+    id: A
+    x_millitiles: 243500
+    y_millitiles: 122500
+    amount: 500
+  - kind: resource
+    id: B
+    x_millitiles: 247500
+    y_millitiles: 136500
+    amount: 500
+  - kind: resource
+    id: Me
+    x_millitiles: 227500
+    y_millitiles: 134500
+    amount: 500
+  # --- Neutros centrales (x en 110000–146000), simétricos por parejas ---
+  - kind: resource
+    id: A
+    x_millitiles: 114000
+    y_millitiles: 88000
+    amount: 800
+  - kind: resource
+    id: A
+    x_millitiles: 142000
+    y_millitiles: 88000
+    amount: 800
+  - kind: resource
+    id: B
+    x_millitiles: 128000
+    y_millitiles: 126000
+    amount: 800
+  - kind: resource
+    id: Me
+    x_millitiles: 128000
+    y_millitiles: 130000
+    amount: 800
 starting_positions:
   - slot: 0
     x_millitiles: 20500
@@ -25,7 +88,7 @@ provenance:
   status: promoted
   generator: human
   task_id: T1-egipto-roma-m1
-  generated_on: "2026-07-22"
+  generated_on: "2026-07-24"
   reviewed_by:
     - architect
   historical_claims:
@@ -34,6 +97,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Mapa sintético de prueba para determinismo y demo; no reconstruye un lugar histórico."
+    rationale: "Mapa sintético de prueba para determinismo y demo; no reconstruye un lugar histórico. Sprint 1.6B (datos de apertura): 12 depósitos resource_spawns (8 de base espejados respecto a x=128000 según x_slot1 = 256000 - x_slot0, 4 neutros en la franja central 110000–146000 también espejados); muro en tile x=128 respetado (ningún depósito en x_millitiles ∈ [127500, 128500]). Composición 2 A + 1 B + 1 Me por jugador; neutros 2 A + 1 B + 1 Me con amount=800 como premio por disputarlos, base amount=500."
     reviewed_by:
       - architect

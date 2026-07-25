@@ -20,7 +20,8 @@ dropoff_resources:
   - A
   - B
   - Me
-trains: []
+trains:
+  - rome:camp_work_crew
 researches:
   - rome:road_engineering
 required_capabilities: []
