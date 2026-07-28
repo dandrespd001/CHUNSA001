@@ -681,7 +681,14 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (found == ECO_NO_DEPOSIT) return RejectReason::INVALID_ENTITY;
 
             g.eco_assigned_deposit[ci] = found;
-            g.eco_state[ci] = EcoState::SEEK;
+            // Auditoría multimodelo 2026-07-27, F-01: si la redirección cambia
+            // de recurso, la carga previa debe volver al dropoff antes de
+            // buscar el depósito nuevo. RETURN conserva assigned_deposit y,
+            // tras descargar, pasa a SEEK sin convertir el tipo transportado.
+            const bool changes_loaded_resource =
+                g.eco_carry[ci] > 0
+                && g.deposits[found].resource_idx != g.eco_carry_resource[ci];
+            g.eco_state[ci] = changes_loaded_resource ? EcoState::RETURN : EcoState::SEEK;
             // Recolectar cancela construir — decisión explícita del contrato
             // (SPEC-004 §18), mismo patrón que el resto del kernel usa
             // BUILD_NO_TARGET como centinela de "sin objetivo".

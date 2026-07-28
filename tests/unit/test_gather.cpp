@@ -21,6 +21,9 @@
 #include "chunsa/game_state.hpp"
 #include "chunsa/step.hpp"
 #include "chunsa/economy.hpp"
+#include "chunsa/ai_stub.hpp"
+#include "chunsa/replay.hpp"
+#include "chunsa/save_io.hpp"
 
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
@@ -393,12 +396,236 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     CHECK(idx_any == 1u);
 }
 
+// ============================================================================
+// 6) Auditoría multimodelo 2026-07-27, F-01: una redirección que cambia el
+//    recurso de una carga parcial debe descargar primero el recurso anterior.
+// ============================================================================
+static std::unique_ptr<GameState> make_loaded_gatherer(uint8_t owner,
+                                                       int32_t carry,
+                                                       uint8_t resource_idx) {
+    static DataCatalogV1 cat = gather_fixture::make_catalog();
+    auto g = std::make_unique<GameState>();
+    gs_init(*g, make_cfg());
+    gs_bind_catalog(*g, cat);
+    gs_init_epoch_from_catalog(*g);
+
+    const EntityHandle h = et_spawn(g->entities);
+    CHECK(h.index == 0u);
+    g->owner[h.index] = owner;
+    g->unit_id[h.index] = 0u;
+    g->unit_class[h.index] = 3u;
+    g->hp[h.index] = 20;
+    g->speed_mtpt[h.index] = 400;
+    g->pos_x[h.index] = 100 * FX_ONE_RAW;
+    g->pos_y[h.index] = 100 * FX_ONE_RAW;
+    g->build_target[h.index] = BUILD_NO_TARGET;
+    g->eco_assigned_deposit[h.index] = 0u;  // depósito A
+    g->eco_state[h.index] = EcoState::HARVEST;
+    g->eco_carry[h.index] = carry;
+    g->eco_carry_resource[h.index] = resource_idx;
+    return g;
+}
+
+static void move_loaded_gatherer_to_dropoff(GameState& g, uint32_t ci) {
+    g.pos_x[ci] = g.dropoff_x[g.owner[ci]];
+    g.pos_y[ci] = g.dropoff_y[g.owner[ci]];
+}
+
+static void test_partial_load_redirect_different_resource_preserves_type() {
+    auto g = make_loaded_gatherer(0u, 10, 0u);
+    const int64_t stock_a = g->player_stock[0][0];
+    const int64_t stock_b = g->player_stock[0][1];
+    const EntityHandle h{0u, g->entities.generation[0]};
+
+    RawCommand redirect_b = gather(g->tick, 0u, 1u, h,
+                                   g->deposits[2].x_raw, g->deposits[2].y_raw);
+    CHECK(g->deposits[2].resource_idx == 1u);
+    const StepResult redirected = step(*g, &redirect_b, 1u);
+    CHECK(redirected.accepted == 1u);
+    CHECK(g->eco_assigned_deposit[0] == 2u);
+    CHECK(g->eco_state[0] == EcoState::RETURN);
+    CHECK(g->eco_carry[0] == 10);
+    CHECK(g->eco_carry_resource[0] == 0u);
+
+    move_loaded_gatherer_to_dropoff(*g, 0u);
+    step(*g, nullptr, 0u);
+    CHECK(g->player_stock[0][0] == stock_a + 10);
+    CHECK(g->player_stock[0][1] == stock_b);
+    CHECK(g->eco_carry[0] == 0);
+    CHECK(g->eco_state[0] == EcoState::SEEK);
+    CHECK(g->eco_assigned_deposit[0] == 2u);
+}
+
+static void test_partial_load_redirect_same_resource_keeps_gathering() {
+    auto g = make_loaded_gatherer(0u, 10, 0u);
+    const EntityHandle h{0u, g->entities.generation[0]};
+    RawCommand redirect_a = gather(g->tick, 0u, 1u, h,
+                                   g->deposits[1].x_raw, g->deposits[1].y_raw);
+    CHECK(g->deposits[1].resource_idx == 0u);
+    const StepResult redirected = step(*g, &redirect_a, 1u);
+    CHECK(redirected.accepted == 1u);
+    CHECK(g->eco_assigned_deposit[0] == 1u);
+    CHECK(g->eco_state[0] == EcoState::SEEK);
+    CHECK(g->eco_carry[0] == 10);
+    CHECK(g->eco_carry_resource[0] == 0u);
+
+    g->pos_x[0] = g->deposits[1].x_raw;
+    g->pos_y[0] = g->deposits[1].y_raw;
+    step(*g, nullptr, 0u);
+    CHECK(g->eco_state[0] == EcoState::HARVEST);
+    const int32_t remaining_before = g->deposits[1].remaining;
+    step(*g, nullptr, 0u);
+    CHECK(g->eco_carry[0] == 10 + ECO_HARVEST_PER_TICK);
+    CHECK(g->eco_carry_resource[0] == 0u);
+    CHECK(g->deposits[1].remaining == remaining_before - ECO_HARVEST_PER_TICK);
+}
+
+static void test_full_load_redirect_different_resource_drops_first() {
+    auto g = make_loaded_gatherer(0u, ECO_CARRY_CAP, 0u);
+    const int64_t stock_a = g->player_stock[0][0];
+    const int64_t stock_b = g->player_stock[0][1];
+    const EntityHandle h{0u, g->entities.generation[0]};
+    RawCommand redirect_b = gather(g->tick, 0u, 1u, h,
+                                   g->deposits[2].x_raw, g->deposits[2].y_raw);
+    CHECK(step(*g, &redirect_b, 1u).accepted == 1u);
+    CHECK(g->eco_state[0] == EcoState::RETURN);
+    CHECK(g->eco_carry[0] == ECO_CARRY_CAP);
+    CHECK(g->eco_assigned_deposit[0] == 2u);
+
+    move_loaded_gatherer_to_dropoff(*g, 0u);
+    step(*g, nullptr, 0u);
+    CHECK(g->player_stock[0][0] == stock_a + ECO_CARRY_CAP);
+    CHECK(g->player_stock[0][1] == stock_b);
+    CHECK(g->eco_state[0] == EcoState::SEEK);
+    CHECK(g->eco_assigned_deposit[0] == 2u);
+}
+
+static void test_ai_redirect_loaded_donor_preserves_type() {
+    auto g = make_loaded_gatherer(1u, 10, 0u);
+    g->eco_state[0] = EcoState::SEEK;
+    const EntityHandle donor2 = et_spawn(g->entities);
+    CHECK(donor2.index == 1u);
+    g->owner[1] = 1u;
+    g->unit_id[1] = 0u;
+    g->unit_class[1] = 3u;
+    g->hp[1] = 20;
+    g->speed_mtpt[1] = 400;
+    g->pos_x[1] = 101 * FX_ONE_RAW;
+    g->pos_y[1] = 100 * FX_ONE_RAW;
+    g->build_target[1] = BUILD_NO_TARGET;
+    g->eco_assigned_deposit[1] = 0u;
+    g->eco_state[1] = EcoState::SEEK;
+    g->eco_carry[1] = 0;
+    g->eco_carry_resource[1] = 0u;
+    g->player_stock[1][0] = 1000;
+    g->player_stock[1][1] = 0;
+    g->player_stock[1][2] = 1000;
+    const int64_t stock_a = g->player_stock[1][0];
+    const int64_t stock_b = g->player_stock[1][1];
+
+    AiJobBox box{};
+    ai_box_init(box, 1u);
+    box.state = AiJobState::DISPATCHED;
+    box.source_tick = g->tick;
+    box.runtime_before = AiRuntimeV1{0u, 0u};
+    ai_execute(box, *g);
+
+    const RawCommand* redirect = nullptr;
+    for (uint32_t i = 0; i < box.result_count; ++i) {
+        if (box.result[i].type == CommandType::GATHER) {
+            redirect = &box.result[i];
+            break;
+        }
+    }
+    CHECK(redirect != nullptr);
+    if (redirect == nullptr) return;
+    CHECK(redirect->p.handle.index == 0u);
+    step(*g, redirect, 1u);
+    while (g->tick <= redirect->target_tick) step(*g, nullptr, 0u);
+    CHECK(last_result(g->mailbox[1]) == RejectReason::ACCEPTED);
+    CHECK(g->eco_state[0] == EcoState::RETURN);
+    CHECK(g->eco_carry[0] == 10);
+    CHECK(g->eco_carry_resource[0] == 0u);
+    CHECK(g->deposits[g->eco_assigned_deposit[0]].resource_idx == 1u);
+
+    move_loaded_gatherer_to_dropoff(*g, 0u);
+    step(*g, nullptr, 0u);
+    CHECK(g->player_stock[1][0] == stock_a + 10);
+    CHECK(g->player_stock[1][1] == stock_b);
+}
+
+static void test_save_load_and_replay_preserve_redirect_transition() {
+    static DataCatalogV1 cat = gather_fixture::make_catalog();
+    const char* save_path = "test_gather_redirect_v12.sav";
+    const char* replay_path = "test_gather_redirect_v3.curp";
+    auto direct = make_loaded_gatherer(0u, 10, 0u);
+    const EntityHandle h{0u, direct->entities.generation[0]};
+    RawCommand redirect_b = gather(direct->tick, 0u, 1u, h,
+                                   direct->deposits[2].x_raw, direct->deposits[2].y_raw);
+
+    ReplayWriter writer;
+    writer.begin(make_cfg().seed, 1u, 1u, 1u, 0u, 20u);
+    writer.tick_batch(&redirect_b, 1u, direct->tick);
+    CHECK(writer.finish(0u, replay_path) == 0);
+
+    CHECK(step(*direct, &redirect_b, 1u).accepted == 1u);
+    CHECK(direct->eco_state[0] == EcoState::RETURN);
+    AiJobBox box{};
+    ai_box_init(box, 1u);
+    AiRuntimeV1 rt{};
+    CHECK(save_game(*direct, box, rt, save_path) == 0);
+
+    auto loaded = std::make_unique<GameState>();
+    AiJobBox loaded_box{};
+    AiRuntimeV1 loaded_rt{};
+    CHECK(load_game(*loaded, loaded_box, loaded_rt, save_path) == 0);
+    gs_bind_catalog(*loaded, cat);
+    CHECK(loaded->eco_carry[0] == direct->eco_carry[0]);
+    CHECK(loaded->eco_carry_resource[0] == direct->eco_carry_resource[0]);
+    CHECK(loaded->eco_state[0] == direct->eco_state[0]);
+    CHECK(loaded->eco_assigned_deposit[0] == direct->eco_assigned_deposit[0]);
+    CHECK(state_checksum_v1(*loaded) == state_checksum_v1(*direct));
+
+    ReplayData replay;
+    CHECK(replay_load(replay_path, replay) == 0);
+    CHECK(replay.batches.size() == 1u && replay.batches[0].size() == 1u);
+    auto replayed = make_loaded_gatherer(0u, 10, 0u);
+    CHECK(step(*replayed, replay.batches[0].data(),
+               static_cast<uint32_t>(replay.batches[0].size())).accepted == 1u);
+    CHECK(replayed->eco_carry[0] == direct->eco_carry[0]);
+    CHECK(replayed->eco_carry_resource[0] == direct->eco_carry_resource[0]);
+    CHECK(replayed->eco_state[0] == direct->eco_state[0]);
+    CHECK(replayed->eco_assigned_deposit[0] == direct->eco_assigned_deposit[0]);
+    CHECK(state_checksum_v1(*replayed) == state_checksum_v1(*direct));
+
+    move_loaded_gatherer_to_dropoff(*direct, 0u);
+    move_loaded_gatherer_to_dropoff(*loaded, 0u);
+    move_loaded_gatherer_to_dropoff(*replayed, 0u);
+    step(*direct, nullptr, 0u);
+    step(*loaded, nullptr, 0u);
+    step(*replayed, nullptr, 0u);
+    CHECK(direct->player_stock[0][0] == loaded->player_stock[0][0]);
+    CHECK(direct->player_stock[0][0] == replayed->player_stock[0][0]);
+    CHECK(direct->player_stock[0][1] == loaded->player_stock[0][1]);
+    CHECK(direct->player_stock[0][1] == replayed->player_stock[0][1]);
+    CHECK(state_checksum_v1(*direct) == state_checksum_v1(*loaded));
+    CHECK(state_checksum_v1(*direct) == state_checksum_v1(*replayed));
+
+    std::remove(save_path);
+    std::remove(replay_path);
+}
+
 int main() {
     test_gather_happy_path();
     test_gather_rejections_in_order();
     test_gather_cancels_build_target();
     test_gather_redirects_active_gatherer();
     test_exhaustion_prefers_same_resource_then_any_then_idle();
+    test_partial_load_redirect_different_resource_preserves_type();
+    test_partial_load_redirect_same_resource_keeps_gathering();
+    test_full_load_redirect_different_resource_drops_first();
+    test_ai_redirect_loaded_donor_preserves_type();
+    test_save_load_and_replay_preserve_redirect_transition();
 
     if (g_fails == 0) { std::printf("gather: OK\n"); return 0; }
     std::printf("gather: %d fallos\n", g_fails);
