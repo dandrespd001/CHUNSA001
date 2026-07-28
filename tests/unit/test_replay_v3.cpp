@@ -50,7 +50,9 @@
 #include "chunsa/replay.hpp"
 #include "chunsa/sha256.hpp"
 #include "chunsa/ai_stub.hpp"
+#include "chunsa/driver.hpp"
 #include "chunsa/rng.hpp"
+#include "chunsa/skirmish_apertura.hpp"
 
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
@@ -515,6 +517,73 @@ static void test_trajectory_dump_no_buildings_pre_post() {
     }
 }
 
+// ============================================================================
+// 8) Auditoría multimodelo 2026-07-27, F-00: el loader acepta hasta 4096
+//    comandos por tick y los consumidores de replay deben honrar esa cota,
+//    aunque sus buffers normales estén dimensionados para 8 comandos de setup
+//    + AI_MAX_COMMANDS (=72). 4097 se rechaza en el loader antes del driver.
+// ============================================================================
+static int write_and_load_single_batch(uint32_t count, const char* path, ReplayData& data) {
+    std::vector<RawCommand> commands(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        commands[i] = move_to(0u, 0u, static_cast<uint64_t>(i) + 1u,
+                              EntityHandle{i, 1u}, 10 * 65536, 10 * 65536);
+    }
+    ReplayWriter writer;
+    writer.begin(20260727ull, 8u, 1u, 1u, 0u, 20u);
+    writer.tick_batch(commands.data(), count, 0u);
+    if (writer.finish(0u, path) != 0) return 2;
+    return replay_load(path, data);
+}
+
+static void exercise_legal_replay_batch(uint32_t count) {
+    const char* path = "test_replay_v3_batch_limit.curp";
+    ReplayData data;
+    CHECK(write_and_load_single_batch(count, path, data) == 0);
+    CHECK(data.batches.size() == 1u);
+    CHECK(data.batches[0].size() == count);
+
+    DriveOpts drive_opts{};
+    drive_opts.units = 8u;  // buffer normal: 8 + AI_MAX_COMMANDS = 72
+    drive_opts.ticks = 1u;
+    drive_opts.human_input_delay_ticks = 0u;
+    drive_opts.feed = &data;
+    DriveOut drive_out{};
+    CHECK(drive_fresh(drive_opts, drive_out) == 0);
+    CHECK(drive_out.fatal == FatalReason::NONE);
+    CHECK(drive_out.accepted + drive_out.rejected == count);
+
+    auto g = std::make_unique<GameState>();
+    gs_init(*g, make_cfg(0u, 16u));
+    SkirmishAperturaSetup setup{};
+    AiJobBox box{};
+    ai_box_init(box, 1u);
+    AiRuntimeV1 rt{};
+    SkirmishAperturaOpts apertura_opts{};
+    apertura_opts.ticks = 1u;
+    apertura_opts.feed = &data;
+    SkirmishAperturaOut apertura_out{};
+    CHECK(drive_skirmish_apertura(
+              apertura_opts, *g, setup, box, rt, apertura_out) == 0);
+    CHECK(apertura_out.fatal == FatalReason::NONE);
+    CHECK(apertura_out.accepted + apertura_out.rejected == count);
+    std::remove(path);
+}
+
+static void test_replay_batch_limits_and_driver_capacity() {
+    exercise_legal_replay_batch(72u);
+    exercise_legal_replay_batch(73u);
+    exercise_legal_replay_batch(replay_detail::MAX_PER_TICK);
+
+    const char* path = "test_replay_v3_batch_over_limit.curp";
+    ReplayData rejected;
+    CHECK(write_and_load_single_batch(
+              replay_detail::MAX_PER_TICK + 1u, path, rejected) == 1);
+    CHECK(rejected.batches.size() == 1u);
+    CHECK(rejected.batches[0].empty());
+    std::remove(path);
+}
+
 int main() {
     test_command_effective_tick_contract();
     test_replay_v3_roundtrip_place_building_nonzero_id();
@@ -523,6 +592,7 @@ int main() {
     test_checksum_v4_covers_pending_unit_id();
     test_setup_window_delay_invariance();
     test_trajectory_dump_no_buildings_pre_post();
+    test_replay_batch_limits_and_driver_capacity();
 
     if (g_fails == 0) { std::printf("replay_v3: OK\n"); return 0; }
     std::printf("replay_v3: %d fallos\n", g_fails);
