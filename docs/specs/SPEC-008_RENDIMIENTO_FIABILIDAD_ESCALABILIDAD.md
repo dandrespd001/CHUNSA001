@@ -20,8 +20,10 @@ Ya hay señales medidas de que importa:
 - `[V]` 0 A.D. tuvo que **optimizar el cómputo de su hash de simulación** en la
   versión A28 porque causaba tirones. Nosotros vamos a ampliar el dominio del
   checksum en 1.8A **sin haber medido nunca cuánto cuesta**.
-- `ECO_MAX_DEPOSITS` pasará de 32 a 128 con las granjas, y la búsqueda de
-  depósito es lineal por ciudadano y por tick.
+- La búsqueda de depósito es lineal por ciudadano y por tick. Con las granjas
+  fuera de `deposits[]` (SPEC-007 §15.5) el coste baja, pero aparece un segundo
+  bucle sobre granjas propias que **no tiene tope duro**: es el que hay que
+  medir.
 
 Esta spec convierte las tres propiedades en **contratos comprobables**, en la
 misma línea que TDD: si no se puede escribir una prueba que falle, no es un
@@ -47,7 +49,7 @@ del número de hilos. Ante la duda, se descarta.
 
 | Concepto | Presupuesto | Escenario de referencia |
 |---|---:|---|
-| `Step()` completo | **≤ 2,0 ms** | 4 jugadores × 200 entidades, 128 depósitos |
+| `Step()` completo | **≤ 2,0 ms** | 4 jugadores × 200 entidades, 64 depósitos, 200 granjas |
 | `state_checksum_v1` | **≤ 0,2 ms** | mismo |
 | Sistema económico | ≤ 0,3 ms | 200 ciudadanos activos |
 | `sh_rebuild` (hash espacial) | ≤ 0,4 ms | 800 entidades |
@@ -131,7 +133,8 @@ Un límite sin número no es un límite. Estos son los objetivos de v1.0:
 |---|---:|---:|---|
 | Jugadores | 2 | **8** | `MAX_EMITTERS` debe cubrirlo |
 | Entidades vivas | ~64 | **1600** (8 × 200) | `ENTITY_HARD_CAP` |
-| Depósitos | 12 (cap 32) | **128** | granjas (SPEC-007 §5) |
+| Depósitos de mapa | 12 (cap 32) | **64** | solo mapa; las granjas NO usan estos slots (SPEC-007 §15.5) |
+| Granjas | 0 | **limitado por espacio** | entidades edificio; techo real = `ENTITY_HARD_CAP` |
 | Recursos | 3 | **32** | `RESOURCE_COUNT` (SPEC-007 §9.3) |
 | Comandos por tick | 4096 | 4096 | `MAX_PER_TICK`, ya suficiente |
 
@@ -139,8 +142,9 @@ Un límite sin número no es un límite. Estos son los objetivos de v1.0:
 
 | Sistema | Complejidad hoy | A escala v1.0 | Veredicto |
 |---|---|---|---|
-| Búsqueda de depósito | O(ciudadanos × depósitos) | 200 × 128 = 25 600/tick | **Aceptable**, vigilar |
-| Zona aliada | O(edificios × depósitos), **1 vez/tick** | ~50 × 128 = 6 400 | Bien: SOL lo precalculó |
+| Búsqueda de depósito | O(ciudadanos × depósitos) | 200 × 64 = 12 800/tick | **Aceptable**; se redujo a la mitad al sacar las granjas de `deposits[]` |
+| Búsqueda de granja | O(ciudadanos × granjas propias) | depende del jugador | **Vigilar**: es el que crece sin tope duro. Medir en 1.12 |
+| Zona aliada | O(edificios × depósitos), **1 vez/tick** | ~50 × 64 = 3 200 | Bien: SOL lo precalculó |
 | Checksum | O(entidades + depósitos + recursos) | crece con `RESOURCE_COUNT` | **Medir en 1.8A** |
 | Combate/aggro | O(entidades) con hash espacial | 1600 | Bien |
 | Dropoff por edificio | O(edificios) por entrega | aceptable | |

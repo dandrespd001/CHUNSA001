@@ -351,7 +351,7 @@ rechaza sin revisar el código.
 | **1.9** | **SPEC-007 §12** | Recetas, `CRAFT=15`, edificio de conversión. Bronce y hierro forjado | Se fabrica bronce · las 11 pruebas de §12.6 · cadenas de profundidad **1** |
 | **1.10** | **SPEC-007 §13** | Energía streaming con parada en seco + upkeep de comida | El late game tiene freno · las 11 pruebas de §13.6 · escenario sin militares bit-idéntico |
 | **1.11** | **SPEC-007 §14** | `reserve_total`/`extracted` + techs de extracción (40→60→75→90) | Se reabre una mina agotada investigando · las 9 pruebas de §14.4 · tope 90 verificado |
-| **1.12** | **SPEC-007 §15** | Granjas como depósito regenerativo · `ECO_MAX_DEPOSITS` a 128 | Comida sostenible · las 9 pruebas de §15.3 · **coste medido** de la búsqueda con 128 |
+| **1.12** | **SPEC-007 §15** | Granjas como entidad con almacén propio · fuentes naturales de comida en el mapa | Comida sostenible · las 13 pruebas de §15.6 · **100+ granjas** sin fallo · coste medido |
 | **1.13** | **SPEC-004 §24** | `ATTACK`, `ATTACK_MOVE`, proyectiles con viaje | **CIERRE MECÁNICO DE FASE 1** · las 14 pruebas de §24.7 · partida completa desde aldeanos hasta victoria sin comandos de debug |
 
 **Delegación** (`DELEGACION_MODELOS.md`, actualizada 2026-07-28): contratos,

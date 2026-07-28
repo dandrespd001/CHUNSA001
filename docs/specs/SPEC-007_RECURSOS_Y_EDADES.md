@@ -345,7 +345,7 @@ Es históricamente cierto y resuelve la directriz sin reglas artificiales.
 
 | # | Recurso | Aparece | Nota |
 |---|---|---|---|
-| 1 | comida | 1 | caza → granja → agricultura industrial |
+| 1 | comida | 1 | fuentes naturales del mapa (bayas, fruta, caza) **finitas**; la granja (§15) es la fuente construida y regenerativa |
 | 2 | madera | 1 | |
 | 3 | piedra | 1 | |
 | 4 | arcilla | 2 | cerámica, ladrillo |
@@ -778,45 +778,123 @@ expandirse sigue siendo necesario.
 
 ---
 
-# §15 Granjas (Sprint 1.12)
+# §15 Granjas y fuentes de comida (Sprint 1.12)
 
-## §15.1 Modelo
+**Revisado por directriz del Director (2026-07-28):** las granjas deben poder
+construirse en **número muy grande**, limitadas por el **espacio** del mapa y no
+por un tope de cantidad. Los depósitos del mapa sí conservan un máximo.
 
-Una granja es un **edificio** que, al completarse, **crea un depósito de comida**
-asociado a su posición.
+## §15.1 Dos cosas distintas que antes confundí
+
+La versión anterior de esta sección metía las granjas en `deposits[]`, que es el
+array de recursos del mapa. Era un error de diseño: obligaba a subir
+`ECO_MAX_DEPOSITS` a 128 y aun así dejaba las granjas compitiendo por slots con
+las minas, con un techo arbitrario que el jugador notaría como «no puedo
+construir más granjas» sin motivo comprensible.
+
+Se separan en dos conceptos:
+
+| | **Depósito de mapa** | **Granja** |
+|---|---|---|
+| Qué es | Yacimiento geológico o biológico | Edificio del jugador |
+| Ejemplos | mina de cobre, bosque, **arbustos de bayas, plataneras, animales de caza** | granja de cereal |
+| Origen | Datos del mapa, fijo | Construida en partida |
+| Almacenamiento | `deposits[ECO_MAX_DEPOSITS]` | **La propia entidad edificio** |
+| Límite | **Máximo duro** (dato del mapa) | **El espacio del mapa** y `ENTITY_HARD_CAP` |
+| Se agota | Sí, con reserva/recuperación (§14) | No: **regenera** mientras viva |
+
+**La comida tiene ambas fuentes**, y ésa es la gracia. Las naturales —bayas,
+fruta, caza— son depósitos del mapa: abundantes al principio, finitas, y te
+empujan a expandirte. La granja es la respuesta construida a ese agotamiento, y
+es la que sostiene el upkeep militar de las quince edades (§10.4).
+
+## §15.2 Las granjas no consumen slots de depósito
+
+Una granja **es una entidad edificio** y ya ocupa un slot de entidad. No hace
+falta ningún array nuevo: su almacén vive en arrays indexados por entidad, igual
+que `build_progress`.
 
 ```cpp
-uint32_t deposit_of_building[ENTITY_HARD_CAP];  // ECO_NO_DEPOSIT si no aplica
+int64_t farm_stored[ENTITY_HARD_CAP];   // comida disponible ahora mismo
 ```
 
-- `BuildingDefinitionV1` gana `farm_regen_per_tick` (0 = no es granja).
-- Al completarse la construcción: se crea el depósito con `reserve_total` alto
-  y `extracted = 0`.
-- Cada tick, `extracted` **decrece** en `farm_regen_per_tick`, con suelo en 0.
-- Al destruirse la granja, su depósito **desaparece** y los ciudadanos asignados
-  pasan a `IDLE` (§22.2), no a `SEEK` perpetuo.
+- `BuildingDefinitionV1` gana `farm_capacity` y `farm_regen_per_tick`
+  (`farm_capacity == 0` ⇒ no es granja).
+- Al completarse la construcción: `farm_stored = 0`.
+- Cada tick: `farm_stored = min(farm_stored + farm_regen_per_tick, farm_capacity)`.
+- Un ciudadano cosecha de ella y `farm_stored` baja.
+- Al destruirse el edificio, su almacén desaparece con él. No hay limpieza
+  aparte porque no hay estructura aparte.
 
-## §15.2 Capacidad
+**El límite real es el espacio.** Cada granja ocupa su footprint en el mapa y no
+puede solaparse con otra construcción — regla que ya existe desde el Sprint 1.1.
+Un mapa de 256×256 tiles con granjas de 3×3 admite miles; el techo efectivo lo
+pone `ENTITY_HARD_CAP`, compartido con el resto de entidades, que es un límite
+que el jugador entiende: «tengo demasiadas cosas», no «el juego dice que no».
 
-`ECO_MAX_DEPOSITS` de 32 a **128** (SPEC-008 §4.1). El coste es
-`O(ciudadanos × depósitos)` en la búsqueda: 200 × 128 = 25 600 por tick, dentro
-del presupuesto de SPEC-008 §2.1, pero **hay que medirlo** en este sprint.
+## §15.3 Direccionamiento del objetivo económico
 
-`[I] [DeepSeek]` advirtió que 128 puede quedarse corto con muchas granjas. Si el
-escenario de 8 jugadores lo agota, se sube **con medición**, no por si acaso.
+`eco_assigned_deposit` era un índice en `deposits[]`. Ahora un ciudadano puede
+ir a un depósito **o** a una granja, así que el objetivo pasa a ser explícito:
 
-## §15.3 Criterios de aceptación
+```cpp
+uint8_t  eco_target_kind[ENTITY_HARD_CAP];   // 0=NINGUNO 1=DEPOSITO 2=GRANJA
+uint32_t eco_target_index[ENTITY_HARD_CAP];  // índice en deposits[] | índice de entidad
+```
 
-1. Al completarse una granja aparece un depósito de comida en su posición.
-2. Un ciudadano recolecta de la granja igual que de un depósito del mapa.
-3. `extracted` decrece cada tick y **nunca baja de 0**.
-4. Al destruir la granja, su depósito desaparece.
-5. Al destruir la granja, los ciudadanos asignados pasan a `IDLE`, **no** quedan
-   girando en `SEEK`.
-6. Construir 128 granjas y una más: la **129 se rechaza limpio** (SPEC-008
-   §3.3), no desborda ni se ignora en silencio.
-7. Un ciudadano que transporta comida de una granja destruida **conserva la
+**Explícito y no empaquetado en bits a propósito.** Un campo con bandera en el
+bit alto ahorraría cuatro bytes por entidad y costaría legibilidad en el sistema
+más delicado del kernel. No merece la pena.
+
+`ECO_NO_DEPOSIT` se conserva como centinela de `eco_target_index` cuando
+`kind == NINGUNO`, para no romper el código existente.
+
+## §15.4 Selección automática
+
+La búsqueda de §23 (zona aliada) considera **ambos tipos**:
+
+1. Granjas propias con `farm_stored > 0` dentro de la zona aliada.
+2. Depósitos del mapa con extraíble > 0 dentro de la zona aliada.
+
+Gana el más cercano; empate por **tipo primero** (depósito antes que granja,
+para desempatar de forma estable) y luego por índice más bajo. El orden
+completo es determinista y no depende de cómo estén dispuestos los arrays.
+
+**Preferencia por granja propia cuando hay empate de distancia real**: no. Se
+evita cualquier regla «inteligente» que el jugador no pueda predecir. El
+criterio es distancia, y punto.
+
+## §15.5 Consecuencia sobre `ECO_MAX_DEPOSITS`
+
+**Ya no hace falta subirlo a 128.** Los depósitos son solo del mapa y su número
+lo fija el diseñador del mapa. Se sube de 32 a **64** para dar aire a mapas
+grandes con muchas fuentes de comida natural, y ahí se queda.
+
+Esto corrige a la baja SPEC-008 §4.1 y reduce el coste de la búsqueda
+económica, que era `O(ciudadanos × depósitos)`: con 64 en vez de 128 se
+reduce a la mitad. El coste de las granjas se paga aparte y solo entre las
+**propias**, que son muchas menos que el total de entidades.
+
+## §15.6 Criterios de aceptación
+
+1. Al completarse una granja, `farm_stored` empieza en 0 y **crece** cada tick.
+2. `farm_stored` **nunca** supera `farm_capacity`.
+3. Un ciudadano cosecha de una granja y `farm_stored` baja en consecuencia.
+4. Un ciudadano cosecha de un arbusto de bayas (depósito de mapa con recurso
+   comida) exactamente igual que de una mina.
+5. **Se pueden construir muchas más granjas que `ECO_MAX_DEPOSITS`** — al menos
+   100 — sin que ninguna falle por falta de slots.
+6. Dos granjas **no pueden solaparse**; la segunda se rechaza por footprint,
+   como cualquier edificio.
+7. Al destruir una granja, los ciudadanos asignados pasan a `IDLE`, **no** a
+   `SEEK` perpetuo.
+8. Un ciudadano que transporta comida de una granja destruida **conserva la
    carga** y la entrega.
-8. Save/load y replay conservan `deposit_of_building` y el `extracted` de las
-   granjas.
-9. Un escenario sin granjas es **bit-idéntico** al anterior, salvo el bump.
+9. La selección automática elige entre granja y depósito por **distancia**, con
+   desempate determinista y reproducible.
+10. Save/load y replay conservan `farm_stored`, `eco_target_kind` y
+    `eco_target_index`.
+11. Mutar `farm_stored` **cambia el checksum**.
+12. Un escenario sin granjas es **bit-idéntico** al anterior, salvo el bump.
+13. Agotar todas las fuentes naturales de comida y sostener el upkeep **solo**
+    con granjas es posible: es el caso que justifica la mecánica.
