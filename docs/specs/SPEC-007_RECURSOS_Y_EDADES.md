@@ -47,12 +47,12 @@ Anclada a las épocas ya usadas por los datos: Egipto 3-4, Roma 5.
 | # | Edad | Ancla histórica | Recursos que introduce |
 |---|---|---|---|
 | 1 | Paleolítica | caza y recolección | comida, madera, piedra |
-| 2 | Neolítica | agricultura, −10000 | *(granja: comida renovable)* |
+| 2 | Neolítica | agricultura, −10000 | *(granja: comida renovable, §15)* |
 | 3 | Calcolítica | cobre nativo, −4500 · **Egipto** | cobre, oro |
 | 4 | Bronce | −3300 · **Egipto Reino Nuevo** | estaño · **bronce (producido)** |
 | 5 | Hierro / Clásica | −1200 · **Roma** | mena de hierro · **hierro forjado (producido)** |
 | 6 | Tardoantigua | 300–800 | — |
-| 7 | Medieval | 800–1300 · *tope del slice v1* | carbón vegetal (producido) |
+| 7 | Medieval | 800–1300 · *tope del slice v1* | carbón vegetal (producido) · *(plantación forestal: madera renovable, §16)* |
 | 8 | Pólvora | 1300–1500 | salitre, azufre · **pólvora (producida)** |
 | 9 | Oceánica | 1500–1700 | — |
 | 10 | Manufactura | 1700–1760 | — |
@@ -346,7 +346,7 @@ Es históricamente cierto y resuelve la directriz sin reglas artificiales.
 | # | Recurso | Aparece | Nota |
 |---|---|---|---|
 | 1 | comida | 1 | fuentes naturales del mapa (bayas, fruta, caza) **finitas**; la granja (§15) es la fuente construida y regenerativa |
-| 2 | madera | 1 | |
+| 2 | madera | 1 | bosques del mapa **finitos**; plantación forestal (§16) desde la edad 7 |
 | 3 | piedra | 1 | |
 | 4 | arcilla | 2 | cerámica, ladrillo |
 | 5 | cobre | 3 | nativo primero, mena después |
@@ -898,3 +898,102 @@ reduce a la mitad. El coste de las granjas se paga aparte y solo entre las
 12. Un escenario sin granjas es **bit-idéntico** al anterior, salvo el bump.
 13. Agotar todas las fuentes naturales de comida y sostener el upkeep **solo**
     con granjas es posible: es el caso que justifica la mecánica.
+
+---
+
+# §16 Fuentes construidas: generalización y reforestación (Sprint 1.12)
+
+**Directriz del Director (2026-07-28):** debe poder **plantarse árboles para
+reforestar** a partir de cierta edad.
+
+## §16.1 La granja no era un caso especial: era el primero
+
+§15 definió la granja como un edificio con almacén propio que se regenera. La
+reforestación pide **exactamente el mismo mecanismo** con otro recurso y otro
+ritmo. Así que §15 no se amplía con un caso nuevo: se **generaliza**.
+
+Una **fuente construida** es un edificio que produce un recurso renovable en su
+propio almacén. Los campos de §15.2 ganan un índice de recurso:
+
+```
+farm_resource_idx     índice del recurso que produce  (nuevo)
+farm_capacity         almacén máximo
+farm_regen_per_tick   ritmo de reposición
+```
+
+| Fuente construida | Recurso | Ritmo | Aparece |
+|---|---|---|---|
+| Granja | comida | rápido | edad 2 |
+| **Plantación forestal** | **madera** | **lento** | **edad 7** |
+
+Nada más cambia: mismo almacén, misma cosecha, misma búsqueda, mismas pruebas.
+Cualquier renovable futuro —un vivero, un criadero— es un registro de datos, no
+código nuevo.
+
+**Por qué generalizar en vez de añadir un tipo**: dos mecanismos casi idénticos
+divergen con el tiempo, y acabas arreglando el mismo bug dos veces. Este ya es
+el segundo caso; habrá un tercero.
+
+## §16.2 Por qué la edad 7
+
+Anclaje histórico real. El manejo deliberado del bosque —el monte bajo con
+turnos de corta— está documentado en la Europa medieval, y encaja con la edad 7
+(Medieval, 800–1300) de §2.
+
+Y hay una simetría que merece la pena hacer explícita, porque es el corazón de
+lo que estamos construyendo: la silvicultura moderna **nació de una crisis de
+agotamiento minero**. En 1713 von Carlowitz escribe *Sylvicultura oeconomica*
+porque las minas de plata sajonas se quedaban sin madera para las galerías, y
+al hacerlo acuña el concepto de sostenibilidad.
+
+En CHUNSA ocurre lo mismo por mecánica pura: la madera es finita y alimenta el
+carbón vegetal que reduce el hierro (§9.2). Quien deforeste su zona se queda sin
+metalurgia. **La reforestación no es una mejora opcional: es la respuesta a un
+agotamiento que el propio jugador provoca.**
+
+Es el mismo patrón que §14: allí la tecnología de extracción responde al
+agotamiento del yacimiento; aquí la plantación responde al del bosque. Dos
+respuestas distintas al mismo problema, ninguna de ellas «expandirse».
+
+## §16.3 Ritmo lento, y deliberadamente
+
+`farm_regen_per_tick` de la plantación es **mucho menor** que el de la granja.
+Un árbol tarda décadas en crecer y la mecánica debe reflejarlo: plantar es una
+inversión a largo plazo, no un grifo.
+
+Consecuencia de diseño buscada: **reforestar tarde no te salva**. Si dejas que
+tu bosque se agote antes de plantar, la plantación no llega a tiempo para esa
+partida. Hay que decidir antes de que duela, que es exactamente la decisión
+interesante.
+
+Los números concretos son **calibración de playtest**, como el resto (§ cabecera).
+
+## §16.4 Gating por edad
+
+No hace falta mecanismo nuevo: `epoch_window` del `BuildingDefinitionV1` ya
+gatea qué se puede construir y cuándo (SPEC-004 §12.4). La plantación forestal
+lleva `epoch_window: [7, 15]` y el kernel no se entera de que es especial.
+
+**Comprobación de coherencia**: `farm_resource_idx` debe apuntar a un recurso
+que exista en la edad del `epoch_window`. Un edificio de edad 7 que produzca
+petróleo (edad 13) es un error de datos y el **loader debe rechazarlo**, no el
+kernel en ejecución.
+
+## §16.5 Criterios de aceptación (amplían §15.6)
+
+14. Una plantación forestal completa produce **madera**, no comida.
+15. Su `farm_regen_per_tick` es menor que el de la granja: en el mismo número de
+    ticks acumula estrictamente menos.
+16. `PLACE_BUILDING` de una plantación en **edad 6** ⇒ `ILLEGAL_STATE`; en
+    edad 7 ⇒ aceptado.
+17. Un ciudadano cosecha madera de una plantación igual que de un bosque del
+    mapa.
+18. Agotar todos los bosques del mapa y sostener el consumo de madera **solo**
+    con plantaciones es posible.
+19. Un catálogo con una fuente construida cuyo `farm_resource_idx` no existe en
+    su `epoch_window` es **rechazado por el loader** con código de error.
+20. Añadir una fuente construida nueva **por datos** —sin tocar código— funciona:
+    es la prueba de que la generalización de §16.1 es real.
+
+La prueba 20 es la que justifica todo este apartado. Si falla, no hemos
+generalizado nada: hemos escrito el mismo caso especial dos veces.
