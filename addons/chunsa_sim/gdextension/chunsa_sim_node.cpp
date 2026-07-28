@@ -2430,7 +2430,14 @@ uint32_t ChunsaSimNode::enqueue_gather_orders(int64_t x_raw, int64_t y_raw) {
     }
     const uint32_t deposit_count = std::min(snap_curr.n_deposits,
                                             chunsa::ECO_MAX_DEPOSITS);
-    const uint64_t radius = static_cast<uint64_t>(chunsa::GATHER_PICK_RADIUS_RAW);
+    // Tolerancia de PUNTERÍA, deliberadamente mayor que GATHER_PICK_RADIUS_RAW
+    // (1 tile). No relaja nada del kernel: el comando lleva las coordenadas
+    // EXACTAS del depósito elegido, así que la validación del kernel sigue
+    // resolviendo a distancia cero. Con 1 tile de tolerancia el jugador tenía
+    // que clavar el clic sobre el centro del depósito y en la práctica no
+    // conseguía darle. 3 tiles es cómodo con ratón y sigue siendo inequívoco:
+    // los depósitos del mapa base están separados por >= 8 tiles.
+    const uint64_t radius = static_cast<uint64_t>(chunsa::GATHER_PICK_RADIUS_RAW) * 3ull;
     const uint64_t radius_sq = radius * radius;
     uint32_t deposit = chunsa::ECO_NO_DEPOSIT;
     uint64_t best_distance_sq = UINT64_MAX;
