@@ -612,3 +612,84 @@ el mismo incremento.
 
 `gs_init` inicializa `citizen_task = GATHER` para ciudadanos (coherente con
 §22.4) e `IDLE` para el resto de clases, que no lo consultan.
+
+---
+
+## §23 Alcance de la auto-asignación económica (zona aliada)
+
+**Origen:** defecto observado por el Director en sesión de juego real
+(2026-07-28) y reproducido con instrumentación del kernel.
+
+### §23.1 El defecto que corrige
+
+La regla de preferencia de recurso introducida en §18 (Sprint 1.6B, arreglo de
+F-01) —«al agotarse el depósito asignado, prefiere el MISMO recurso; si no hay,
+cualquiera»— se especificó **sin cota de distancia**. Consecuencia medida en el
+demo:
+
+```text
+CIT idx=10 state=SEEK dep=7 dep_rem=750 dep_res=2 carry=0 pos=45,132
+CIT idx=11 state=SEEK dep=7 dep_rem=750 dep_res=2 carry=0 pos=46,133
+CIT idx=12 state=SEEK dep=7 dep_rem=750 dep_res=2 carry=0 pos=38,131
+CIT idx=13 state=SEEK dep=7 dep_rem=750 dep_res=2 carry=0 pos=39,131
+```
+
+Los cuatro aldeanos del jugador agotan el depósito de `Me` contiguo a su base
+(tile 20,128) y la preferencia los envía al siguiente depósito de `Me`: un
+neutral del centro del mapa, a más de 100 tiles. Marchan indefinidamente
+mientras ignoran 2 depósitos de `A` y 1 de `B` situados a 8–20 tiles. Como todo
+lo construible/entrenable/investigable cuesta `A`, el jugador queda sin
+economía y **cada comando se rechaza con `ILLEGAL_STATE`**.
+
+### §23.2 Regla
+
+La **auto-asignación** de un ciudadano (la que hace `eco_find_nearest_deposit`
+cuando el ciudadano no tiene una orden explícita del jugador) considera
+**únicamente depósitos dentro de la zona aliada**.
+
+Un depósito está en zona aliada del jugador `p` si su distancia a **algún
+edificio COMPLETO propiedad de `p`** es menor o igual a
+`ECO_AUTO_GATHER_RADIUS_RAW`. Se reutiliza el mismo recorrido de edificios que
+`find_building_dropoff` (§6): `entity_kind == 1`, vivo, `owner == p`,
+`build_progress >= build_time_ticks`.
+
+Orden de resolución, todo con aritmética entera y recorrido ascendente:
+
+1. Depósitos en zona aliada con `remaining > 0` **y** `resource_idx` igual al
+   preferido (§18). Gana el más cercano; empate por índice más bajo.
+2. Si no hay, depósitos en zona aliada con `remaining > 0`, cualquier recurso.
+   Gana el más cercano; empate por índice más bajo.
+3. Si no hay ninguno, el ciudadano pasa a `IDLE` (§22.2), **no** queda girando
+   en `SEEK`.
+
+### §23.3 La orden del jugador NO está acotada
+
+`GATHER` emitido por el jugador asigna el depósito **directamente**, sin pasar
+por `eco_find_nearest_deposit`. Por tanto **puede apuntar a cualquier depósito
+del mapa**, dentro o fuera de la zona aliada, incluidos los neutrales
+disputados. Es agencia del jugador y es deliberado: el patrón AoE2 es
+«los aldeanos trabajan solos cerca de casa; expandir a recursos lejanos o
+disputados es una decisión explícita del jugador».
+
+Si un depósito asignado por el jugador se agota, la reasignación posterior
+vuelve a ser auto-asignación y por tanto **sí** queda acotada por §23.2: el
+aldeano regresa a trabajar cerca de casa en vez de seguir alejándose.
+
+### §23.4 Constante
+
+`ECO_AUTO_GATHER_RADIUS_RAW` se define en `economy.hpp` junto al resto de
+constantes económicas. Valor inicial: **32 tiles**. Justificación: los
+depósitos de base del mapa están a 8–20 tiles y los neutrales disputados a más
+de 100, así que 32 separa ambos conjuntos con holgura y deja margen para
+edificios de expansión.
+
+Es un valor de balance. Cuando el catálogo gane un bloque de parámetros de
+partida, debe migrar allí como dato; hasta entonces vive como constante con
+nombre y comentario que explique el criterio.
+
+### §23.5 Versionado
+
+No introduce estado persistente nuevo: **`SAVE_FORMAT_VERSION` no cambia**. Sí
+cambia la trayectoria de todo escenario con ciudadanos y depósitos, luego los
+baselines de `ai_skirmish_eco` y `ai_skirmish_apertura` **se re-registran**; los
+escenarios sin ciudadanos deben quedar **bit-idénticos**.
