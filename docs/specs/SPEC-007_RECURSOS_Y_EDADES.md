@@ -306,3 +306,160 @@ No son errores, son apuestas. Quedan registradas para no re-litigarlas:
   AoE2.
 - **HUD.** `[V]` Anno necesitó **3 regiones** para sostener 30+ recursos. Con
   más de ~8 activos habrá que **agrupar por familias** en el HUD.
+
+---
+
+# §9 Análisis de recursos por edad (decisión del Director: 15 edades)
+
+Directriz (2026-07-28): **15 edades**; los recursos esenciales y los
+energéticos **permanecen activos a lo largo de varias edades**; se acepta algo
+más de carga a cambio de realismo.
+
+## §9.1 Principio: los recursos no se jubilan
+
+Un recurso **no desaparece** al llegar la edad siguiente: **cambia de uso**.
+Es históricamente cierto y resuelve la directriz sin reglas artificiales.
+
+| Recurso | Uso temprano | Uso tardío | Activo |
+|---|---|---|---|
+| cobre | bronce (edad 4) | cableado eléctrico (12+) | 3–15 |
+| estaño | bronce (edad 4) | soldadura, hojalata (11+) | 4–15 |
+| madera | construcción | carbón vegetal, celulosa, química | 1–15 |
+| piedra | muros, monumentos | hormigón, áridos | 1–15 |
+| oro | moneda, prestigio | contactos electrónicos (14+) | 3–15 |
+| comida | subsistencia | **upkeep militar (§10)** | 1–15 |
+| carbón | coque metalúrgico (11) | generación eléctrica (12+) | 11–15 |
+
+## §9.2 Catálogo completo
+
+**Recolectados (17)** — salen de un depósito del mapa:
+
+| # | Recurso | Aparece | Nota |
+|---|---|---|---|
+| 1 | comida | 1 | caza → granja → agricultura industrial |
+| 2 | madera | 1 | |
+| 3 | piedra | 1 | |
+| 4 | arcilla | 2 | cerámica, ladrillo |
+| 5 | cobre | 3 | nativo primero, mena después |
+| 6 | oro | 3 | |
+| 7 | estaño | 4 | escaso: es el cuello de botella del bronce |
+| 8 | mena de hierro | 5 | |
+| 9 | plomo | 8 | proyectiles → baterías (14) |
+| 10 | salitre | 8 | pólvora |
+| 11 | azufre | 8 | pólvora → ácido sulfúrico |
+| 12 | carbón | 11 | energético |
+| 13 | petróleo | 13 | energético |
+| 14 | bauxita | 14 | *(faltaba en el recuento original, §8.2)* |
+| 15 | uranio | 14 | energético |
+| 16 | silicio | 15 | de arena |
+| 17 | tierras raras | 15 | |
+
+**Producidos (8)** — salen de un edificio con receta, no del mapa:
+
+| # | Producido | Receta | Edad |
+|---|---|---|---|
+| 18 | carbón vegetal | madera | 5 |
+| 19 | bronce | cobre + estaño | 4 |
+| 20 | hierro forjado | mena de hierro + carbón vegetal | 5 |
+| 21 | pólvora | salitre + azufre + carbón vegetal | 8 |
+| 22 | coque | carbón | 11 |
+| 23 | acero | hierro forjado + coque | 12 |
+| 24 | aluminio | bauxita + electricidad | 14 |
+| 25 | derivados del petróleo | petróleo | 13 |
+
+**Streaming (1)** — no ocupa índice de stock (§8.1): **electricidad**, desde la
+edad 12.
+
+Corrección al carbón vegetal: aparece en la **edad 5**, no en la 7. La
+reducción de mena de hierro lo exige desde el primer día del hierro; el coque
+solo lo sustituye en la 11.
+
+## §9.3 `RESOURCE_COUNT = 32`
+
+25 almacenados + margen. **32 no es arbitrario**: es exactamente el ancho de
+`dropoff_mask` como `uint32_t`, así que el mask y el vector de stock quedan
+alineados y no hay que volver a tocar ninguno de los dos.
+
+## §9.4 Carga simultánea por edad
+
+Es la métrica que importa, no el total. «Activos» = recursos que el jugador
+gasta o recolecta de verdad en esa edad.
+
+| Edad | Activos | Cuáles |
+|---|---:|---|
+| 1 | 3 | comida, madera, piedra |
+| 2 | 4 | + arcilla |
+| 3 | 6 | + cobre, oro |
+| 4 | 8 | + estaño, **bronce** |
+| 5 | 11 | + mena de hierro, carbón vegetal, **hierro forjado** |
+| 6–7 | 11 | sin recurso nuevo: consolidación |
+| 8 | 15 | + plomo, salitre, azufre, **pólvora** |
+| 9–10 | 15 | sin recurso nuevo |
+| 11 | 17 | + carbón, **coque** |
+| 12 | 19 | + **acero**, *electricidad (streaming)* |
+| 13 | 21 | + petróleo, **derivados** |
+| 14 | 24 | + bauxita, uranio, **aluminio** |
+| 15 | 26 | + silicio, tierras raras |
+
+**El pico es 26 en la edad 15**, muy por encima de los 4 de AoE2. Se acepta
+conscientemente por la directriz del Director, con dos mitigaciones:
+
+1. **La mayoría se gasta indirectamente.** Desde la edad 12 no compras unidades
+   con cobre: compras con acero, y el cobre alimenta la receta. La superficie de
+   **decisión** del jugador es mucho más estrecha que el número de recursos.
+2. **Agrupación por familias en el HUD**, que el panel identificó como
+   obligatoria por encima de ~8 activos: subsistencia · construcción ·
+   metales base · metalurgia · química · energía. Seis grupos, no 26 contadores.
+
+## §9.5 Los energéticos no se sustituyen: se acumulan
+
+Directriz explícita del Director. Cada energético nuevo **no jubila** al
+anterior; abre un uso distinto:
+
+| Energético | Desde | Uso propio que no cubre el anterior |
+|---|---|---|
+| madera / carbón vegetal | 5 | reducción metalúrgica preindustrial |
+| carbón | 11 | vapor y coque |
+| petróleo | 13 | motor de combustión, química |
+| uranio | 14 | densidad energética para generación masiva |
+
+En la edad 15 conviven los cuatro. Es correcto: hoy el mundo sigue quemando
+carbón, petróleo y uranio a la vez.
+
+---
+
+# §10 Upkeep: coste de mantenimiento (cierra §8.7)
+
+## §10.1 Elección
+
+De los tres modelos posibles —tope de población duro (AoE2), penalización de
+ingresos (Warcraft III) y consumo continuo (Total War, Anno, Supreme
+Commander)— se adopta el **tercero**, por ser el único históricamente veraz y
+por reutilizar el sistema de energía que §8.1 ya obliga a construir.
+
+## §10.2 Regla
+
+- **Unidades militares consumen comida por tick** mientras viven. Es la
+  logística de intendencia, el problema central de toda campaña antigua.
+- **Edificios industriales consumen energía por tick** mientras operan.
+
+El freno del late game deja de ser una regla de videojuego y pasa a ser
+ficción: no sostienes 500 unidades porque no puedes alimentarlas.
+
+## §10.3 Qué pasa al no poder pagar
+
+Coherente con §8.1, **sin ralentización gradual**:
+
+- Sin energía: los edificios dependientes **se paran**.
+- Sin comida: las unidades **no mueren de golpe** — la muerte por inanición
+  castiga demasiado un descuido momentáneo. Pierden eficacia (moral o daño) y
+  la producción de unidades nuevas se bloquea hasta recuperar superávit.
+
+## §10.4 Consecuencia sobre la comida
+
+La comida deja de ser un recurso de arranque para convertirse en el **eje
+económico de toda la partida**: es lo que sostiene al ejército en las 15
+edades. Eso justifica por sí solo las granjas de §5 y su regeneración.
+
+**Pendiente de especificar**: tasas concretas de consumo por clase de unidad y
+por edificio. Requieren playtest, no se pueden fijar desde el escritorio.
