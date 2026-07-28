@@ -185,6 +185,20 @@ void ChunsaSimNode::_ready() {
         // colocación del Sprint 1.1. El adaptador enlaza gs->catalog a mano
         // (no vía gs_bind_catalog), así que la llamada va aquí explícita.
         chunsa::gs_init_epoch_from_catalog(*gs);
+        // Sprint 1.6B: cargar los depósitos REALES del mapa desde el catálogo.
+        // Es opt-in por diseño del kernel (gs_init_economy_from_catalog no se
+        // invoca desde gs_init porque allí g.catalog todavía es nullptr), y sin
+        // esta llamada el demo se quedaba con el patrón LEGACY de depuración de
+        // gs_init_economy: 6 depósitos en los tiles (40,40) (216,216) (40,216)
+        // (216,40) (128,40) (128,216), a ~90 tiles del dropoff del jugador
+        // (tile 20,128) y muy fuera de su visión. Consecuencias observadas en la
+        // sesión de verificación del Director: los aldeanos se auto-asignaban y
+        // caminaban eternamente (stock 0 tras 3800 ticks), y como ningún
+        // depósito era visible NO había nada sobre lo que hacer clic derecho, así
+        // que el jugador no tenía NINGÚN control sobre ellos (los ciudadanos
+        // están excluidos de MOVE_TO por movement_v1, SPEC-001 §12).
+        // Los depósitos del mapa base están a 8–20 tiles de cada base.
+        chunsa::gs_init_economy_from_catalog(*gs);
         uid_cavalry = chunsa::catalog_find_unit(
             *gs->catalog, "egipto:chariot_warrior", std::strlen("egipto:chariot_warrior"));
         uid_citizen = chunsa::catalog_find_unit(
