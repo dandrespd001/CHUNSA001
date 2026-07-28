@@ -58,6 +58,12 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     gs_set_player_civ(*g, 1, setup.civ_rome);
     gs_init_epoch_from_catalog_per_player(*g);
     gs_init_economy_from_catalog(*g);
+    // Blindaje del Arquitecto (revisión 1.6B): asevera que este escenario usa
+    // de verdad los depósitos DEL MAPA (12, SPEC-004 §15.1) y no el fallback
+    // legacy de 6. Es EL punto del sprint, y sin esta aserción una regresión
+    // futura (borrar la llamada de arriba) dejaría el escenario "verde" pero
+    // corriendo sobre el patrón fijo que este sprint vino a eliminar.
+    CHECK(g->n_deposits == 12u);
     return g;
 }
 
