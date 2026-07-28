@@ -241,9 +241,16 @@ static void test_apertura_save_mid_gather_and_continue() {
                 const bool gathering_active =
                     dep != ECO_NO_DEPOSIT && dep < g->n_deposits
                     && g->deposits[dep].remaining > 0;
-                const bool transient =
-                    g->eco_carry[i] > 0 || g->eco_state[i] == EcoState::HARVEST
-                    || g->eco_state[i] == EcoState::RETURN;
+                // Endurecimiento del Arquitecto (revisión K3): la disyunción
+                // original (`carry>0 || HARVEST || RETURN`) la satisfacía
+                // SIEMPRE primero un aldeano ENTRANDO en HARVEST con carry==0,
+                // porque `carry` solo crece una vez ya dentro de HARVEST. Con
+                // eso los asertos post-load sobre `eco_carry` y
+                // `eco_carry_resource` comparaban 0 con 0: tautologías justo
+                // sobre los dos campos que F-02 existe para blindar. Exigir
+                // carry>0 implica ya HARVEST o RETURN y fuerza que el save
+                // cruce una carga parcial real.
+                const bool transient = g->eco_carry[i] > 0;
                 if (!gathering_active || !transient) continue;
                 mid_gather_tick = g->tick;
                 observed_ci = i;
