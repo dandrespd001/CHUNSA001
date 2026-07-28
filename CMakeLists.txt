@@ -29,6 +29,8 @@ endif()
 # --- CLI ------------------------------------------------------------------------
 add_executable(chunsa_sim_cli addons/chunsa_sim/cli/main.cpp)
 target_link_libraries(chunsa_sim_cli PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_sim_cli PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism)
 
 # --- Tests ----------------------------------------------------------------------
 enable_testing()
@@ -36,6 +38,16 @@ add_executable(chunsa_test_props tests/unit/test_props.cpp)
 target_link_libraries(chunsa_test_props PRIVATE chunsa_sim_core)
 add_test(NAME props COMMAND chunsa_test_props)
 add_test(NAME golden COMMAND chunsa_sim_cli golden --vectors ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism/golden)
+
+# --- Gates de determinismo aserverados (Sprint 1.7, SPEC-004 §22 / brief C.2)
+add_test(NAME gate_g1 COMMAND chunsa_sim_cli run --selftest-g1)
+add_test(NAME gate_g3 COMMAND chunsa_sim_cli savetest
+    --save-file ${CMAKE_CURRENT_BINARY_DIR}/ctest-g3.sav)
+add_test(NAME gate_g4 COMMAND chunsa_sim_cli savetest --ai
+    --save-file ${CMAKE_CURRENT_BINARY_DIR}/ctest-g4.sav)
+set_tests_properties(gate_g1 gate_g3 gate_g4 PROPERTIES
+    LABELS "determinism_gate"
+    TIMEOUT 120)
 
 # --- Tests 0.1B ------------------------------------------------------------------
 add_executable(chunsa_test_state tests/unit/test_state.cpp)
@@ -117,12 +129,16 @@ add_test(NAME ai_layers COMMAND chunsa_test_ai_layers)
 # --- Test Sprint 1.4 (K2): gate de fase — skirmish (SPEC-005 §8.3) -------------
 add_executable(chunsa_test_ai_skirmish tests/unit/test_ai_skirmish.cpp)
 target_link_libraries(chunsa_test_ai_skirmish PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_ai_skirmish PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism)
 add_test(NAME ai_skirmish COMMAND chunsa_test_ai_skirmish)
 
 # --- Test Sprint 1.4 (K3): skirmish CON ECONOMÍA — aldeanos vulnerables --------
 # (SPEC-004 §7.1: partida completa con economía que termina por conquista)
 add_executable(chunsa_test_ai_skirmish_eco tests/unit/test_ai_skirmish_eco.cpp)
 target_link_libraries(chunsa_test_ai_skirmish_eco PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_ai_skirmish_eco PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism)
 add_test(NAME ai_skirmish_eco COMMAND chunsa_test_ai_skirmish_eco)
 
 # --- Test Sprint 1.6B (K1): civ_id tipado + depósitos desde el mapa (SPEC-004
@@ -139,6 +155,11 @@ add_executable(chunsa_test_gather tests/unit/test_gather.cpp)
 target_link_libraries(chunsa_test_gather PRIVATE chunsa_sim_core)
 add_test(NAME gather COMMAND chunsa_test_gather)
 
+# --- Test Sprint 1.7: modelo de tareas del ciudadano (SPEC-004 §22) -----------
+add_executable(chunsa_test_citizen_task tests/unit/test_citizen_task.cpp)
+target_link_libraries(chunsa_test_citizen_task PRIVATE chunsa_sim_core)
+add_test(NAME citizen_task COMMAND chunsa_test_citizen_task)
+
 # --- Test Sprint 1.6B (K2): la IA juega la apertura (SPEC-004 §19) -------------
 add_executable(chunsa_test_ai_apertura tests/unit/test_ai_apertura.cpp)
 target_link_libraries(chunsa_test_ai_apertura PRIVATE chunsa_sim_core)
@@ -148,6 +169,8 @@ add_test(NAME ai_apertura COMMAND chunsa_test_ai_apertura)
 # (SPEC-004 §20, el corazón del sprint) --------------------------------------
 add_executable(chunsa_test_ai_skirmish_apertura tests/unit/test_ai_skirmish_apertura.cpp)
 target_link_libraries(chunsa_test_ai_skirmish_apertura PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_ai_skirmish_apertura PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/determinism)
 target_compile_definitions(chunsa_test_ai_skirmish_apertura PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME ai_skirmish_apertura COMMAND chunsa_test_ai_skirmish_apertura)

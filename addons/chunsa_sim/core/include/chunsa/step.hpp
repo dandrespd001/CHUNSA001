@@ -138,6 +138,9 @@ inline void init_citizen_from_catalog(GameState& g, uint32_t i,
     g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
     g.eco_carry[i] = 0;
     g.eco_carry_resource[i] = 0;
+    // §22.4: todo ciudadano data-driven (SPAWN_UNIT, SPAWN_CITIZEN o
+    // TRAIN_UNIT vía production_system) nace auto-asignado a GATHER.
+    g.citizen_task[i] = CITIZEN_TASK_GATHER;
 }
 
 // Validación y aplicación de UN comando debido (función pura de estado+comando).
@@ -282,6 +285,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
             g.eco_carry[i] = 0;
             g.eco_carry_resource[i] = 0;
+            g.citizen_task[i] = CITIZEN_TASK_GATHER;
             return RejectReason::ACCEPTED;
         }
         case CommandType::PLACE_BUILDING: {
@@ -458,6 +462,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (found == g.entities.capacity) return RejectReason::INVALID_ENTITY;
 
             g.build_target[ci] = found;
+            g.citizen_task[ci] = CITIZEN_TASK_BUILD;
             return RejectReason::ACCEPTED;
         }
         case CommandType::TRAIN_UNIT: {
@@ -693,6 +698,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             // (SPEC-004 §18), mismo patrón que el resto del kernel usa
             // BUILD_NO_TARGET como centinela de "sin objetivo".
             g.build_target[ci] = BUILD_NO_TARGET;
+            g.citizen_task[ci] = CITIZEN_TASK_GATHER;
             return RejectReason::ACCEPTED;
         }
         case CommandType::MOVE_TO: {
@@ -705,6 +711,13 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (!world_contains(tgt)) return RejectReason::MALFORMED;
             g.tgt_x[i] = c.p.x_raw;  // un segundo target REEMPLAZA al anterior (§12)
             g.tgt_y[i] = c.p.y_raw;
+            // SPEC-004 §22.2: MOVE_TO conserva toda la carga/asignación
+            // económica. Solo en ciudadanos cambia la autoridad de locomoción
+            // y cancela cualquier obra previa.
+            if (g.unit_class[i] == 3u) {
+                g.citizen_task[i] = CITIZEN_TASK_MOVE;
+                g.build_target[i] = BUILD_NO_TARGET;
+            }
             return RejectReason::ACCEPTED;
         }
         case CommandType::DESTROY_DEBUG: {
@@ -866,6 +879,70 @@ inline void movement_v1(GameState& g) noexcept {
         g.vel_x[i] = vx.raw; g.vel_y[i] = vy.raw;
         g.pos_x[i] = fx_add(pos.x, vx, g.fatal).raw;
         g.pos_y[i] = fx_add(pos.y, vy, g.fatal).raw;
+    }
+}
+
+// Locomoción individual del ciudadano (Sprint 1.7, SPEC-004 §22.3). Fase
+// propia, antes de economía y construcción. movement_v1 permanece congelado
+// y sigue excluyendo unit_class>2; este sistema es el único dueño de pos para
+// un ciudadano cuya tarea explícita sea MOVE.
+inline void citizen_move_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    const uint64_t arrive_r_sq =
+        static_cast<uint64_t>(ECO_ARRIVE_RADIUS_RAW)
+        * static_cast<uint64_t>(ECO_ARRIVE_RADIUS_RAW);
+
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.unit_class[i] != 3u) continue;
+        if (g.citizen_task[i] != CITIZEN_TASK_MOVE) continue;
+
+        const Vec2Fx here{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}};
+        const Vec2Fx there{Fx{g.tgt_x[i]}, Fx{g.tgt_y[i]}};
+        const uint64_t d_sq = dist_sq_raw(here, there, g.fatal);
+        if (d_sq <= arrive_r_sq) {
+            g.citizen_task[i] = CITIZEN_TASK_IDLE;
+            g.vel_x[i] = 0;
+            g.vel_y[i] = 0;
+            continue;
+        }
+
+        // Forma idéntica a economy.hpp::try_move: step entero, snap si el
+        // paso cubre la distancia, si no normalize_v1 + multiplicación fija.
+        const int64_t step_i64 =
+            (static_cast<int64_t>(g.speed_mtpt[i]) * FX_ONE_RAW) / 1000;
+        if (step_i64 <= 0) {
+            g.vel_x[i] = 0;
+            g.vel_y[i] = 0;
+            continue;
+        }
+
+        uint64_t step_sq;
+        if (static_cast<uint64_t>(step_i64) > UINT32_MAX) {
+            step_sq = UINT64_MAX;
+        } else {
+            const uint64_t s = static_cast<uint64_t>(step_i64);
+            step_sq = s * s;
+        }
+        if (d_sq <= step_sq) {
+            g.pos_x[i] = g.tgt_x[i];
+            g.pos_y[i] = g.tgt_y[i];
+            g.vel_x[i] = 0;
+            g.vel_y[i] = 0;
+            g.citizen_task[i] = CITIZEN_TASK_IDLE;
+            continue;
+        }
+
+        const Vec2Fx d{Fx{g.tgt_x[i] - g.pos_x[i]},
+                       Fx{g.tgt_y[i] - g.pos_y[i]}};
+        const Vec2Fx dir = normalize_v1(d, g.fatal);
+        const Fx step_fx{step_i64};
+        const Fx vx = fx_mul(dir.x, step_fx, g.fatal);
+        const Fx vy = fx_mul(dir.y, step_fx, g.fatal);
+        g.pos_x[i] = fx_add(Fx{g.pos_x[i]}, vx, g.fatal).raw;
+        g.pos_y[i] = fx_add(Fx{g.pos_y[i]}, vy, g.fatal).raw;
+        g.vel_x[i] = vx.raw;
+        g.vel_y[i] = vy.raw;
     }
 }
 
@@ -1210,10 +1287,9 @@ inline void economy_system(GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.unit_class[i] != 3) continue;  // solo ciudadanos
-        // Sprint 1.1 (SPEC-004 §4.2): mientras build_target esté activo el
-        // ciudadano queda FUERA del pipeline económico (construction_system,
-        // más abajo, es quien lo mueve/hace avanzar el progreso).
-        if (g.build_target[i] != BUILD_NO_TARGET) continue;
+        // §22.1: la tarea, no build_target, es la única autoridad. Un
+        // build_target obsoleto es solo dato y no puede secuestrar GATHER.
+        if (g.citizen_task[i] != CITIZEN_TASK_GATHER) continue;
 
         EcoCitizenIn in{};
         in.pos_x = g.pos_x[i];
@@ -1250,6 +1326,16 @@ inline void economy_system(GameState& g) noexcept {
         g.eco_carry[i] = out.carry;
         g.eco_carry_resource[i] = out.carry_resource_idx;
 
+        // §22.2: no queda depósito alcanzable. eco_step_citizen ya deja el
+        // ciudadano quieto y sin asignación; la tarea explícita pasa a IDLE
+        // para que no vuelva a girar indefinidamente en SEEK.
+        if (out.state == EcoState::SEEK
+            && out.assigned_deposit == ECO_NO_DEPOSIT) {
+            g.citizen_task[i] = CITIZEN_TASK_IDLE;
+            g.vel_x[i] = 0;
+            g.vel_y[i] = 0;
+        }
+
         if (out.did_harvest && out.assigned_deposit < g.n_deposits) {
             g.deposits[out.assigned_deposit].remaining -= out.harvested_amount;
         }
@@ -1276,7 +1362,9 @@ inline void construction_system(GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.unit_class[i] != 3u) continue;
-        if (g.build_target[i] == BUILD_NO_TARGET) continue;
+        // §22.1: BUILD es el selector exclusivo; build_target solo describe
+        // el objetivo de esa tarea y puede ser inválido/obsoleto.
+        if (g.citizen_task[i] != CITIZEN_TASK_BUILD) continue;
 
         const uint32_t b = g.build_target[i];
         bool invalid = (b >= t.capacity) || !t.alive[b] || (g.entity_kind[b] != 1u);
@@ -1293,7 +1381,10 @@ inline void construction_system(GameState& g) noexcept {
         }
         if (invalid) {
             g.build_target[i] = BUILD_NO_TARGET;
-            continue;  // vuelve a economía en el siguiente tick
+            g.citizen_task[i] = CITIZEN_TASK_IDLE;
+            g.vel_x[i] = 0;
+            g.vel_y[i] = 0;
+            continue;
         }
 
         const int64_t Traw = FX_ONE_RAW;
@@ -1345,6 +1436,10 @@ inline void construction_system(GameState& g) noexcept {
             g.build_progress[b] += 1u;
             if (g.build_progress[b] > T) g.build_progress[b] = T;
             g.vel_x[i] = 0; g.vel_y[i] = 0;
+            if (g.build_progress[b] >= T) {
+                g.build_target[i] = BUILD_NO_TARGET;
+                g.citizen_task[i] = CITIZEN_TASK_IDLE;
+            }
         }
     }
 }
@@ -1573,6 +1668,10 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
 
         // (5) Sistemas del tick (subconjunto 0.1A).
         detail::movement_v1(g);
+        // (5a) Control del ciudadano (Sprint 1.7, SPEC-004 §22.3): fase
+        // propia antes de economía y construcción. movement_v1 sigue
+        // congelado y no toca ciudadanos.
+        detail::citizen_move_system(g);
         sh_rebuild(g.shash, g.pos_x, g.pos_y, g.entities.alive, g.entities.capacity);
 
         // Visión en su fase (SPEC-001 §8: t % 4 == 1). La actualización vive

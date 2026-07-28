@@ -89,7 +89,12 @@ namespace chunsa {
 // stock), que sigue siendo bit-idéntica — ver RESULT del sprint para el
 // dump pre/post. Se mantiene el símbolo `state_checksum_v1` por la misma
 // razón que en sprints anteriores (no tocar call sites).
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 7;
+//
+// Sprint 1.7 (SPEC-004 §22.5): bump a v8 — el stream gana citizen_task al
+// final para todos los slots y usa universalmente el dominio V8, sin depender
+// del contenido del estado. El bump V7→V8 invalida por diseño todos los
+// baselines previos, aunque la trayectoria funcional permanezca bit-idéntica.
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 8;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -116,12 +121,12 @@ struct Hasher {
 inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
-    h.bytes("CHUNSA_STATE_V7", 15);
+    const EntityTable& t = g.entities;
+    h.bytes("CHUNSA_STATE_V8", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
 
-    const EntityTable& t = g.entities;
     h.u32(t.capacity);
     h.u32(t.alive_count);
     h.u32(t.free_top);
@@ -252,6 +257,9 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     // tras todo lo v6. Escalar por jugador (no por-entidad), todos los
     // MAX_EMITTERS slots (misma convención que pop_used/player_epoch).
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u32(g.player_civ[e]);
+    // Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22.5): AL FINAL,
+    // todos los slots, sin condicionales por contenido.
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.citizen_task[i]);
     return h.digest();
 }
 

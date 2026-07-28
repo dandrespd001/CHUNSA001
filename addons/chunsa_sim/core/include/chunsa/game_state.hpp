@@ -24,6 +24,15 @@ namespace chunsa {
 // build_target, misma convención que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
 inline constexpr uint32_t BUILD_NO_TARGET = 0xFFFFFFFFu;
 
+// Control explícito del ciudadano (Sprint 1.7, SPEC-004 §22). El campo
+// GameState::citizen_task se mantiene como uint8_t plano para que el layout,
+// la serialización y el checksum sean inequívocos; estas constantes son sus
+// únicos valores válidos.
+inline constexpr uint8_t CITIZEN_TASK_IDLE = 0u;
+inline constexpr uint8_t CITIZEN_TASK_MOVE = 1u;
+inline constexpr uint8_t CITIZEN_TASK_GATHER = 2u;
+inline constexpr uint8_t CITIZEN_TASK_BUILD = 3u;
+
 // Sprint 1.2 (SPEC-004 §11.2/§12.2): producción, tecnología y épocas.
 inline constexpr uint32_t PROD_QUEUE_CAP = 5;
 inline constexpr uint32_t POP_CAP_V1 = 200;  // constante v1 (brief K2, no re-litigar)
@@ -187,6 +196,12 @@ struct GameState {
     int32_t    eco_carry[ENTITY_HARD_CAP];
     uint8_t    eco_carry_resource[ENTITY_HARD_CAP];
 
+    // Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22). ESTADO:
+    // serializado + checksummeado. Es la única autoridad que decide cuál de
+    // citizen_move_system/economy_system/construction_system puede escribir
+    // la posición de un ciudadano en el tick.
+    uint8_t citizen_task[ENTITY_HARD_CAP];
+
     // DestroyBatch del tick en curso (paso 6 de Step: se ordena ASC y se recicla).
     uint32_t destroy_batch[PENDING_CAP];
     uint32_t destroy_count;
@@ -230,6 +245,7 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     g.eco_assigned_deposit[i] = ECO_NO_DEPOSIT;
     g.eco_carry[i] = 0;
     g.eco_carry_resource[i] = 0;
+    g.citizen_task[i] = CITIZEN_TASK_IDLE;
     g.unit_id[i] = INVALID_UNIT_ID;
     // Sprint 1.1 (SPEC-004 §3): edificios, misma convención que unit_id.
     g.entity_kind[i] = 0;
@@ -317,6 +333,12 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     for (uint32_t i = 0; i < g.entities.capacity; ++i) {
         g.building_id[i] = INVALID_BUILDING_ID;
         g.build_target[i] = BUILD_NO_TARGET;
+        // §22.4: la inicialización canónica depende de la clase. En gs_init
+        // todos los slots parten como no-ciudadanos por el memset, pero se
+        // conserva la regla literal aquí para que no haya un segundo default
+        // implícito si cambia la preparación de componentes.
+        g.citizen_task[i] =
+            (g.unit_class[i] == 3u) ? CITIZEN_TASK_GATHER : CITIZEN_TASK_IDLE;
     }
     // Sprint 1.2 (SPEC-004 §11.2/§12.2): mismo motivo — memset ya dejó 0, que
     // bajo la semántica de UnitId/TechId significaría "unidad/tech 0", no

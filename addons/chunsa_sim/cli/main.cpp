@@ -40,6 +40,7 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 #include "chunsa/cli_run.hpp"
 #include "chunsa/driver.hpp"
 #include "chunsa/skirmish.hpp"
+#include "baselines.hpp"
 
 namespace {
 
@@ -117,9 +118,17 @@ int cmd_golden(const std::string& dir) {
     GoldenStats st;
     if (!run_fixed64_file(dir + "/fixed64_v1.csv", st)) return 2;
     if (!run_normalize_file(dir + "/normalize_v1.csv", st)) return 2;
+    const bool count_ok =
+        st.total == chunsa::determinism_baselines::GOLDEN_VECTOR_CASES;
     std::cout << "GOLDEN backend=" << CHUNSA_WIDE128_BACKEND_NAME << " casos=" << st.total
-              << " fallos=" << st.fails << (st.fails == 0 ? "  [OK]" : "  [FAIL]") << "\n";
-    return st.fails == 0 ? 0 : 1;
+              << " fallos=" << st.fails
+              << ((st.fails == 0 && count_ok) ? "  [OK]" : "  [FAIL]") << "\n";
+    if (!count_ok) {
+        std::cerr << "GOLDEN baseline mismatch: esperado casos="
+                  << chunsa::determinism_baselines::GOLDEN_VECTOR_CASES
+                  << " obtenido=" << st.total << "\n";
+    }
+    return (st.fails == 0 && count_ok) ? 0 : 1;
 }
 
 uint64_t opt_u64(const std::vector<std::string>& a, const std::string& k, uint64_t d) {
@@ -145,10 +154,22 @@ int cmd_run(const std::vector<std::string>& args, bool is_bench) {
         chunsa::RunReport r1{}, r2{};
         const int c1 = chunsa::run_synthetic(600, 2000, 1, 20260716ull, r1);
         const int c2 = chunsa::run_synthetic(600, 2000, 1, 20260716ull, r2);
+        const uint64_t expected =
+            chunsa::determinism_baselines::G1_SYNTHETIC_STATE;
         const bool ok = (c1 == 0 && c2 == 0 && r1.final_checksum == r2.final_checksum
+                         && r1.final_checksum == expected
                          && r1.alloc_delta == 0 && r2.alloc_delta == 0);
         std::cout << "G1 selftest: alloc_delta=" << r1.alloc_delta << " " << (ok ? "OK" : "FAIL")
                   << " checksum=" << std::hex << r1.final_checksum << std::dec << "\n";
+        if (r1.final_checksum != expected || r2.final_checksum != expected) {
+            std::cerr << "G1 baseline mismatch: esperado=" << std::hex << expected
+                      << " obtenido_1=" << r1.final_checksum
+                      << " obtenido_2=" << r2.final_checksum << std::dec << "\n";
+        }
+        if (r1.alloc_delta != 0 || r2.alloc_delta != 0) {
+            std::cerr << "G1 allocation mismatch: esperado=0 obtenido_1="
+                      << r1.alloc_delta << " obtenido_2=" << r2.alloc_delta << "\n";
+        }
         return ok ? 0 : 1;
     }
     const uint32_t units = static_cast<uint32_t>(opt_u64(args, "--units", 600));
@@ -211,13 +232,29 @@ int main(int argc, char** argv) {
         chunsa::DriveOut ob{};
         const int cb = chunsa::drive(b, *gs, box, rt, ob);
         delete gs;
+        const uint64_t expected_state = a.with_ai
+            ? chunsa::determinism_baselines::G4_SAVETEST_AI_STATE
+            : chunsa::determinism_baselines::G3_SAVETEST_STATE;
+        const uint64_t expected_cont = a.with_ai
+            ? chunsa::determinism_baselines::G4_SAVETEST_AI_CONTINUATION
+            : chunsa::determinism_baselines::G3_SAVETEST_CONTINUATION;
         const bool ok = (cb == 0 && oa.final_checksum == ob.final_checksum
-                         && oa.continuation_checksum == ob.continuation_checksum);
+                         && oa.continuation_checksum == ob.continuation_checksum
+                         && oa.final_checksum == expected_state
+                         && oa.continuation_checksum == expected_cont);
         std::cout << (a.with_ai ? "G4" : "G3") << " savetest(save@" << a.save_at
                   << (a.hold_dispatched_until_save ? ",hold" : "") << "): "
                   << (ok ? "OK" : "FAIL") << " state=" << std::hex << oa.final_checksum
                   << " cont=" << oa.continuation_checksum << std::dec
                   << " ai_executions=" << (oa.ai_executions + ob.ai_executions) << "\n";
+        if (oa.final_checksum != expected_state
+            || oa.continuation_checksum != expected_cont) {
+            std::cerr << (a.with_ai ? "G4" : "G3")
+                      << " baseline mismatch: esperado state=" << std::hex
+                      << expected_state << " cont=" << expected_cont
+                      << " obtenido state=" << oa.final_checksum
+                      << " cont=" << oa.continuation_checksum << std::dec << "\n";
+        }
         return ok ? 0 : 1;
     }
     if (cmd == "record") {

@@ -67,7 +67,11 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // checksum.hpp v7 — mismo motivo que en v11: ya se comprobaba antes de
 // este sprint, no es un cambio de layout del envelope/header en sí), solo
 // el payload crece. Sin migración v11→v12 (mismo precedente D7).
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 12;
+// v13 (Sprint 1.7, SPEC-004 §22.5): +citizen_task (autoridad explícita de
+// MOVE/GATHER/BUILD), añadido al final del stream STATE. Mismo patrón
+// append-only que v7..v12; envelope/header sin cambios y sin migración
+// v12→v13.
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 13;
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B
