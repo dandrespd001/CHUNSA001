@@ -1,6 +1,15 @@
 # SPEC-007 — Modelo de recursos y escalera de edades
 
-**Estado: PROPUESTA. Requiere aprobación del Director antes de implementar.**
+**Estado: APROBADA por el Director (2026-07-28). Lista para implementar.**
+
+Aprobada con la escalera de **15 edades**, `RESOURCE_COUNT = 32`, los recursos
+permaneciendo activos a lo largo de varias edades (§9), la energía como
+**streaming** y no como stock (§8.1), y el **upkeep por consumo continuo**
+(§10). Las cinco correcciones firmes de §8 forman parte de lo aprobado.
+
+Quedan como **calibración de playtest**, no como decisiones de diseño
+pendientes: el ratio del bronce (§3.2), las tasas de consumo del upkeep
+(§10.4) y los porcentajes de recuperación por tecnología (§4.2).
 
 Fecha: 2026-07-28
 Origen: directriz del Director (2026-07-28) — jugabilidad tipo AoE2, recursos
