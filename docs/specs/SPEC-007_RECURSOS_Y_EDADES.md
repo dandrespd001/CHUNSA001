@@ -472,3 +472,42 @@ edades. Eso justifica por sí solo las granjas de §5 y su regeneración.
 
 **Pendiente de especificar**: tasas concretas de consumo por clase de unidad y
 por edificio. Requieren playtest, no se pueden fijar desde el escritorio.
+
+---
+
+# §11 Secuenciación revisada (sustituye a §6)
+
+§6 planteaba el 1.8 como un solo sprint. El panel lo señaló como la
+subestimación más grave del documento:
+
+> `[I] [DeepSeek]` La migración de 3 a 24 recursos + renombrado + costes nuevos
+> no es solo un cambio técnico; requiere **diseñar y balancear los costes de
+> todas las unidades, edificios y tecnologías existentes** → el diseño de
+> contenido absorberá meses, no un sprint, y el juego será injugable hasta
+> completarlo.
+>
+> `[I] [Qwen]` Sprint 1.8 toca save, checksum, catálogo, costes y HUD
+> simultáneamente → riesgo de regresión catastrófica; debería dividirse en
+> migración de datos y actualización de UI.
+
+Ambos tienen razón, y el riesgo real no es el esfuerzo: es que **el juego quede
+injugable a mitad de migración**. Se divide así:
+
+| Sprint | Contenido | Criterio de "hecho" |
+|---|---|---|
+| **1.7** *(en curso)* | Zona aliada §23 + HUD codificación | El Director juega y recolecta |
+| **1.8A** | `RESOURCE_COUNT = 32`, `dropoff_mask` a `uint32_t`, save/checksum. **Sin tocar datos**: los índices 0/1/2 siguen siendo A/B/Me y 3..31 quedan a cero | Suite verde, baselines re-registrados, **el juego sigue jugable exactamente igual** |
+| **1.8B** | `data/resources/` authored: los 25 recursos con nombre, familia y edad. Renombrar A/B/Me → comida/madera/piedra. Sin recursos nuevos en el mapa | El juego sigue jugable; el HUD muestra nombres reales |
+| **1.8C** | Depósitos grandes + el resto de recolectados en el mapa por edad | Partida larga sin peregrinaciones |
+| **1.9** | Recetas y edificio de conversión (bronce, hierro forjado) | Se puede fabricar bronce |
+| **1.10** | Energía streaming §8.1 + upkeep §10 | El late game tiene freno |
+| **1.11** | Reserva/recuperación §4 + techs de extracción | Reabrir una mina agotada |
+| **1.12** | Granjas §5 | Comida sostenible |
+
+**La regla que gobierna el troceo**: al final de cada sprint el juego debe
+quedar **jugable**. 1.8A es puramente estructural y no debe cambiar ni una
+trayectoria observable salvo los checksums; si cambia algo más, es un error.
+
+**Orden deliberado**: la energía (1.10) va **antes** que la recuperación (1.11)
+porque el upkeep es lo que frena el late game, y sin freno no se puede calibrar
+nada de lo que venga después.
