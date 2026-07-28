@@ -1,0 +1,4 @@
+[?] 0 A.D. separa la simulación escrita en JavaScript de la presentación gráfica en C++ mediante una interfaz de componentes -> [CHUNSA] permite aislar el estado determinista de la lógica de renderizado visual.
+[?] 0 A.D. utiliza un modelo de sincronización lockstep determinista para el multijugador en red sobre su motor Phoenix -> [CHUNSA] minimiza el ancho de banda requerido al transmitir únicamente comandos de entrada de usuario.
+[?] Las plantillas de entidades de 0 A.D. se definen en archivos estructurados XML ubicados en la ruta simulation/templates/ -> [CHUNSA] facilita la modificación de atributos de unidades y edificios sin recompilar código fuente.
+[?] Las fases equivalentes a edades en 0 A.D. se modelan a través de tecnologías de progresión que desbloquean plantillas y componentes en la simulação -> [CHUNSA] simula la evolución tecnológica de las civilizaciones de forma modular.
