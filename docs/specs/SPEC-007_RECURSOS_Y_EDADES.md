@@ -511,3 +511,312 @@ trayectoria observable salvo los checksums; si cambia algo más, es un error.
 **Orden deliberado**: la energía (1.10) va **antes** que la recuperación (1.11)
 porque el upkeep es lo que frena el late game, y sin freno no se puede calibrar
 nada de lo que venga después.
+
+---
+
+# §12 Recetas y producción de recursos (Sprint 1.9)
+
+## §12.1 Concepto
+
+Un **recurso producido** no existe en el mapa: sale de un edificio que consume
+otros recursos según una **receta**. Es la mecánica que hace que cobre y estaño
+importen más allá de la edad 4.
+
+**Restricción de diseño, deliberada y no negociable:** las cadenas son de **un
+solo paso**. `cobre + estaño → bronce`, nunca `A → B → C → D`.
+
+`[V] [Widelands]` demuestra que las cadenas profundas funcionan, pero convierten
+el juego en gestión logística. `[I] [DeepSeek]` lo señaló como riesgo:
+«se añade una capa de gestión de fábricas típica de Factorio, ajena al ritmo de
+un RTS». Se acepta la crítica: profundidad 1, y quien quiera más, que juegue a
+otra cosa.
+
+## §12.2 Datos
+
+`RecipeDefinitionV1`, tabla tipada nueva en el catálogo:
+
+```
+id                  RecipeId
+output_resource     índice de recurso (0..RESOURCE_COUNT)
+output_amount       >= 1
+inputs[4]           pares (índice de recurso, cantidad), hasta 4
+input_count         1..4
+craft_time_ticks    >= 1
+epoch               1..15
+building_id         edificio que la ejecuta
+```
+
+Referencias no resolubles ⇒ **error de carga**, mismo criterio que el resto del
+catálogo.
+
+`BuildingDefinitionV1` gana `recipes[8]` / `recipe_count`, análogo al
+`researches` que ya existe.
+
+## §12.3 Estado
+
+```cpp
+uint32_t craft_recipe[ENTITY_HARD_CAP];    // INVALID_RECIPE_ID = ocioso
+uint32_t craft_progress[ENTITY_HARD_CAP];
+```
+
+Mismo patrón que `research_tech`/`research_progress` (§12.2 de SPEC-004). No se
+inventa una estructura nueva donde ya hay una que funciona.
+
+## §12.4 Comando `CRAFT = 14`
+
+`CommandType` es append-only: **14**, a continuación de `GATHER = 13`.
+
+- `p.handle` = edificio propio **completo** cuya lista `recipes` contiene la
+  receta.
+- `p.unit_id` = `RecipeId`.
+
+**Orden de validación** — idéntico en forma al de `RESEARCH_TECH`, y ese orden
+es contractual:
+
+1. handle vivo · 2. propio · 3. es edificio · 4. completo ·
+5. receta en la lista del edificio · 6. `recipe.epoch <= player_epoch` ·
+7. edificio ocioso de producción · 8. stock cubre **todos** los inputs.
+
+Cualquier fallo ⇒ `ILLEGAL_STATE`, salvo los de handle que ya tienen su código.
+
+**Efecto al aceptar**: deducir **todos** los inputs de golpe, fijar
+`craft_recipe`/`craft_progress`.
+
+**Al completar** (`craft_system`, misma fase que `production_system`):
+`player_stock[owner][output_resource] += output_amount`, y el edificio queda
+ocioso.
+
+**Deducción por adelantado, deliberado**: si los inputs se dedujeran al
+terminar, un jugador podría encolar producción que no puede pagar y el sistema
+tendría que decidir qué hacer al final. Deducir al aceptar elimina esa clase
+entera de casos.
+
+## §12.5 Versionado
+
+`SAVE_FORMAT_VERSION` +1 · `CHECKSUM_ALGO_VERSION` +1. `craft_recipe` y
+`craft_progress` entran en serialización y checksum.
+
+## §12.6 Criterios de aceptación (= lista de pruebas del sprint)
+
+1. `CRAFT` con inputs suficientes es **aceptado** y deduce **todos** los inputs
+   en el tick de aceptación.
+2. `CRAFT` con **un** input insuficiente es rechazado con `ILLEGAL_STATE` y
+   **no deduce nada**.
+3. Al completarse, el stock del recurso de salida sube exactamente
+   `output_amount`.
+4. `CRAFT` sobre edificio **no completo** ⇒ `ILLEGAL_STATE`.
+5. `CRAFT` de receta **no listada** en ese edificio ⇒ `ILLEGAL_STATE`.
+6. `CRAFT` de receta de **época superior** ⇒ `ILLEGAL_STATE`.
+7. `CRAFT` sobre edificio ya ocupado produciendo ⇒ `ILLEGAL_STATE`.
+8. El **orden de rechazos** se conserva: un comando que viola varias reglas
+   devuelve el código de la **primera** en el orden de §12.4.
+9. Save/load y replay conservan `craft_recipe` y `craft_progress` a mitad de
+   producción.
+10. Mutar `craft_recipe` **cambia el checksum** (prueba de pertenencia al
+    dominio).
+11. Destruir el edificio a mitad de producción **no** acredita la salida y
+    **no** devuelve los inputs.
+
+---
+
+# §13 Energía y upkeep (Sprint 1.10)
+
+## §13.1 La energía no es stock — recordatorio
+
+Establecido en §8.1 y confirmado por los tres críticos del panel de forma
+independiente. **No ocupa índice en `player_stock`.** Se deriva cada tick.
+
+## §13.2 Estado derivado
+
+```cpp
+int64_t energy_production[MAX_EMITTERS];   // recalculado cada tick
+int64_t energy_consumption[MAX_EMITTERS];  // recalculado cada tick
+```
+
+**No se persisten**: se recalculan al inicio de la fase económica desde los
+edificios vivos. Persistirlos sería duplicar la fuente de verdad y abrir la
+puerta a que save y simulación discrepen.
+
+Sí entran en el **checksum**, como comprobación de que la derivación es
+determinista.
+
+## §13.3 Regla de parada en seco
+
+```
+disponible = energy_production[p] - energy_consumption[p]
+```
+
+Si `disponible < 0`, **todos** los edificios de ese jugador que requieren
+energía **se paran**: `craft_progress` no avanza. No se ralentizan, no encolan.
+
+`[V] [Total Annihilation]` «Out of energy? power-dependent structures such as
+radar towers, metal extractors and laser towers will cease to function».
+
+**Por qué parada y no ralentización**: la ralentización proporcional exige una
+división por tick sobre un valor que cambia, y eso es superficie de error de
+determinismo a cambio de un matiz que el jugador no percibe. Parar es binario,
+barato y legible.
+
+**Determinismo del reparto**: cuando la energía no alcanza, se paran **todos**
+los edificios dependientes, no un subconjunto. Así no hay que elegir cuáles, y
+no hay reparto que pueda depender del orden.
+
+## §13.4 Upkeep
+
+Cierra §10.
+
+```cpp
+// Derivados, no persistidos, mismo criterio que la energía:
+int64_t food_upkeep[MAX_EMITTERS];   // suma de unidades militares vivas
+```
+
+- Cada unidad de `unit_class <= 2` consume `upkeep_food` por tick (campo nuevo
+  de `UnitDefinitionV1`, por defecto 0 para compatibilidad).
+- El consumo se descuenta de `player_stock[p][ÍNDICE_COMIDA]`.
+
+**Si la comida llega a 0 y el upkeep la excede** (§10.3, decisión ya tomada):
+
+- Las unidades **no mueren**.
+- `TRAIN_UNIT` se rechaza con `ILLEGAL_STATE` mientras dure el déficit.
+- Las unidades militares pierden eficacia: se aplica un **penalizador de moral**
+  determinista y acotado.
+
+**El penalizador es de moral, no de daño**: la moral ya existe en el kernel
+(Sprint 0.3), ya está en el checksum y ya tiene efectos de combate. Reutilizarla
+evita inventar un canal nuevo.
+
+## §13.5 Versionado
+
+`SAVE_FORMAT_VERSION` +1 (por `upkeep_food` en el catálogo y la penalización
+activa) · `CHECKSUM_ALGO_VERSION` +1.
+
+## §13.6 Criterios de aceptación
+
+1. Con producción ≥ consumo, un edificio con receta avanza normalmente.
+2. Con producción < consumo, `craft_progress` **no avanza** en ese tick.
+3. Al restaurar el superávit, la producción **continúa desde donde estaba**, no
+   se reinicia.
+4. La parada afecta a **todos** los edificios dependientes del jugador, nunca a
+   un subconjunto.
+5. La energía de un jugador **no afecta** a los edificios de otro.
+6. El upkeep descuenta comida cada tick en proporción a las unidades vivas.
+7. Al morir una unidad, el upkeep baja en el tick siguiente.
+8. Con déficit de comida, `TRAIN_UNIT` ⇒ `ILLEGAL_STATE`.
+9. Con déficit de comida, ninguna unidad muere.
+10. El penalizador de moral por hambre es determinista: dos corridas idénticas
+    dan el mismo checksum.
+11. Un escenario **sin** unidades militares tiene upkeep 0 y **checksum
+    bit-idéntico** al de antes de este sprint, salvo el bump.
+
+---
+
+# §14 Reserva y recuperación (Sprint 1.11)
+
+## §14.1 Modelo
+
+Sustituye `remaining` (§4.2 ya lo estableció; aquí se detalla).
+
+```cpp
+struct EcoDeposit {
+    int64_t x_raw, y_raw;
+    uint8_t resource_idx;
+    int64_t reserve_total;   // geología, del mapa, FIJA
+    int64_t extracted;       // crece, nunca decrece
+};
+```
+
+`extracted` es **del depósito**, compartido entre jugadores (§8.4).
+`recovery_pct` es **del jugador**, derivado de `player_caps`.
+
+```
+extraible(p, d) = (reserve_total[d] * recovery_pct[p][resource]) / 100 - extracted[d]
+```
+
+Agotado **para ese jugador** cuando `extraible <= 0`.
+
+## §14.2 Aritmética determinista
+
+Multiplicación y división **enteras**, en ese orden: primero multiplicar por el
+porcentaje, después dividir por 100. Invertirlo perdería precisión de forma
+distinta según los valores.
+
+`reserve_total` acotado para que `reserve_total * 100` no desborde `int64_t`.
+Es holgadísimo, pero se comprueba en el loader: es exactamente la clase de cota
+que el desbordamiento del 1.6B enseñó a no dar por supuesta.
+
+## §14.3 Techos de recuperación
+
+Tecnologías de extracción, como capacidades (`player_caps`), acumulativas:
+
+| Tecnología | Época | `recovery_pct` |
+|---|---:|---:|
+| (base, sin tecnología) | 1 | 40 |
+| Galería | 5 | 60 |
+| Voladura | 11 | 75 |
+| Flotación | 14 | **90** |
+
+**Tope 90, nunca 100** (§8.5). Siempre queda reserva inaccesible, así que
+expandirse sigue siendo necesario.
+
+## §14.4 Criterios de aceptación
+
+1. Con `recovery_pct = 40` y `reserve_total = 1000`, se extraen exactamente 400
+   y el depósito queda agotado para ese jugador.
+2. Investigar Galería sobre ese depósito agotado lo **reabre** con 200 más.
+3. `extracted` **no** se resetea al cambiar el dueño del depósito ni al
+   conquistar la zona.
+4. Dos jugadores con `recovery_pct` distinto ven **distinta** disponibilidad del
+   **mismo** depósito.
+5. La extracción de un jugador **reduce** lo disponible para el otro
+   (`extracted` es compartido).
+6. Con todas las tecnologías, `recovery_pct` es 90 y **queda reserva
+   inaccesible**.
+7. La aritmética no desborda con `reserve_total` en su cota máxima.
+8. Mutar `extracted` cambia el checksum.
+9. Un escenario sin tecnologías de extracción reproduce **exactamente** la
+   trayectoria de antes del sprint, salvo el bump.
+
+---
+
+# §15 Granjas (Sprint 1.12)
+
+## §15.1 Modelo
+
+Una granja es un **edificio** que, al completarse, **crea un depósito de comida**
+asociado a su posición.
+
+```cpp
+uint32_t deposit_of_building[ENTITY_HARD_CAP];  // ECO_NO_DEPOSIT si no aplica
+```
+
+- `BuildingDefinitionV1` gana `farm_regen_per_tick` (0 = no es granja).
+- Al completarse la construcción: se crea el depósito con `reserve_total` alto
+  y `extracted = 0`.
+- Cada tick, `extracted` **decrece** en `farm_regen_per_tick`, con suelo en 0.
+- Al destruirse la granja, su depósito **desaparece** y los ciudadanos asignados
+  pasan a `IDLE` (§22.2), no a `SEEK` perpetuo.
+
+## §15.2 Capacidad
+
+`ECO_MAX_DEPOSITS` de 32 a **128** (SPEC-008 §4.1). El coste es
+`O(ciudadanos × depósitos)` en la búsqueda: 200 × 128 = 25 600 por tick, dentro
+del presupuesto de SPEC-008 §2.1, pero **hay que medirlo** en este sprint.
+
+`[I] [DeepSeek]` advirtió que 128 puede quedarse corto con muchas granjas. Si el
+escenario de 8 jugadores lo agota, se sube **con medición**, no por si acaso.
+
+## §15.3 Criterios de aceptación
+
+1. Al completarse una granja aparece un depósito de comida en su posición.
+2. Un ciudadano recolecta de la granja igual que de un depósito del mapa.
+3. `extracted` decrece cada tick y **nunca baja de 0**.
+4. Al destruir la granja, su depósito desaparece.
+5. Al destruir la granja, los ciudadanos asignados pasan a `IDLE`, **no** quedan
+   girando en `SEEK`.
+6. Construir 128 granjas y una más: la **129 se rechaza limpio** (SPEC-008
+   §3.3), no desborda ni se ignora en silencio.
+7. Un ciudadano que transporta comida de una granja destruida **conserva la
+   carga** y la entrega.
+8. Save/load y replay conservan `deposit_of_building` y el `extracted` de las
+   granjas.
+9. Un escenario sin granjas es **bit-idéntico** al anterior, salvo el bump.

@@ -103,7 +103,7 @@ Consecuencias, para que nadie las descubra por sorpresa:
 | **SPEC-003** | Pipeline de assets/render/audio: formatos, presupuesto, atlas/batching sobre ADR-009 y QA | DIFERIDA hasta cierre mecánico + presupuesto | Post-1.7 | Arquitecto |
 | **SPEC-TRAYECTORIA** | Contrato final de ADR-016: sucesión/legado de módulos históricos, IDs namespaced, reglas de era | POR ESCRIBIR | Fase 2 (antes de integrar la 3ª civ) | Arquitecto |
 | **SPEC-007** | **Recursos y edades**: 15 edades, 17 recolectados + 8 producidos + energía streaming, upkeep, reserva/recuperación, granjas | **APROBADA** (2026-07-28) | 1.8A–1.12 | Arquitecto |
-| **SPEC-008** | **Rendimiento, fiabilidad y escalabilidad**: presupuestos medibles, degradación, límites de escala | POR ESCRIBIR | 1.8A (esqueleto) | Arquitecto |
+| **SPEC-008** | **Rendimiento, fiabilidad y escalabilidad**: presupuestos medibles, degradación, límites de escala | PROPUESTA (2026-07-28) | 1.8A (aplicación §6) | Arquitecto |
 | **SPEC-009** | Campaña y escenarios: YAML de misión (doc 08), triggers deterministas como Commands, árbol de decisiones, saves de campaña | POR ESCRIBIR | Fase 3 | Arquitecto |
 
 Documentos de diseño canónicos que alimentan cada SPEC (rutas en `/home/adquiod/Imágenes/Project/Investigación/`): `03_EPOCAS` · `13_PIPELINE_ASSETS` · `24_RECURSOS_Y_CADENAS_PRODUCTIVAS` · `27_CIVILIZACIONES_INSTITUCIONES_Y_TECNOLOGIAS` · `23_ARBOL_TECNOLOGICO_FUNDAMENTADO` · `07_COMBATE` · `30_DISENO_IA_OPONENTE` · `33_METODOLOGIA_BALANCE_Y_ECONOMIA` · `34_GAME_FEEL_UX_Y_DISENO_DE_JUGABILIDAD` · `35_OPTIMIZACION_DEFINITIVA_Y_PRESUPUESTO_UNICO` · `08_CAMPAÑAS` · `09_MODOS_DE_JUEGO`. Consultar SIEMPRE la tabla de canonicidad de `INDICE_MAESTRO.md` §0 antes de citar (04/05/06/11 están supersedidos).
@@ -333,8 +333,40 @@ Ver `docs/REPORTE_SPRINT_1.5.md`.
   órdenes · partida desde aldeanos hasta victoria sin comandos de debug · gates
   verdes. Este DoD constituye el **cierre mecánico de Fase 1**.
 
-#### Post-1.7 — arte, audio y feel (diferido por decisión del Director)
-- **Condición de entrada**: cierre mecánico 1.7 aceptado; no comienza antes.
+#### Sprints 1.8A–1.13 — profundidad económica y cierre mecánico (replan 2026-07-28)
+
+Adelantados desde Fase 2 §2.2 por directriz del Director. Contratos completos
+en **SPEC-007** §12–§15 y **SPEC-004** §24. Todos bajo **TDD**
+(`METODOLOGIA_TDD.md`): fase roja pegada en el informe o el entregable se
+rechaza sin revisar el código.
+
+**Regla que gobierna el troceo**: al final de cada sprint el juego queda
+**jugable**. Un sprint que deja la partida rota está mal cortado.
+
+| Sprint | Contrato | Entrega | DoD |
+|---|---|---|---|
+| **1.8A** ⏳ | SPEC-007 §9.3 · SPEC-008 §6 | `RESOURCE_COUNT=32`, `dropoff_mask` a 32 bits, save v14/checksum v9. **Sin tocar `data/`** | Suite verde · **`end_tick` idénticos** (apertura 9317, eco 1107) · etiquetas `fast`/`slow` en ctest · coste del checksum medido antes y después |
+| **1.8B** | SPEC-007 §9.2 · concordancia C5–C7 | `data/resources/` con los 25 recursos (nombre, familia, edad). Renombrar A/B/Me → comida/madera/piedra. HUD por familias | El HUD muestra nombres reales · el juego sigue jugable · sin recursos nuevos en el mapa |
+| **1.8C** | SPEC-007 §9.4 | Depósitos grandes y resto de recolectados en el mapa, escalonados por edad | Partida larga sin peregrinaciones ni agotamiento prematuro |
+| **1.9** | **SPEC-007 §12** | Recetas, `CRAFT=15`, edificio de conversión. Bronce y hierro forjado | Se fabrica bronce · las 11 pruebas de §12.6 · cadenas de profundidad **1** |
+| **1.10** | **SPEC-007 §13** | Energía streaming con parada en seco + upkeep de comida | El late game tiene freno · las 11 pruebas de §13.6 · escenario sin militares bit-idéntico |
+| **1.11** | **SPEC-007 §14** | `reserve_total`/`extracted` + techs de extracción (40→60→75→90) | Se reabre una mina agotada investigando · las 9 pruebas de §14.4 · tope 90 verificado |
+| **1.12** | **SPEC-007 §15** | Granjas como depósito regenerativo · `ECO_MAX_DEPOSITS` a 128 | Comida sostenible · las 9 pruebas de §15.3 · **coste medido** de la búsqueda con 128 |
+| **1.13** | **SPEC-004 §24** | `ATTACK`, `ATTACK_MOVE`, proyectiles con viaje | **CIERRE MECÁNICO DE FASE 1** · las 14 pruebas de §24.7 · partida completa desde aldeanos hasta victoria sin comandos de debug |
+
+**Delegación** (`DELEGACION_MODELOS.md`, actualizada 2026-07-28): contratos,
+revisión e integración = **Arquitecto**; kernel y sanitizers = **GPT-5.6 SOL**;
+adaptador Godot = **GPT-5.6 Luna**; datos y catálogo = **MiniMax M3**;
+investigación = **MiniMax + rutas Gemini**; revisión adversarial previa a cada
+merge de kernel = **panel multimodelo** (`PROTOCOLO_PANEL.md`).
+
+**Riesgo principal del bloque**: 1.8B es migración de contenido, no de código.
+`[I]` El panel advirtió que rebalancear todos los costes «absorberá meses, no un
+sprint». Si se confirma, se trocea otra vez antes que entregar una partida
+injugable.
+
+#### Post-1.13 — arte, audio y feel (diferido por decisión del Director)
+- **Condición de entrada**: cierre mecánico **1.13** aceptado; no comienza antes.
 - **Alcance posterior**: SPEC-003 final, presupuesto, assets reales M1, audio,
   animación/partículas y PERF-1 sobre hardware mínimo. No se declara
   implementado ni financiado en este plan.

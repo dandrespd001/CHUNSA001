@@ -693,3 +693,118 @@ No introduce estado persistente nuevo: **`SAVE_FORMAT_VERSION` no cambia**. Sí
 cambia la trayectoria de todo escenario con ciudadanos y depósitos, luego los
 baselines de `ai_skirmish_eco` y `ai_skirmish_apertura` **se re-registran**; los
 escenarios sin ciudadanos deben quedar **bit-idénticos**.
+
+---
+
+# PARTE V — Órdenes de combate (Sprint 1.13, cierre mecánico de Fase 1)
+
+## §24 ATTACK, ATTACK_MOVE y proyectiles
+
+**Origen**: este contenido estaba planificado como «Sprint 1.7» en
+`PLAN_MAESTRO` §4 y **no se ejecutó**; el número se consumió con §22–§23. Su
+DoD **es** el cierre mecánico de la Fase 1, y de él dependen arte y audio.
+
+### §24.1 El problema que resuelve
+
+Hoy el jugador solo puede dar `MOVE_TO`. El combate ocurre porque el sistema de
+aggro (Sprint 0.3) engancha lo que tiene cerca. **El jugador no puede decidir a
+quién ataca**, que es la carencia más visible que le queda a la partida.
+
+### §24.2 Comandos
+
+`CommandType` append-only. Tras `CRAFT = 14`:
+
+- **`ATTACK = 15`** — `p.handle` = unidad propia viva; `p.target_handle` =
+  entidad enemiga viva. La unidad persigue y ataca a **ese** objetivo hasta que
+  muere, sale de alcance permanentemente, o llega otra orden.
+- **`ATTACK_MOVE = 16`** — `p.handle` = unidad propia viva; `p.x_raw/y_raw` =
+  destino en cota. La unidad avanza hacia el destino y **ataca lo que encuentre
+  por el camino**, reanudando el avance al terminar.
+
+**Orden de validación**, sin alterar el existente:
+
+`ATTACK`: handle vivo · propio · es unidad (no edificio) · objetivo vivo ·
+objetivo **no propio** (`NOT_OWNER` si lo es) ⇒ si no, el código
+correspondiente.
+
+`ATTACK_MOVE`: handle vivo · propio · es unidad · destino en cota
+(`MALFORMED` si no).
+
+### §24.3 Estado
+
+```cpp
+EntityHandle attack_target[ENTITY_HARD_CAP];  // INVALID si ninguno
+uint8_t      order_mode[ENTITY_HARD_CAP];     // 0=NINGUNA 1=MOVE 2=ATTACK 3=ATTACK_MOVE
+```
+
+`order_mode` es a las unidades militares lo que `citizen_task` (§22) es a los
+ciudadanos: **la autoridad única** sobre qué sistema decide su movimiento. El
+patrón ya está probado y no se reinventa.
+
+### §24.4 Interacción con aggro
+
+`order_mode` **manda sobre el aggro automático**:
+
+- `ATTACK`: el aggro **no** puede cambiar el objetivo. El jugador mandó.
+- `ATTACK_MOVE`: el aggro elige objetivo, pero solo dentro del radio; al no
+  haber nada, se reanuda el avance.
+- `NINGUNA`: comportamiento actual, sin cambios.
+
+**Esto es lo que hace la orden útil**: sin esta precedencia, `ATTACK` sería una
+sugerencia que el aggro pisa, y el jugador lo notaría como que el juego no le
+obedece.
+
+### §24.5 Proyectiles
+
+Unidades con `range_millitiles > 0` disparan proyectiles con **viaje**, no
+daño instantáneo.
+
+```cpp
+struct Projectile {
+    int64_t x_raw, y_raw;
+    int64_t vel_x, vel_y;
+    EntityHandle target;
+    int32_t damage;
+    uint8_t owner;
+};
+Projectile projectiles[PROJECTILE_HARD_CAP];  // 256
+uint32_t n_projectiles;
+```
+
+- Movimiento entero por tick, misma aritmética que `movement_v1`. **Sin
+  balística, sin gravedad, sin float.**
+- Impacto cuando la distancia al objetivo `<= PROJECTILE_HIT_RADIUS_RAW`.
+- Si el objetivo muere antes del impacto, el proyectil **se descarta**; no
+  redirige ni cae al suelo.
+- Cota dura: al llegar a `PROJECTILE_HARD_CAP`, los disparos nuevos **no se
+  crean**. Determinista y documentado, nunca desbordamiento (SPEC-008 §3.3).
+
+### §24.6 Versionado
+
+`SAVE_FORMAT_VERSION` +1 · `CHECKSUM_ALGO_VERSION` +1. `attack_target`,
+`order_mode`, el array de proyectiles y `n_projectiles` entran en serialización
+y checksum.
+
+### §24.7 Criterios de aceptación (= pruebas del sprint)
+
+1. `ATTACK` sobre enemigo vivo es aceptado y la unidad se acerca hasta alcance.
+2. `ATTACK` sobre **unidad propia** ⇒ `NOT_OWNER`.
+3. `ATTACK` sobre entidad muerta ⇒ `INVALID_ENTITY`.
+4. Con `ATTACK` activo, el aggro **no** cambia el objetivo aunque pase otro
+   enemigo más cerca.
+5. Al morir el objetivo, la unidad pasa a `NINGUNA` y el aggro vuelve a mandar.
+6. `ATTACK_MOVE` avanza, se detiene a atacar lo que encuentra, y **reanuda** al
+   despejar.
+7. `ATTACK_MOVE` con destino fuera de cota ⇒ `MALFORMED`.
+8. Un proyectil recorre la distancia en el número de ticks esperado y aplica el
+   daño **en el tick del impacto**, no antes.
+9. Si el objetivo muere en vuelo, el proyectil se descarta sin aplicar daño.
+10. Con `PROJECTILE_HARD_CAP` proyectiles vivos, un disparo más **no se crea** y
+    no hay desbordamiento.
+11. `ATTACK`, `ATTACK_MOVE` y los proyectiles sobreviven save/load y replay
+    con checksum idéntico.
+12. Dos corridas del mismo escenario de combate producen impactos en los
+    **mismos ticks** y el mismo checksum.
+13. Mutar `order_mode` o `n_projectiles` cambia el checksum.
+14. Un escenario **sin** órdenes de combate es **bit-idéntico** al anterior,
+    salvo el bump.
