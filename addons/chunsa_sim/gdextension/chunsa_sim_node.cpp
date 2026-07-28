@@ -64,6 +64,69 @@ constexpr int64_t SKIRMISH_BASE_TY = 128;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 
+// Godot interpreta const char* como Latin-1. Todo literal con caracteres no
+// ASCII DEBE pasar por aquí o sale mojibake en pantalla y en la terminal.
+static inline godot::String U(const char* s) { return godot::String::utf8(s); }
+
+struct PresentationNameEntry {
+    const char* record_id;
+    const char* display_name;
+};
+
+// Tabla provisional de presentación. Desaparece cuando exista localización
+// real porque entonces display_name_key llegará al blob y el adaptador no debe
+// mantener una segunda fuente de nombres.
+static constexpr PresentationNameEntry PRESENTATION_NAMES[] = {
+    // Unidades (5)
+    {"egipto:chariot_warrior", "Guerrero de carros"},
+    {"egipto:work_crew", "Cuadrilla de trabajo"},
+    {"rome:ballista_crew", "Equipo de balista"},
+    {"rome:camp_work_crew", "Cuadrilla de campamento"},
+    {"rome:legionary", "Legionario"},
+    // Edificios (6)
+    {"egipto:chariotry_stable", "Establo de carros"},
+    {"egipto:settlement_center", "Centro de asentamiento"},
+    {"egipto:shena_granary", "Granero Shena"},
+    {"rome:castra_barracks", "Cuartel Castra"},
+    {"rome:forum_center", "Foro romano"},
+    {"rome:horreum", "Horreum"},
+    // Tecnologias (4)
+    {"egipto:composite_bow_program", "Programa de arco compuesto"},
+    {"egipto:corvee_logistics", "Logistica de corvea"},
+    {"rome:marching_drill", "Instruccion de marcha"},
+    {"rome:road_engineering", "Ingenieria de caminos"},
+    // Civilizaciones (2)
+    {"egipto:dynastic_nile", "Egipto dinastico"},
+    {"rome:republic_imperial", "Roma republicana e imperial"},
+};
+
+godot::String presentation_name_from_record(const char* record_id,
+                                             uint16_t record_id_bytes) {
+    if (record_id == nullptr || record_id_bytes == 0u) return U("Desconocido");
+    for (const PresentationNameEntry& entry : PRESENTATION_NAMES) {
+        const size_t entry_bytes = std::strlen(entry.record_id);
+        if (entry_bytes == record_id_bytes &&
+            std::memcmp(entry.record_id, record_id, record_id_bytes) == 0) {
+            return U(entry.display_name);
+        }
+    }
+
+    // Respaldo obligatorio: deriva un nombre legible del record_id y nunca
+    // devuelve el identificador tecnico ni una cadena vacia.
+    std::string readable(record_id, record_id_bytes);
+    const size_t separator = readable.find(':');
+    if (separator != std::string::npos) readable.erase(0, separator + 1);
+    for (char& character : readable) {
+        if (character == '_') character = ' ';
+    }
+    if (readable.empty()) return U("Desconocido");
+    if (readable[0] >= 'a' && readable[0] <= 'z') {
+        readable[0] = static_cast<char>(readable[0] - 'a' + 'A');
+    }
+    return godot::String::utf8(readable.c_str(),
+                               static_cast<int>(readable.size()));
+}
+
 const char* resource_label(uint8_t resource_idx) {
     switch (resource_idx) {
         case 0u: return "A";
@@ -95,19 +158,54 @@ godot::Color fog_overlay_color(chunsa::presentation::FogLevel level) {
     }
 }
 
-const char* receipt_result_text(uint16_t result) {
+godot::String receipt_result_text(uint16_t result) {
     using chunsa::RejectReason;
     switch (static_cast<RejectReason>(result)) {
-        case RejectReason::ACCEPTED: return "aceptado";
-        case RejectReason::MALFORMED: return "payload malformado";
-        case RejectReason::INVALID_ENTITY: return "entidad inválida";
-        case RejectReason::NOT_OWNER: return "no es propio";
-        case RejectReason::ILLEGAL_STATE: return "estado ilegal (época/stock/cola)";
-        case RejectReason::OUT_OF_WINDOW: return "fuera de ventana";
-        case RejectReason::POOL_EXHAUSTED: return "pool agotado";
-        case RejectReason::RATE_LIMITED: return "rate limited";
-        case RejectReason::SEQUENCE_REJECTED: return "secuencia rechazada";
-        default: return "resultado desconocido";
+        case RejectReason::ACCEPTED: return U("aceptado");
+        case RejectReason::MALFORMED: return U("payload malformado");
+        case RejectReason::INVALID_ENTITY: return U("entidad inválida");
+        case RejectReason::NOT_OWNER: return U("no es propio");
+        case RejectReason::ILLEGAL_STATE: return U("estado ilegal");
+        case RejectReason::OUT_OF_WINDOW: return U("fuera de ventana");
+        case RejectReason::POOL_EXHAUSTED: return U("pool agotado");
+        case RejectReason::RATE_LIMITED: return U("rate limited");
+        case RejectReason::SEQUENCE_REJECTED: return U("secuencia rechazada");
+        default: return U("resultado desconocido");
+    }
+}
+
+void append_rejection_detail(godot::String& details,
+                             const godot::String& detail) {
+    if (detail.is_empty()) return;
+    if (!details.is_empty()) details += "; ";
+    details += detail;
+}
+
+void append_epoch_detail(godot::String& details, uint8_t epoch_min,
+                         uint8_t epoch_max, uint8_t player_epoch) {
+    if (player_epoch >= epoch_min && player_epoch <= epoch_max) return;
+    godot::String detail = U("Requiere época ") +
+            godot::String::num_int64(static_cast<int64_t>(epoch_min));
+    if (epoch_min != epoch_max) {
+        detail += "-" + godot::String::num_int64(static_cast<int64_t>(epoch_max));
+    }
+    detail += U(" (estás en ") +
+            godot::String::num_int64(static_cast<int64_t>(player_epoch)) + ")";
+    append_rejection_detail(details, detail);
+}
+
+void append_stock_details(godot::String& details, int32_t cost_a,
+                          int32_t cost_b, int32_t cost_me, int64_t stock_a,
+                          int64_t stock_b, int64_t stock_me) {
+    const int64_t costs[] = {cost_a, cost_b, cost_me};
+    const int64_t stocks[] = {stock_a, stock_b, stock_me};
+    for (uint8_t resource = 0; resource < 3u; ++resource) {
+        if (costs[resource] <= stocks[resource]) continue;
+        const int64_t missing = costs[resource] - stocks[resource];
+        append_rejection_detail(
+                details,
+                U("Faltan ") + godot::String::num_int64(missing) + " " +
+                        godot::String(resource_label(resource)));
     }
 }
 }  // namespace
@@ -173,7 +271,7 @@ void ChunsaSimNode::_ready() {
             chunsa::CatalogLoadProfile::Development, catalog_storage);
         if (code != chunsa::CatalogLoadCode::Ok || !catalog_storage.valid()) {
             godot::UtilityFunctions::print(
-                "CHUNSA ERROR: catálogo no cargado (code=",
+                U("CHUNSA ERROR: catálogo no cargado (code="),
                 static_cast<int64_t>(code), ") desde ", blob_path);
             return;  // sin catálogo no hay spawns data-driven
         }
@@ -228,7 +326,7 @@ void ChunsaSimNode::_ready() {
             }
         }
         godot::UtilityFunctions::print(
-            "CHUNSA catálogo OK: cav_id=", static_cast<int64_t>(uid_cavalry),
+            U("CHUNSA catálogo OK: cav_id="), static_cast<int64_t>(uid_cavalry),
             " cit_id=", static_cast<int64_t>(uid_citizen),
             " art_id=", static_cast<int64_t>(uid_artillery),
             " building_count=", static_cast<int64_t>(gs->catalog->building_count),
@@ -243,7 +341,7 @@ void ChunsaSimNode::_ready() {
             bid_castra_barracks == chunsa::INVALID_BUILDING_ID ||
             bid_buildable == chunsa::INVALID_BUILDING_ID) {
             godot::UtilityFunctions::print(
-                "CHUNSA ERROR: catálogo sin centros iniciales o edificio construible");
+                U("CHUNSA ERROR: catálogo sin centros iniciales o edificio construible"));
             return;
         }
     }
@@ -325,6 +423,7 @@ void ChunsaSimNode::sim_loop() {
                 s->range_mt[i] = gs->range_mt[i];
                 s->speed_mtpt[i] = gs->speed_mtpt[i];
                 s->entity_kind[i] = gs->entity_kind[i];
+                s->unit_id[i] = gs->unit_id[i];
                 s->building_id[i] = gs->building_id[i];
                 s->build_progress[i] = gs->build_progress[i];
                 s->bld_anchor_tx[i] = gs->bld_anchor_tx[i];
@@ -356,7 +455,11 @@ void ChunsaSimNode::sim_loop() {
             s->stock_b = gs->player_stock[0][1];
             s->stock_me = gs->player_stock[0][2];
             s->player_epoch = gs->player_epoch[0];
+            s->epoch_initial = gs->epoch_initial[0];
             s->pop_used = gs->pop_used[0];
+            std::copy_n(gs->player_techs[0], chunsa::TECH_WORDS, s->player_techs);
+            std::copy_n(gs->player_caps[0], chunsa::CAP_WORDS, s->player_caps);
+            s->player_civ = gs->player_civ[0];
             s->game_over = gs->game_over;
             s->winner = gs->winner;
             const chunsa::ReceiptMailbox& mailbox = gs->mailbox[0];
@@ -450,16 +553,42 @@ void ChunsaSimNode::_process(double delta) {
                     snap_curr.last_receipt_sequence >= 1000000ull &&
                     snap_curr.last_receipt_sequence != last_feedback_sequence) {
                     last_feedback_sequence = snap_curr.last_receipt_sequence;
+                    const CommandPresentationPrediction* prediction =
+                            command_prediction(snap_curr.last_receipt_sequence);
+                    const godot::String result =
+                            receipt_result_text(snap_curr.last_receipt_result);
+                    godot::String detail;
+                    if (prediction != nullptr) {
+                        if (!prediction->detail_utf8.empty()) {
+                            detail = godot::String::utf8(
+                                    prediction->detail_utf8.c_str());
+                        } else if (snap_curr.last_receipt_result ==
+                                   static_cast<uint16_t>(
+                                           chunsa::RejectReason::ILLEGAL_STATE)) {
+                            detail = U("No se detectó un bloqueo visible; revisar ") +
+                                    U("civilización, prerrequisitos o estado del edificio");
+                        }
+                        if (snap_curr.last_receipt_result ==
+                                    static_cast<uint16_t>(
+                                            chunsa::RejectReason::ACCEPTED) &&
+                            !prediction->detail_utf8.empty()) {
+                            godot::UtilityFunctions::print(
+                                    U("CHUNSA WARNING: el kernel aceptó el comando ") +
+                                            U("pese a la predicción del adaptador: "),
+                                    detail);
+                        }
+                    }
                     godot::UtilityFunctions::print(
                             "CHUNSA comando seq=", last_feedback_sequence,
-                            " resultado=",
-                            receipt_result_text(snap_curr.last_receipt_result),
+                            " resultado=", result,
+                            detail.is_empty() ? godot::String()
+                                              : U(" — ") + detail,
                             " tick=", snap_curr.last_receipt_tick);
                 }
                 if (last_feedback_epoch != 0u &&
                     snap_curr.player_epoch != last_feedback_epoch) {
                     godot::UtilityFunctions::print(
-                            "CHUNSA EPOCH_UP aceptado: época=",
+                            U("CHUNSA EPOCH_UP aceptado: época="),
                             static_cast<int64_t>(snap_curr.player_epoch));
                 }
                 last_feedback_epoch = snap_curr.player_epoch;
@@ -494,8 +623,8 @@ void ChunsaSimNode::_draw() {
     godot::String resources = godot::String("CHUNSA  A ") +
             godot::String::num_int64(snap_curr.stock_a) + "  B " +
             godot::String::num_int64(snap_curr.stock_b) + "  Me " +
-            godot::String::num_int64(snap_curr.stock_me) + "    Época " +
-            godot::String::num_int64(snap_curr.player_epoch) + "    Población " +
+            godot::String::num_int64(snap_curr.stock_me) + U("    Época ") +
+            godot::String::num_int64(snap_curr.player_epoch) + U("    Población ") +
             godot::String::num_int64(snap_curr.pop_used) + "/200";
     draw_string(font, godot::Vector2(28, 42), resources,
                  static_cast<godot::HorizontalAlignment>(0), -1, 18, text);
@@ -528,7 +657,7 @@ void ChunsaSimNode::_draw() {
         if (resource_idx < 3u) ++citizens_by_resource[resource_idx];
         else ++idle;
     }
-    const godot::String citizen_line = "Aldeanos — A:" +
+    const godot::String citizen_line = U("Aldeanos — A:") +
             godot::String::num_int64(citizens_by_resource[0]) + "  B:" +
             godot::String::num_int64(citizens_by_resource[1]) + "  Me:" +
             godot::String::num_int64(citizens_by_resource[2]) + "  constr:" +
@@ -538,16 +667,28 @@ void ChunsaSimNode::_draw() {
                  static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
 
     godot::String controls =
-            "1..9 grupos | WASD/flechas: cámara | rueda: zoom | MMB: pan";
+            U("1..9 grupos | WASD/flechas: cámara | rueda: zoom | MMB: pan");
     draw_string(font, godot::Vector2(28, 68), controls,
                  static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
 
     if (snap_curr.last_receipt_sequence != UINT64_MAX &&
         snap_curr.last_receipt_sequence >= 1000000ull) {
-        const godot::String feedback = "Último comando #" +
+        godot::String feedback = U("Último comando #") +
                 godot::String::num_int64(
                         static_cast<int64_t>(snap_curr.last_receipt_sequence)) +
                 ": " + receipt_result_text(snap_curr.last_receipt_result);
+        const CommandPresentationPrediction* prediction =
+                command_prediction(snap_curr.last_receipt_sequence);
+        if (prediction != nullptr) {
+            if (!prediction->detail_utf8.empty()) {
+                feedback += U(" — ") +
+                        godot::String::utf8(prediction->detail_utf8.c_str());
+            } else if (snap_curr.last_receipt_result ==
+                       static_cast<uint16_t>(chunsa::RejectReason::ILLEGAL_STATE)) {
+                feedback += U(" — No se detectó un bloqueo visible; revisar ") +
+                        U("civilización, prerrequisitos o estado del edificio");
+            }
+        }
         draw_string(font, godot::Vector2(28, 94), feedback,
                      static_cast<godot::HorizontalAlignment>(0), -1, 14,
                      snap_curr.last_receipt_result ==
@@ -558,7 +699,7 @@ void ChunsaSimNode::_draw() {
 
     const godot::Rect2 epoch_rect = epoch_button_rect();
     draw_rect(epoch_rect, godot::Color(0.12, 0.3, 0.5, 0.95));
-    draw_string(font, epoch_rect.position + godot::Vector2(12, 21), "E: SUBIR ÉPOCA",
+    draw_string(font, epoch_rect.position + godot::Vector2(12, 21), U("E: SUBIR ÉPOCA"),
                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
 
     draw_selection_panel(font, text, muted);
@@ -587,7 +728,7 @@ void ChunsaSimNode::_draw() {
         draw_string(font, panel.position + godot::Vector2(0, 76), outcome,
                     static_cast<godot::HorizontalAlignment>(1), panel.size.x,
                     48, outcome_color);
-        const godot::String detail = "Partida finalizada · tick " +
+        const godot::String detail = U("Partida finalizada · tick ") +
                 godot::String::num_int64(static_cast<int64_t>(snap_curr.tick));
         draw_string(font, panel.position + godot::Vector2(0, 122), detail,
                     static_cast<godot::HorizontalAlignment>(1), panel.size.x,
@@ -634,7 +775,7 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             placement_input_captured = false;
             rally_mode = false;
             research_mode = false;
-            godot::UtilityFunctions::print("CHUNSA acción contextual cancelada");
+            godot::UtilityFunctions::print(U("CHUNSA acción contextual cancelada"));
             return;
         }
         if (code == godot::KEY_N && placement_mode) {
@@ -1097,27 +1238,247 @@ bool ChunsaSimNode::selected_slot_is_current(uint32_t slot) const {
 }
 
 godot::String ChunsaSimNode::catalog_name(const char* name, uint16_t bytes) const {
-    return name == nullptr ? godot::String() : godot::String::utf8(name, bytes);
+    return presentation_name_from_record(name, bytes);
+}
+
+godot::String ChunsaSimNode::unit_display_name(uint32_t unit_id) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (unit_id < catalog.unit_count && catalog.unit_names != nullptr) {
+        return catalog_name(catalog.unit_names[unit_id].record_id_utf8,
+                            catalog.unit_names[unit_id].record_id_bytes);
+    }
+    return U("Unidad desconocida");
+}
+
+godot::String ChunsaSimNode::tech_display_name(uint32_t tech_id) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (tech_id < catalog.tech_count && catalog.tech_names != nullptr) {
+        return catalog_name(catalog.tech_names[tech_id].record_id_utf8,
+                            catalog.tech_names[tech_id].record_id_bytes);
+    }
+    return U("Tecnología desconocida");
+}
+
+godot::String ChunsaSimNode::unit_class_display_name(uint8_t unit_class) const {
+    switch (unit_class) {
+        case 0u: return U("infantería");
+        case 1u: return U("caballería");
+        case 2u: return U("artillería");
+        case 3u: return U("ciudadano");
+        default: return U("unidad");
+    }
 }
 
 godot::String ChunsaSimNode::slot_display_name(uint32_t slot) const {
-    if (slot >= 1024u || !have_curr) return "desconocido";
+    if (slot >= 1024u || !have_curr) return U("Desconocido");
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     if (snap_curr.entity_kind[slot] == 1u) {
         if (snap_curr.building_id[slot] < catalog.building_count &&
             catalog.building_names != nullptr) {
-            return catalog_name(catalog.building_names[snap_curr.building_id[slot]].record_id_utf8,
-                                catalog.building_names[snap_curr.building_id[slot]].record_id_bytes);
+            return catalog_name(
+                    catalog.building_names[snap_curr.building_id[slot]].record_id_utf8,
+                    catalog.building_names[snap_curr.building_id[slot]].record_id_bytes);
         }
-        return "edificio";
+        return U("Edificio desconocido");
     }
-    switch (snap_curr.unit_class[slot]) {
-        case 0u: return "infantería";
-        case 1u: return "caballería";
-        case 2u: return "artillería";
-        case 3u: return "ciudadano";
-        default: return "unidad";
+    if (snap_curr.unit_id[slot] < catalog.unit_count &&
+        catalog.unit_names != nullptr) {
+        return unit_display_name(snap_curr.unit_id[slot]);
     }
+    return unit_class_display_name(snap_curr.unit_class[slot]);
+}
+
+godot::String ChunsaSimNode::presentation_rejection_explanation(
+        chunsa::CommandType type, uint32_t building_slot,
+        uint32_t item_id) const {
+    if (!have_curr) return godot::String();
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    godot::String details;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+
+    const auto building_at = [&](uint32_t slot)
+            -> const chunsa::BuildingDefinitionV1* {
+        if (slot >= cap || snap_curr.alive[slot] == 0u ||
+            snap_curr.entity_kind[slot] != 1u ||
+            snap_curr.building_id[slot] >= catalog.building_count) {
+            return nullptr;
+        }
+        return &catalog.buildings[snap_curr.building_id[slot]];
+    };
+
+    const auto tech_known = [&](uint32_t tech_id) {
+        const uint32_t word = tech_id / 64u;
+        const uint32_t bit = tech_id % 64u;
+        return word < chunsa::TECH_WORDS &&
+                ((snap_curr.player_techs[word] >> bit) & 1u) != 0u;
+    };
+
+    const auto append_civilization_detail = [&](chunsa::CivId civ_id) {
+        if (snap_curr.player_civ != chunsa::INVALID_CIV_ID &&
+            civ_id != snap_curr.player_civ) {
+            append_rejection_detail(details,
+                                    U("No pertenece a la civilización del jugador"));
+        }
+    };
+
+    switch (type) {
+        case chunsa::CommandType::PLACE_BUILDING: {
+            if (item_id >= catalog.building_count) return details;
+            const chunsa::BuildingDefinitionV1& def = catalog.buildings[item_id];
+            if (def.constructible == 0u) {
+                append_rejection_detail(details, U("Edificio no construible"));
+            }
+            append_epoch_detail(details, def.epoch_min, def.epoch_max,
+                                snap_curr.player_epoch);
+            append_civilization_detail(def.civ_id);
+            for (uint8_t k = 0; k < def.required_capabilities_count; ++k) {
+                const uint32_t capability = def.required_capabilities[k];
+                const uint32_t word = capability / 64u;
+                const uint32_t bit = capability % 64u;
+                if (word >= chunsa::CAP_WORDS ||
+                    ((snap_curr.player_caps[word] >> bit) & 1u) == 0u) {
+                    append_rejection_detail(details,
+                                            U("Falta capacidad requerida"));
+                }
+            }
+            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
+                                 snap_curr.stock_a, snap_curr.stock_b,
+                                 snap_curr.stock_me);
+            return details;
+        }
+
+        case chunsa::CommandType::TRAIN_UNIT: {
+            if (item_id >= catalog.unit_count) return details;
+            const chunsa::UnitDefinitionV1& def = catalog.units[item_id];
+            append_epoch_detail(details, def.epoch_min, def.epoch_max,
+                                snap_curr.player_epoch);
+            append_civilization_detail(def.civ_id);
+
+            const chunsa::BuildingDefinitionV1* building = building_at(building_slot);
+            if (building == nullptr) {
+                append_rejection_detail(details, U("Edificio no disponible"));
+            } else {
+                if (snap_curr.build_progress[building_slot] <
+                    building->build_time_ticks) {
+                    append_rejection_detail(details, U("Edificio en construcción"));
+                }
+                if (snap_curr.prod_count[building_slot] >= chunsa::PROD_QUEUE_CAP) {
+                    append_rejection_detail(details,
+                                            U("Cola de producción llena"));
+                }
+            }
+            if (snap_curr.pop_used + def.pop_cost >
+                static_cast<int32_t>(chunsa::POP_CAP_V1)) {
+                append_rejection_detail(details, U("Población llena"));
+            }
+            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
+                                 snap_curr.stock_a, snap_curr.stock_b,
+                                 snap_curr.stock_me);
+            return details;
+        }
+
+        case chunsa::CommandType::RESEARCH_TECH: {
+            if (item_id >= catalog.tech_count) return details;
+            const chunsa::TechDefinitionV1& def = catalog.techs[item_id];
+            append_epoch_detail(details, def.epoch, def.epoch,
+                                snap_curr.player_epoch);
+            append_civilization_detail(def.civ_id);
+            if (tech_known(item_id)) {
+                append_rejection_detail(details, U("Tecnología ya investigada"));
+            }
+            for (uint32_t i = 0; i < cap; ++i) {
+                if (snap_curr.alive[i] != 0u && snap_curr.owner[i] == 0u &&
+                    snap_curr.entity_kind[i] == 1u &&
+                    snap_curr.research_tech[i] == item_id) {
+                    append_rejection_detail(details, U("Investigación ya en curso"));
+                    break;
+                }
+            }
+            const chunsa::BuildingDefinitionV1* building = building_at(building_slot);
+            if (building == nullptr) {
+                append_rejection_detail(details, U("Edificio no disponible"));
+            } else if (snap_curr.build_progress[building_slot] <
+                       building->build_time_ticks) {
+                append_rejection_detail(details, U("Edificio en construcción"));
+            }
+            for (uint8_t k = 0; k < def.prereq_count; ++k) {
+                if (!tech_known(def.prerequisites[k])) {
+                    append_rejection_detail(
+                            details,
+                            U("Falta prerrequisito: ") +
+                                    tech_display_name(def.prerequisites[k]));
+                }
+            }
+            for (uint8_t k = 0; k < def.mutex_count; ++k) {
+                if (tech_known(def.mutually_exclusive_with[k])) {
+                    append_rejection_detail(
+                            details,
+                            U("Incompatible con ") +
+                                    tech_display_name(def.mutually_exclusive_with[k]));
+                }
+            }
+            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
+                                 snap_curr.stock_a, snap_curr.stock_b,
+                                 snap_curr.stock_me);
+            return details;
+        }
+
+        case chunsa::CommandType::EPOCH_UP: {
+            if (snap_curr.player_epoch >= chunsa::EPOCH_MAX_V1) {
+                append_rejection_detail(details, U("Ya estás en la época máxima"));
+            }
+            uint32_t compatible_buildings = 0;
+            for (uint32_t i = 0; i < cap; ++i) {
+                const chunsa::BuildingDefinitionV1* building = building_at(i);
+                if (building == nullptr || snap_curr.owner[i] != 0u ||
+                    snap_curr.build_progress[i] < building->build_time_ticks ||
+                    snap_curr.player_epoch < building->epoch_min ||
+                    snap_curr.player_epoch > building->epoch_max) {
+                    continue;
+                }
+                ++compatible_buildings;
+            }
+            if (compatible_buildings < 2u) {
+                append_rejection_detail(
+                        details, U("Necesitas 2 edificios completos de la época actual"));
+            }
+            const uint32_t steps =
+                    static_cast<uint32_t>(snap_curr.player_epoch) -
+                    static_cast<uint32_t>(snap_curr.epoch_initial) + 1u;
+            const uint32_t minimum_tick = chunsa::EPOCH_MIN_TICKS * steps;
+            if (snap_curr.tick < minimum_tick) {
+                append_rejection_detail(
+                        details,
+                        U("Aún no se alcanza el tiempo mínimo para subir de época"));
+            }
+            append_stock_details(details, chunsa::EPOCH_COST_A,
+                                 chunsa::EPOCH_COST_B, chunsa::EPOCH_COST_ME,
+                                 snap_curr.stock_a, snap_curr.stock_b,
+                                 snap_curr.stock_me);
+            return details;
+        }
+
+        default:
+            return details;
+    }
+}
+
+void ChunsaSimNode::remember_command_prediction(uint64_t sequence,
+                                                 const godot::String& detail) {
+    if (command_predictions.size() >= 512u) {
+        command_predictions.erase(command_predictions.begin());
+    }
+    const std::string detail_utf8 = detail.utf8().get_data();
+    command_predictions.push_back({sequence, detail_utf8});
+}
+
+const ChunsaSimNode::CommandPresentationPrediction*
+ChunsaSimNode::command_prediction(uint64_t sequence) const {
+    for (auto it = command_predictions.rbegin();
+         it != command_predictions.rend(); ++it) {
+        if (it->sequence == sequence) return &*it;
+    }
+    return nullptr;
 }
 
 void ChunsaSimNode::update_pan_key(godot::Key code, bool pressed) {
@@ -1278,7 +1639,7 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
     const godot::Rect2 map = minimap_world_rect();
     const float scale = map.size.x / MAP_PX;
     draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
-    draw_string(font, panel.position + godot::Vector2(12, 19), "MINIMAPA · fog activo",
+    draw_string(font, panel.position + godot::Vector2(12, 19), U("MINIMAPA · fog activo"),
                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
     draw_rect(map, godot::Color(0.13, 0.17, 0.2, 1.0));
 
@@ -1392,7 +1753,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
     const godot::Rect2 panel = selection_panel_rect();
     draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
     draw_string(font, panel.position + godot::Vector2(16, 24),
-                "SELECCIÓN · " + godot::String::num_int64(count),
+                U("SELECCIÓN · ") + godot::String::num_int64(count),
                 static_cast<godot::HorizontalAlignment>(0), -1, 17, text);
 
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
@@ -1415,16 +1776,22 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
             snap_curr.unit_class[static_cast<uint32_t>(first)] <= 2u;
 
     if (count == 1 && first >= 0) {
+        godot::String single_name = slot_display_name(static_cast<uint32_t>(first));
+        if (snap_curr.entity_kind[static_cast<uint32_t>(first)] == 0u) {
+            single_name += U(" (") +
+                    unit_class_display_name(
+                            snap_curr.unit_class[static_cast<uint32_t>(first)]) + ")";
+        }
         draw_string(font, panel.position + godot::Vector2(16, 49),
-                    slot_display_name(static_cast<uint32_t>(first)) + "  · owner " +
+                    single_name + U("  · owner ") +
                             godot::String::num_int64(snap_curr.owner[first]),
                     static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
     } else {
         godot::String summary = "unidades";
-        if (class_counts[1] > 0u) summary += "  caballería " + godot::String::num_int64(class_counts[1]);
-        if (class_counts[2] > 0u) summary += "  artillería " + godot::String::num_int64(class_counts[2]);
+        if (class_counts[1] > 0u) summary += U("  caballería ") + godot::String::num_int64(class_counts[1]);
+        if (class_counts[2] > 0u) summary += U("  artillería ") + godot::String::num_int64(class_counts[2]);
         if (class_counts[3] > 0u) summary += "  ciudadanos " + godot::String::num_int64(class_counts[3]);
-        if (class_counts[0] > 0u) summary += "  infantería " + godot::String::num_int64(class_counts[0]);
+        if (class_counts[0] > 0u) summary += U("  infantería ") + godot::String::num_int64(class_counts[0]);
         if (building_count > 0u) summary += "  edificios " + godot::String::num_int64(building_count);
         draw_string(font, panel.position + godot::Vector2(16, 49), summary,
                     static_cast<godot::HorizontalAlignment>(0), -1, 14, muted);
@@ -1448,8 +1815,8 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
         const uint32_t unit = static_cast<uint32_t>(first);
         const godot::String stats = "ATQ " +
                 godot::String::num_int64(snap_curr.attack[unit]) +
-                " · ALC " + godot::String::num_int64(snap_curr.range_mt[unit]) +
-                " mili-tiles · VEL " +
+                U(" · ALC ") + godot::String::num_int64(snap_curr.range_mt[unit]) +
+                U(" mili-tiles · VEL ") +
                 godot::String::num_int64(snap_curr.speed_mtpt[unit]) + " mt/tick";
         draw_string(font, panel.position + godot::Vector2(16, 106), stats,
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
@@ -1470,8 +1837,8 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 : "ninguno";
         const godot::String carry_resource = resource_label(
                 snap_curr.eco_carry_resource[citizen]);
-        const godot::String economy = "Estado " + godot::String(state) +
-                " · depósito " + deposit_text + " · carga " +
+        const godot::String economy = U("Estado ") + godot::String(state) +
+                U(" · depósito ") + deposit_text + U(" · carga ") +
                 godot::String::num_int64(snap_curr.eco_carry[citizen]) + "/" +
                 godot::String::num_int64(chunsa::ECO_CARRY_CAP) + " " +
                 carry_resource;
@@ -1487,7 +1854,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
         if (def.build_time_ticks > 0u &&
             snap_curr.build_progress[selected_building] < def.build_time_ticks) {
             draw_string(font, panel.position + godot::Vector2(130, 87),
-                        "Construcción " +
+                        U("Construcción ") +
                                 godot::String::num_int64(snap_curr.build_progress[selected_building]) +
                                 "/" + godot::String::num_int64(def.build_time_ticks),
                         static_cast<godot::HorizontalAlignment>(0), -1, 13,
@@ -1521,33 +1888,23 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
             draw_rect(godot::Rect2(godot::Vector2(x, y),
                                    godot::Vector2(button_w, button_h)), button_color);
             const uint32_t id = research_mode ? def.researches[k] : def.trains[k];
-            godot::String label = research_mode ? "Investigar " : "Entrenar ";
-            if (research_mode && id < catalog_storage.catalog().tech_count &&
-                catalog_storage.catalog().tech_names != nullptr) {
-                label += catalog_name(catalog_storage.catalog().tech_names[id].record_id_utf8,
-                                      catalog_storage.catalog().tech_names[id].record_id_bytes);
-            } else if (!research_mode && id < catalog_storage.catalog().unit_count &&
-                       catalog_storage.catalog().unit_names != nullptr) {
-                label += catalog_name(catalog_storage.catalog().unit_names[id].record_id_utf8,
-                                      catalog_storage.catalog().unit_names[id].record_id_bytes);
-            } else {
-                label += "#" + godot::String::num_int64(id);
-            }
+            godot::String label = research_mode ? U("Investigar ") : U("Entrenar ");
+            label += research_mode ? tech_display_name(id) : unit_display_name(id);
             draw_string(font, godot::Vector2(x + 7, y + 20), label.left(20),
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
         }
         const bool has_train = snap_curr.prod_count[selected_building] > 0u;
         const bool has_research = snap_curr.research_tech[selected_building] != chunsa::INVALID_TECH_ID;
         if (has_train || has_research) {
-            godot::String queue = has_train ? "Cola: " : "Investigación: ";
+            godot::String queue = has_train ? U("Cola: ") : U("Investigación: ");
             if (has_train) {
-                queue += slot_display_name(selected_building) + "  " +
+                const uint32_t queued_unit = snap_curr.prod_queue[selected_building][0];
+                queue += unit_display_name(queued_unit) + " x" +
                         godot::String::num_int64(snap_curr.prod_count[selected_building]);
             }
             if (has_research) {
-                if (has_train) queue += "  ·  ";
-                queue += "tech #" + godot::String::num_int64(
-                        snap_curr.research_tech[selected_building]);
+                if (has_train) queue += U("  ·  ");
+                queue += tech_display_name(snap_curr.research_tech[selected_building]);
             }
             draw_string(font, panel.position + godot::Vector2(16, 224), queue.left(72),
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
@@ -1555,7 +1912,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
     } else {
         const float actions_y = single_combat_unit || single_citizen ? 126.0f : 116.0f;
         draw_string(font, panel.position + godot::Vector2(16, actions_y),
-                    "Acciones: clic derecho mueve/recolecta · B construye · R rally",
+                    U("Acciones: clic derecho mueve/recolecta · B construye · R rally"),
                     static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
 }
@@ -1610,6 +1967,32 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
                     godot::String(resource_label(snap_curr.dep_resource_idx[d])) + " " +
                             godot::String::num_int64(snap_curr.dep_remaining[d]),
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, color);
+    }
+
+    // Etiquetas de mundo: edificios visibles y unidades seleccionadas usan la
+    // misma tabla provisional que el panel, nunca el record_id tecnico.
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (snap_curr.alive[i] == 0u || !presentation_entity_visible(i)) continue;
+        if (snap_curr.entity_kind[i] == 1u &&
+            snap_curr.building_id[i] < catalog.building_count) {
+            const chunsa::BuildingDefinitionV1& def =
+                    catalog.buildings[snap_curr.building_id[i]];
+            const float px = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                              static_cast<float>(def.footprint_w) * 0.5f) * 4.0f;
+            const float py = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                              static_cast<float>(def.footprint_h) * 0.5f) * 4.0f;
+            const godot::Vector2 label_pos = cam3d->unproject_position(
+                    godot::Vector3(px, -py, py + 24.0f));
+            draw_string(font, label_pos, slot_display_name(i).left(24),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
+        } else if (selected_slot_is_current(i)) {
+            const godot::Vector2 label_pos = cam3d->unproject_position(
+                    godot::Vector3(snap_curr.x[i] * 4.0f,
+                                   -snap_curr.y[i] * 4.0f,
+                                   snap_curr.y[i] * 4.0f + 20.0f));
+            draw_string(font, label_pos, slot_display_name(i).left(24),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
+        }
     }
 
     for (uint32_t i = 0; i < cap; ++i) {
@@ -1691,7 +2074,7 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
             const uint32_t uid = snap_curr.prod_queue[i][0];
             uint32_t total = 0;
             if (uid < catalog.unit_count) total = catalog.units[uid].build_time_ticks;
-            godot::String line = "TRAIN " + godot::String::num_int64(uid) + " " +
+            godot::String line = "TRAIN " + unit_display_name(uid) + " " +
                     godot::String::num_int64(snap_curr.prod_progress[i]) + "/" +
                     godot::String::num_int64(total);
             draw_string(font, label_pos - godot::Vector2(0, 14), line,
@@ -1702,8 +2085,8 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
             if (snap_curr.research_tech[i] < catalog.tech_count) {
                 total = catalog.techs[snap_curr.research_tech[i]].research_time_ticks;
             }
-            godot::String line = "TECH " + godot::String::num_int64(
-                    snap_curr.research_tech[i]) + " " +
+            godot::String line = "TECH " +
+                    tech_display_name(snap_curr.research_tech[i]) + " " +
                     godot::String::num_int64(snap_curr.research_progress[i]) + "/" +
                     godot::String::num_int64(total);
             draw_string(font, label_pos + godot::Vector2(0, 2), line,
@@ -2364,6 +2747,11 @@ void ChunsaSimNode::enqueue_place_building(int64_t tx, int64_t ty) {
     c.p.x_raw = tx; // SPEC-004 §4.1: tile ancla ENTERO, no raw Q47.16.
     c.p.y_raw = ty;
     c.p.unit_id = bid_buildable;
+    remember_command_prediction(
+            c.sequence,
+            presentation_rejection_explanation(
+                    chunsa::CommandType::PLACE_BUILDING, UINT32_MAX,
+                    bid_buildable));
     pending_player_commands.push_back(c);
 }
 
@@ -2490,7 +2878,7 @@ void ChunsaSimNode::enqueue_selected_action(uint32_t action_index, bool research
     const int32_t selected = selected_building_slot();
     if (selected < 0) {
         godot::UtilityFunctions::print(
-                "CHUNSA acción local reject: selecciona un edificio propio");
+                U("CHUNSA acción local reject: selecciona un edificio propio"));
         return;
     }
     const chunsa::BuildingId building_id = snap_curr.building_id[selected];
@@ -2500,8 +2888,8 @@ void ChunsaSimNode::enqueue_selected_action(uint32_t action_index, bool research
     const uint32_t count = research ? def.research_count : def.train_count;
     if (action_index >= count) {
         godot::UtilityFunctions::print(
-                research ? "CHUNSA RESEARCH local reject: índice sin tech"
-                         : "CHUNSA TRAIN local reject: índice sin unidad");
+                research ? U("CHUNSA RESEARCH local reject: índice sin tech")
+                         : U("CHUNSA TRAIN local reject: índice sin unidad"));
         return;
     }
 
@@ -2517,6 +2905,12 @@ void ChunsaSimNode::enqueue_selected_action(uint32_t action_index, bool research
     c.p.handle = chunsa::EntityHandle{
             static_cast<uint32_t>(selected), snap_curr.generation[selected]};
     c.p.unit_id = item_id;
+    remember_command_prediction(
+            c.sequence,
+            presentation_rejection_explanation(
+                    research ? chunsa::CommandType::RESEARCH_TECH
+                             : chunsa::CommandType::TRAIN_UNIT,
+                    static_cast<uint32_t>(selected), item_id));
     {
         std::lock_guard<std::mutex> lock(input_mutex);
         pending_player_commands.push_back(c);
@@ -2570,6 +2964,10 @@ void ChunsaSimNode::enqueue_epoch_up() {
     c.type = chunsa::CommandType::EPOCH_UP;
     c.sequence = next_player_sequence++;
     // EPOCH_UP es de jugador: todos los campos de c.p permanecen en cero.
+    remember_command_prediction(
+            c.sequence,
+            presentation_rejection_explanation(chunsa::CommandType::EPOCH_UP,
+                                               UINT32_MAX, 0u));
     {
         std::lock_guard<std::mutex> lock(input_mutex);
         pending_player_commands.push_back(c);
@@ -2609,7 +3007,7 @@ void ChunsaSimNode::maybe_screenshot() {
     }
     const godot::Ref<godot::Image> img = tex->get_image();
     if (img.is_null() || img->is_empty()) {
-        godot::UtilityFunctions::print("CHUNSA SHOT: imagen vacía (renderer dummy?)");
+        godot::UtilityFunctions::print(U("CHUNSA SHOT: imagen vacía (renderer dummy?)"));
         return;
     }
     img->save_png(godot::String(path.c_str()));

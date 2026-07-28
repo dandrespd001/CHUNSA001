@@ -64,6 +64,7 @@ public:
         int32_t range_mt[1024];     // alcance en mili-tiles (1000 = 1 tile)
         int32_t speed_mtpt[1024];   // velocidad en mili-tiles por tick
         uint8_t entity_kind[1024]; // 0=unidad, 1=edificio
+        uint32_t unit_id[1024];
         uint32_t building_id[1024];
         uint32_t build_progress[1024];
         uint16_t bld_anchor_tx[1024];
@@ -99,7 +100,11 @@ public:
         int64_t stock_b;
         int64_t stock_me;
         uint8_t player_epoch;
+        uint8_t epoch_initial;
         int32_t pop_used;
+        uint64_t player_techs[chunsa::TECH_WORDS];
+        uint64_t player_caps[chunsa::CAP_WORDS];
+        chunsa::CivId player_civ;
         uint8_t game_over;
         uint8_t winner;
 
@@ -173,6 +178,11 @@ private:
     // no necesita mutex.
     std::mutex input_mutex;
     std::vector<chunsa::RawCommand> pending_player_commands;
+    struct CommandPresentationPrediction {
+        uint64_t sequence;
+        std::string detail_utf8;
+    };
+    std::vector<CommandPresentationPrediction> command_predictions;
     uint64_t next_player_sequence = 1000000ull;
     bool is_selected[1024] = {};
     uint32_t selection_generation[1024] = {};
@@ -241,6 +251,16 @@ private:
     bool selected_slot_is_current(uint32_t slot) const;
     godot::String slot_display_name(uint32_t slot) const;
     godot::String catalog_name(const char* name, uint16_t bytes) const;
+    godot::String unit_display_name(uint32_t unit_id) const;
+    godot::String tech_display_name(uint32_t tech_id) const;
+    godot::String unit_class_display_name(uint8_t unit_class) const;
+    godot::String presentation_rejection_explanation(
+            chunsa::CommandType type, uint32_t building_slot,
+            uint32_t item_id) const;
+    void remember_command_prediction(uint64_t sequence,
+                                     const godot::String& detail);
+    const CommandPresentationPrediction* command_prediction(
+            uint64_t sequence) const;
     bool handle_hud_press(const godot::Vector2& screen);
     void recover_control_group(uint32_t group_number);
     void assign_control_group(uint32_t group_number);
