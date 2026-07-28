@@ -314,6 +314,10 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     // MAX_EMITTERS.
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.u32(g.player_civ[e]);
 
+    // (p) Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22.5 — save
+    // v13): append-only tras todo lo v12, todos los slots de entidad.
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.citizen_task[i]);
+
     if (w.overflow) return 0;
     return w.len;
 }
@@ -426,10 +430,10 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         it.p.unit_id             = r.u32();  // v9 (SPEC-004 §10.2)
         if (r.fail) return false;
         if (emitter_raw >= 16)               return false;
-        // CommandType ∈ {1..12} (Sprint 1.1: +PLACE_BUILDING/ASSIGN_BUILD;
+        // CommandType ∈ {1..13} (Sprint 1.1: +PLACE_BUILDING/ASSIGN_BUILD;
         // Sprint 1.2, SPEC-004 §11.3/§12.3: +TRAIN_UNIT/SET_RALLY/
-        // RESEARCH_TECH/EPOCH_UP).
-        if (type_raw < 1 || type_raw > 12)   return false;
+        // RESEARCH_TECH/EPOCH_UP; Sprint 1.6B: +GATHER).
+        if (type_raw < 1 || type_raw > 13)   return false;
         it.emitter = emitter_raw;
         it.type    = static_cast<CommandType>(type_raw);
     }
@@ -612,6 +616,16 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     // (`g.catalog`) se re-enlaza aparte vía gs_bind_catalog; los gates de
     // civilización de step.hpp ya comprueban bounds/igualdad en caliente.
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) g.player_civ[e] = r.u32();
+    if (r.fail) return false;
+
+    // (p) Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22.5 — save
+    // v13): espejo del bloque append-only de gs_serialize. Los cuatro valores
+    // 0..3 son exhaustivos; cualquier otro byte hace el save malformado.
+    for (uint32_t i = 0; i < cap_e; ++i) {
+        const uint8_t task = r.u8();
+        if (task > CITIZEN_TASK_BUILD) return false;
+        g.citizen_task[i] = task;
+    }
     if (r.fail) return false;
 
     // Frontera de save = inicio de tick → no hay destrucciones pendientes

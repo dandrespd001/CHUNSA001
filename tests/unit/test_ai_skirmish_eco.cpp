@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "chunsa/skirmish_eco.hpp"
+#include "baselines.hpp"
 
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
@@ -31,6 +32,15 @@ static int g_fails = 0;
 using namespace chunsa;
 
 namespace {
+
+void check_baseline(const char* name, uint64_t expected, uint64_t obtained) {
+    if (expected == obtained) return;
+    ++g_fails;
+    std::printf("BASELINE %s: esperado=%016llx obtenido=%016llx\n",
+                name,
+                static_cast<unsigned long long>(expected),
+                static_cast<unsigned long long>(obtained));
+}
 
 MatchConfig01A skirmish_eco_cfg(uint64_t seed) {
     MatchConfig01A cfg{};
@@ -79,6 +89,12 @@ static void test_skirmish_eco_concludes_in_victory() {
     // escenario (mismo patrón que skirmish.hpp), ahora con economía real en
     // juego del lado del defensor.
     CHECK(out.winner == 1u);
+    check_baseline("ai_skirmish_eco.state",
+                   determinism_baselines::AI_SKIRMISH_ECO_STATE,
+                   out.final_checksum);
+    check_baseline("ai_skirmish_eco.continuation",
+                   determinism_baselines::AI_SKIRMISH_ECO_CONTINUATION,
+                   out.continuation_checksum);
     std::printf("skirmish_eco A: end_tick=%u winner=%u ai_executions=%u state=%016llx cont=%016llx\n",
                 out.end_tick, static_cast<unsigned>(out.winner), out.ai_executions,
                 static_cast<unsigned long long>(out.final_checksum),

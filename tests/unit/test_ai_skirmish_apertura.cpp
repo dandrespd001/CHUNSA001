@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "chunsa/skirmish_apertura.hpp"
+#include "baselines.hpp"
 
 #ifndef CHUNSA_GOLDEN_CHDB_PATH
 #error "CHUNSA_GOLDEN_CHDB_PATH debe definirse via CMake (ver CMakeLists.txt: chunsa_test_ai_skirmish_apertura)"
@@ -31,6 +32,15 @@ static int g_fails = 0;
 using namespace chunsa;
 
 namespace {
+
+void check_baseline(const char* name, uint64_t expected, uint64_t obtained) {
+    if (expected == obtained) return;
+    ++g_fails;
+    std::printf("BASELINE %s: esperado=%016llx obtenido=%016llx\n",
+                name,
+                static_cast<unsigned long long>(expected),
+                static_cast<unsigned long long>(obtained));
+}
 
 MatchConfig01A apertura_cfg(uint64_t seed) {
     MatchConfig01A cfg{};
@@ -120,6 +130,13 @@ static void test_apertura_concludes_in_victory() {
     CHECK(out.p1_resources_gathered);
     CHECK(out.p1_built_military);
     CHECK(out.p1_trained_military);
+    CHECK(out.end_tick == determinism_baselines::AI_SKIRMISH_APERTURA_END_TICK);
+    check_baseline("ai_skirmish_apertura.state",
+                   determinism_baselines::AI_SKIRMISH_APERTURA_STATE,
+                   out.final_checksum);
+    check_baseline("ai_skirmish_apertura.continuation",
+                   determinism_baselines::AI_SKIRMISH_APERTURA_CONTINUATION,
+                   out.continuation_checksum);
 
     std::printf("apertura A: end_tick=%u winner=%u ai_executions=%u "
                 "p0_gather=%d p1_gather=%d p1_built=%d p1_trained=%d "
