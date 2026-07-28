@@ -193,3 +193,116 @@ lane de MiniMax.
    recomendación.
 3. **Ratio del bronce**: histórico ~9:1 cobre:estaño. Propongo 4:1 para que el
    estaño sea escaso pero no frustrante. ¿Fidelidad o jugabilidad?
+
+---
+
+# REVISIÓN TRAS PANEL MULTIMODELO (2026-07-28)
+
+Panel: MiniMax-M3 (investigación con `WebFetch`, 33 URLs), Gemini 3.1 Pro /
+3.5 Flash / 3.1 Flash-Lite (investigación web), DeepSeek V4 Pro y Qwen 3.7 Plus
+(crítica adversarial sin web). Material en `docs/research/`.
+
+Las correcciones §8.1–§8.5 son **firmes**: son errores del documento original,
+independientes de cualquier decisión pendiente. §8.6 y §8.7 quedan **abiertas**.
+
+## §8.1 La energía NO es un índice de `player_stock` — CORRECCIÓN FIRME
+
+Los **tres** críticos lo señalaron de forma independiente, que es la señal más
+fuerte que produjo el panel.
+
+`[V] [Total Annihilation]` «Out of energy? power-dependent structures such as
+radar towers, metal extractors and laser towers will cease to function».
+
+La energía **no se almacena por aldeano ni se agota como insumo: se gasta al
+instante**. La dicotomía de §3.1 (recolectado / producido) no la captura, y la
+receta de aluminio de §3.2 —que lista «electricidad» como si fuera materia—
+es incorrecta tanto física como computacionalmente.
+
+**Corrección.** Tercera naturaleza, **streaming**:
+
+- No ocupa índice en `player_stock`.
+- Se deriva cada tick: `disponible = producción − consumo`.
+- Si `disponible < 0`, las recetas dependientes de energía **se paran en seco**
+  (modelo TA), no se ralentizan ni encolan. Es lo único que hace que la edad 14
+  (aluminio por electrólisis) se sienta distinta de la 13.
+
+## §8.2 El recuento de recursos del documento estaba mal — CORRECCIÓN FIRME
+
+`§3.2` usa **bauxita** en la receta del aluminio, pero `§2` nunca la introduce
+como recurso ni la cuenta. El total real supera al declarado. Antes de fijar
+`RESOURCE_COUNT` hay que **enumerar exhaustivamente** los recursos por edad y
+contar, no estimar.
+
+## §8.3 Contradicción interna §3.1 ↔ §5 — CORRECCIÓN FIRME
+
+`§3.1` afirma que la distinción entre naturalezas es «de datos, no de código».
+`§5` exige que la granja **regenere** `extracted` por tick, que es lógica de
+simulación. Las dos cosas no pueden ser ciertas a la vez.
+
+**Corrección.** La granja es un **depósito con regeneración**, y eso **sí** es
+comportamiento en el kernel. §3.1 se reescribe: lo que es puro dato es *qué*
+recursos existen y sus recetas; *cómo* se comporta un depósito (estático,
+regenerativo) es código con un flag en datos.
+
+## §8.4 `extracted` es del depósito, no del jugador — CORRECCIÓN FIRME
+
+Hueco detectado por Qwen: el documento no dice qué ocurre con un yacimiento
+agotado **al conquistarlo**, ni qué pasa si **dos jugadores** explotan el mismo.
+
+**Corrección.** `extracted` es estado **del depósito**, compartido y global.
+`recovery_pct` es **del jugador**. Consecuencias deliberadas: conquistar una
+mina agotada **no la resetea** (mata el exploit), y un jugador con mejor
+tecnología **sí** puede seguir extrayendo de un yacimiento que su rival dio por
+muerto — que es justo la fantasía que perseguimos.
+
+## §8.5 La recuperación no llega al 100% — CORRECCIÓN FIRME
+
+`[I] [Qwen]` con recuperación total, la partida se vuelve infinita y desaparece
+la presión por expandirse.
+
+**Corrección.** El tope acumulado de `recovery_pct` queda **estrictamente por
+debajo de 100** (propongo 90). Siempre queda reserva inaccesible: expandirse
+sigue siendo necesario.
+
+## §8.6 ABIERTA — ¿15 edades o menos?
+
+Evidencia en contra de 15:
+
+- `[V] [0 A.D.]` — RTS histórico como el nuestro, resuelve con **3 fases**
+  (Village / Town / City).
+- `[V] [Empire Earth]` — 14 épocas; la serie fue de 82% a 79% a **50%** de
+  recepción. Más granularidad de edad no mejoró el juego.
+- `[I] [DeepSeek]` — en partidas de 30–60 min, las últimas 8 edades **no se
+  alcanzan nunca**: diseño y balance desperdiciados.
+- `[I] [Qwen]` — las edades 6, 9 y 10, sin recurso nuevo, son «valles de
+  progresión».
+
+Recomendación del panel: **7–9 edades** con **3 fases narrativas** encima.
+
+**Decisión del Director pendiente.** Es la más cara de revertir: los datos
+históricos de cada civilización (`epoch_window`, `playable_periods`) se cuelgan
+de esta escalera.
+
+## §8.7 ABIERTA — Falta un mecanismo de upkeep
+
+`[V] [Warcraft III]` «producing units over certain amounts will decrease the
+amount of gold one can earn».
+
+SPEC-007 no tiene **ningún** freno económico al late game. A partir de la edad 9
+la producción se descontrola. Hay que añadir coste de mantenimiento creciente
+por edad, o un equivalente. **No especificado todavía.**
+
+## §8.8 Riesgos aceptados conscientemente
+
+No son errores, son apuestas. Quedan registradas para no re-litigarlas:
+
+- **Depósitos finitos van contra la corriente.** `[V]` Rise of Nations eligió 6
+  recursos **infinitos** a propósito; Total Annihilation, BAR y Supreme
+  Commander tampoco modelan agotamiento. El único que sí lo hace, Anno, es
+  cívico-casual, no RTS. Lo mantenemos porque el agotamiento **crea decisiones**
+  y es el eje de §4, pero sabiendo que el RTS competitivo lo suele rechazar.
+- **Carga cognitiva.** Se mitiga con la regla de **pocos recursos activos por
+  edad**: muchos a lo largo de la partida, ~4–5 simultáneos, que es el nivel de
+  AoE2.
+- **HUD.** `[V]` Anno necesitó **3 regiones** para sostener 30+ recursos. Con
+  más de ~8 activos habrá que **agrupar por familias** en el HUD.
