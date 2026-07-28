@@ -6,7 +6,7 @@
 // humano-scripted vs rome IA real, AMBOS con centro + 3 aldeanos y CERO
 // ejército/edificios militares inyectados, catálogo REAL + 12 depósitos
 // reales del mapa vía gs_init_economy_from_catalog) debe:
-//   - Correr hasta game_over==1 con winner != 0xFF en < 36000 ticks, con la
+//   - Correr hasta game_over==1 con winner == 1 en < 36000 ticks, con la
 //     IA recorriendo sola recolectar -> construir -> entrenar -> atacar.
 //   - Dos corridas idénticas -> mismo winner y mismo tick de fin (determinismo).
 //   - Save a MITAD DE RECOLECCIÓN + continuar -> mismo resultado que la
@@ -58,20 +58,36 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     gs_set_player_civ(*g, 1, setup.civ_rome);
     gs_init_epoch_from_catalog_per_player(*g);
     gs_init_economy_from_catalog(*g);
-    // Blindaje del Arquitecto (revisión 1.6B): asevera que este escenario usa
-    // de verdad los depósitos DEL MAPA (12, SPEC-004 §15.1) y no el fallback
-    // legacy de 6. Es EL punto del sprint, y sin esta aserción una regresión
-    // futura (borrar la llamada de arriba) dejaría el escenario "verde" pero
-    // corriendo sobre el patrón fijo que este sprint vino a eliminar.
-    CHECK(g->n_deposits == 12u);
+    // Pre-flight duro del escenario: un estado con otro número de depósitos
+    // no es una apertura válida y no debe producir ruido derivado en el resto
+    // de asertos.
+    if (g->n_deposits != 12u) return nullptr;
     return g;
 }
 
 }  // namespace
 
+static bool test_apertura_preflight() {
+    DataCatalogStorageV1 store;
+    const auto load_code =
+        catalog_load_file_v1(CHUNSA_GOLDEN_CHDB_PATH, CatalogLoadProfile::Verified, store);
+    CHECK(load_code == CatalogLoadCode::Ok);
+    if (load_code != CatalogLoadCode::Ok || !store.valid()) return false;
+    const SkirmishAperturaSetup setup = skirmish_apertura_resolve(store.catalog());
+    CHECK(setup.ok);
+    if (!setup.ok) return false;
+    auto g = make_apertura_state(store.catalog(), setup, 20260724ull);
+    CHECK(g != nullptr);
+    if (g == nullptr) {
+        std::printf("apertura pre-flight: se esperaban 12 depósitos reales\n");
+        return false;
+    }
+    return true;
+}
+
 // ============================================================================
 // A) La partida TERMINA en victoria real (< 36000 ticks): game_over==1,
-//    winner != 0xFF, y las 3 fases del DoD se alcanzaron (recursos > 0 en
+//    winner == 1, y las 3 fases del DoD se alcanzaron (recursos > 0 en
 //    ambos bandos, edificio militar construido Y unidad entrenada por rome).
 // ============================================================================
 static void test_apertura_concludes_in_victory() {
@@ -85,6 +101,7 @@ static void test_apertura_concludes_in_victory() {
     if (!setup.ok) { std::printf("apertura: no resolvió ids reales, abortando subtest\n"); return; }
 
     auto g = make_apertura_state(cat, setup, 20260724ull);
+    if (g == nullptr) return;
     AiJobBox box{}; ai_box_init(box, 1);
     AiRuntimeV1 rt{0u, 4u};  // 1 PLACE_BUILDING + 3 SPAWN_UNIT del setup de rome (emitter=1)
 
@@ -96,7 +113,7 @@ static void test_apertura_concludes_in_victory() {
     CHECK(code == 0);
     CHECK(out.fatal == FatalReason::NONE);
     CHECK(out.game_over == 1u);
-    CHECK(out.winner != 0xFFu);
+    CHECK(out.winner == 1u);
     CHECK(out.end_tick < 36000u);
     CHECK(out.ai_executions > 0u);
     CHECK(out.p0_resources_gathered);
@@ -129,6 +146,7 @@ static void test_apertura_deterministic_two_runs() {
         if (!setup.ok) return false;
 
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return false;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
@@ -143,7 +161,7 @@ static void test_apertura_deterministic_two_runs() {
 
     CHECK(out_a.game_over == 1u && out_b.game_over == 1u);
     CHECK(out_a.winner == out_b.winner);
-    CHECK(out_a.winner != 0xFFu);
+    CHECK(out_a.winner == 1u);
     CHECK(out_a.end_tick == out_b.end_tick);
     CHECK(out_a.final_checksum == out_b.final_checksum);
     CHECK(out_a.continuation_checksum == out_b.continuation_checksum);
@@ -152,9 +170,9 @@ static void test_apertura_deterministic_two_runs() {
 
 // ============================================================================
 // C) Save a MITAD DE RECOLECCIÓN + continuar == corrida continua. El punto
-//    de guardado se fija en el PRIMER tick en el que rome ya tiene stock > 0
-//    (a mitad del ciclo económico, no al final de la partida) — exactamente
-//    "mitad de recolección", el escenario que el brief exige.
+//    de guardado se fija por estado transitorio observable: un ciudadano de
+//    Rome lleva carga o está en HARVEST/RETURN, con depósito vivo y la partida
+//    aún activa.
 // ============================================================================
 static void test_apertura_save_mid_gather_and_continue() {
     DataCatalogStorageV1 store;
@@ -168,12 +186,18 @@ static void test_apertura_save_mid_gather_and_continue() {
 
     const char* save_path = "test_apertura_mid_gather.sav";
 
-    // Corrida continua de referencia + tick de "primer dropoff de rome" (a
-    // mitad de recolección, mucho antes del fin natural de la partida).
+    // Corrida continua de referencia.
     SkirmishAperturaOut out_ref{};
-    uint32_t first_gather_tick = 0;
+    uint32_t mid_gather_tick = 0;
+    uint32_t observed_ci = UINT32_MAX;
+    EcoState observed_state = EcoState::SEEK;
+    uint32_t observed_deposit = ECO_NO_DEPOSIT;
+    int32_t observed_carry = 0;
+    uint8_t observed_carry_resource = 0u;
+    uint64_t observed_continuation = 0;
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
@@ -182,10 +206,11 @@ static void test_apertura_save_mid_gather_and_continue() {
         CHECK(code == 0);
         CHECK(out_ref.game_over == 1u);
     }
-    // Corrida de sondeo: detiene tick a tick hasta el primer stock>0 de rome
-    // (mismo catálogo/setup, misma semilla — determinista, reconstruible).
+    // Corrida de sondeo: guarda la primera frontera con estado económico
+    // transitorio observable (mismo catálogo/setup/semilla).
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         std::vector<RawCommand> batch(8 + AI_MAX_COMMANDS);
@@ -196,29 +221,64 @@ static void test_apertura_save_mid_gather_and_continue() {
             if (box.state == AiJobState::DISPATCHED) ai_execute(box, *g);
             if (ai_stalled(box, t)) ai_execute(box, *g);
             if (ai_due(box, t)) {
+                // Auditoría F-00: esta sonda reproduce solo la ruta de IA,
+                // cuya cota contractual sigue siendo AI_MAX_COMMANDS. El
+                // guard de copia se conserva y estas comprobaciones hacen
+                // explícita la capacidad 8 + AI_MAX_COMMANDS del fixture.
+                CHECK(n <= 8u);
+                CHECK(box.result_count <= AI_MAX_COMMANDS);
                 for (uint32_t k = 0; k < box.result_count && n < batch.size(); ++k) batch[n++] = box.result[k];
                 ai_commit(box, rt);
             }
             step(*g, batch.data(), n);
-            if (g->player_stock[1][0] > 0 || g->player_stock[1][1] > 0 || g->player_stock[1][2] > 0) {
-                first_gather_tick = g->tick;
+            if (g->game_over != 0u) continue;
+            for (uint32_t i = 0; i < g->entities.capacity; ++i) {
+                if (!g->entities.alive[i] || g->owner[i] != 1u
+                    || g->unit_class[i] != 3u) {
+                    continue;
+                }
+                const uint32_t dep = g->eco_assigned_deposit[i];
+                const bool gathering_active =
+                    dep != ECO_NO_DEPOSIT && dep < g->n_deposits
+                    && g->deposits[dep].remaining > 0;
+                const bool transient =
+                    g->eco_carry[i] > 0 || g->eco_state[i] == EcoState::HARVEST
+                    || g->eco_state[i] == EcoState::RETURN;
+                if (!gathering_active || !transient) continue;
+                mid_gather_tick = g->tick;
+                observed_ci = i;
+                observed_state = g->eco_state[i];
+                observed_deposit = dep;
+                observed_carry = g->eco_carry[i];
+                observed_carry_resource = g->eco_carry_resource[i];
+                observed_continuation = continuation_checksum(*g, box, rt);
                 break;
             }
+            if (observed_ci != UINT32_MAX) break;
         }
     }
-    CHECK(first_gather_tick > 0u);
-    CHECK(first_gather_tick < out_ref.end_tick);
+    CHECK(mid_gather_tick > 0u);
+    CHECK(mid_gather_tick < out_ref.end_tick);
+    CHECK(observed_ci != UINT32_MAX);
+    if (observed_ci == UINT32_MAX) return;
+    std::printf("apertura C save-boundary: tick=%u citizen=%u state=%u "
+                "deposit=%u carry=%d resource=%u cont=%016llx\n",
+                mid_gather_tick, observed_ci, static_cast<unsigned>(observed_state),
+                observed_deposit, observed_carry,
+                static_cast<unsigned>(observed_carry_resource),
+                static_cast<unsigned long long>(observed_continuation));
 
-    // Corrida A: guarda EXACTAMENTE en first_gather_tick (mitad de
+    // Corrida A: guarda EXACTAMENTE en mid_gather_tick (mitad de
     // recolección) y sigue hasta el fin en la MISMA invocación.
     SkirmishAperturaOut out_a{};
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
         o.ticks = 36000;
-        o.save_at = first_gather_tick;
+        o.save_at = mid_gather_tick;
         o.save_path = save_path;
         const int code = drive_skirmish_apertura(o, *g, setup, box, rt, out_a);
         CHECK(code == 0);
@@ -239,7 +299,13 @@ static void test_apertura_save_mid_gather_and_continue() {
         // El catálogo es BINDING RUNTIME puro: jamás se serializa. Re-enlazar
         // EXPLÍCITAMENTE tras el load (mismo precedente que test_ai_skirmish.cpp).
         gs_bind_catalog(*g, cat);
-        CHECK(g->tick == first_gather_tick);
+        CHECK(g->tick == mid_gather_tick);
+        CHECK(g->entities.alive[observed_ci] == 1u);
+        CHECK(g->eco_state[observed_ci] == observed_state);
+        CHECK(g->eco_assigned_deposit[observed_ci] == observed_deposit);
+        CHECK(g->eco_carry[observed_ci] == observed_carry);
+        CHECK(g->eco_carry_resource[observed_ci] == observed_carry_resource);
+        CHECK(continuation_checksum(*g, box, rt) == observed_continuation);
         SkirmishAperturaOpts o{};
         o.ticks = 36000;  // sin save_path: solo continuar
         const int code = drive_skirmish_apertura(o, *g, setup, box, rt, out_b);
@@ -274,6 +340,7 @@ static void test_apertura_replay_bit_exact() {
     uint32_t known_end_tick = 0;
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
@@ -286,6 +353,7 @@ static void test_apertura_replay_bit_exact() {
     SkirmishAperturaOut out_rec{};
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
@@ -309,6 +377,7 @@ static void test_apertura_replay_bit_exact() {
     SkirmishAperturaOut out_verify{};
     {
         auto g = make_apertura_state(cat, setup, 20260724ull);
+        if (g == nullptr) return;
         AiJobBox box{}; ai_box_init(box, 1);
         AiRuntimeV1 rt{0u, 4u};
         SkirmishAperturaOpts o{};
@@ -328,6 +397,10 @@ static void test_apertura_replay_bit_exact() {
 }
 
 int main() {
+    if (!test_apertura_preflight()) {
+        std::printf("ai_skirmish_apertura: pre-flight falló; subtests abortados\n");
+        return 1;
+    }
     test_apertura_concludes_in_victory();
     test_apertura_deterministic_two_runs();
     test_apertura_save_mid_gather_and_continue();
