@@ -91,12 +91,9 @@ namespace chunsa {
 // razón que en sprints anteriores (no tocar call sites).
 //
 // Sprint 1.7 (SPEC-004 §22.5): bump a v8 — el stream gana citizen_task al
-// final. El mismo contrato exige simultáneamente que los escenarios SIN
-// ciudadanos conserven sus checksums v7 bit-exactos. V8 formaliza esa
-// compatibilidad: si no hay ningún ciudadano vivo, hashea exactamente el
-// dominio/stream v7; si hay al menos uno, usa CHUNSA_STATE_V8, versión 8 y
-// añade citizen_task. Así el campo nuevo participa siempre que puede afectar
-// la simulación, sin invalidar G1/G3/G4/skirmish militar.
+// final para todos los slots y usa universalmente el dominio V8, sin depender
+// del contenido del estado. El bump V7→V8 invalida por diseño todos los
+// baselines previos, aunque la trayectoria funcional permanezca bit-idéntica.
 inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 8;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
@@ -125,21 +122,8 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
     const EntityTable& t = g.entities;
-    bool has_live_citizen = false;
-    for (uint32_t i = 0; i < t.capacity; ++i) {
-        if (t.alive[i] && g.unit_class[i] == 3u) {
-            has_live_citizen = true;
-            break;
-        }
-    }
-    if (has_live_citizen) {
-        h.bytes("CHUNSA_STATE_V8", 15);
-        h.u32(CHECKSUM_ALGO_VERSION);
-    } else {
-        // Rama de compatibilidad normativa de §22.5/Parte B.
-        h.bytes("CHUNSA_STATE_V7", 15);
-        h.u32(7u);
-    }
+    h.bytes("CHUNSA_STATE_V8", 15);
+    h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
 
@@ -274,11 +258,8 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     // MAX_EMITTERS slots (misma convención que pop_used/player_epoch).
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u32(g.player_civ[e]);
     // Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22.5): AL FINAL,
-    // todos los slots. En la rama sin ciudadanos se omite junto al dominio
-    // v8 para conservar literalmente el digest v7 contractual.
-    if (has_live_citizen) {
-        for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.citizen_task[i]);
-    }
+    // todos los slots, sin condicionales por contenido.
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.citizen_task[i]);
     return h.digest();
 }
 

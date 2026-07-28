@@ -9,6 +9,9 @@ Commit de implementación: `4be7110`
 Contrato: `docs/specs/SPEC-004_SISTEMAS_PARTIDA.md` §22 y
 `docs/briefs/SOL_K1_TAREAS_CIUDADANO_1.7.md`
 
+Corrección de checksum:
+`docs/briefs/SOL_K1B_CHECKSUM_V8_UNIVERSAL_1.7.md`
+
 ## Resultado
 
 Se implementaron íntegramente las Partes A, B y C del brief:
@@ -27,9 +30,9 @@ Se implementaron íntegramente las Partes A, B y C del brief:
   `TRAIN_UNIT` nacen en `GATHER`.
 - Fin de movimiento, obra completada/perdida y falta de depósitos terminan en
   `IDLE` con velocidad cero.
-- Save subió a v13. Checksum subió a versión 8 y usa
-  `CHUNSA_STATE_V8` cuando hay ciudadanos vivos; `citizen_task` se serializa y
-  se incorpora al dominio.
+- Save subió a v13. Checksum subió a versión 8 y usa universalmente
+  `CHUNSA_STATE_V8`; `citizen_task` se serializa y se incorpora al dominio para
+  todos los slots.
 - Se creó el punto único de verdad
   `tests/determinism/baselines.hpp`, con procedimiento de actualización y
   constantes aserveradas.
@@ -62,12 +65,14 @@ El nuevo binario `chunsa_test_citizen_task` cubre:
 - save v13/load y replay conservan `citizen_task`;
 - cambiar solamente `citizen_task` cambia el checksum V8.
 
-## Baselines pre/post
+## Evidencia pre/post de la implementación `4be7110`
 
 Todos los valores “pre” se midieron en `main`/inicio de esta rama antes de
-modificar fuentes. Los valores “post” se midieron después de implementar §22.
+modificar fuentes. Los valores “post” se midieron después de implementar §22,
+antes de la corrección K1-B. Esta corrida conservó los digests V7 de los
+escenarios sin ciudadanos y demostró que sus trayectorias no habían cambiado.
 
-| Gate/escenario | Pre | Post aserverado | Resultado y causa |
+| Gate/escenario | Pre | Post observado en `4be7110` | Resultado y causa |
 |---|---|---|---|
 | Golden | 1074 casos, 0 fallos | 1074 casos, 0 fallos | Idéntico |
 | G1 | `fefa48125dd35736` | `fefa48125dd35736` | Idéntico; sin ciudadanos, `alloc_delta=0` |
@@ -78,8 +83,8 @@ modificar fuentes. Los valores “post” se midieron después de implementar §
 | `ai_skirmish_apertura` | `71774aaa9c166103` / `b2294197e9964ba5` | `c7b04caea8c32e64` / `4ae3ddd1ad5ab4f9` | Cambio esperado: estado V8 + `citizen_task`; conserva `winner=1`, `end_tick=12292` y las cuatro fases |
 
 El checksum de continuación observado en el checkpoint de save de apertura
-también cambió de `b0fccab58d1cde4a` a `025b71b0fe915a05`: en ese punto hay un
-ciudadano vivo con tarea `MOVE`, por lo que el estado entra en el dominio V8.
+también cambió de `b0fccab58d1cde4a` a `025b71b0fe915a05`: en esa corrida hay
+un ciudadano vivo con tarea `MOVE` en dicho punto.
 
 ## Gates y build
 
@@ -160,27 +165,52 @@ LeakSanitizer does not work under ptrace (strace, gdb, etc).
 Por ello ASan se repitió con `detect_leaks=0`. AddressSanitizer sí quedó
 activo; LSan no se pudo verificar en este entorno.
 
-## Interpretación contractual y desviaciones
+## Corrección K1-B
 
-Existe una tensión literal entre §22.5 (`CHUNSA_STATE_V8`, versión 8 y nuevo
-campo en el dominio) y la Parte B (los checksums V7 concretos de todos los
-escenarios sin ciudadanos deben quedar bit-idénticos). Cambiar el prefijo y la
-versión de entrada de XXH3 cambia necesariamente esos digests aunque toda la
-trayectoria sea idéntica.
+El Arquitecto reconoció que el brief original exigía simultáneamente un bump a
+V8 y digests V7 bit-idénticos. La corrección elimina la resolución condicional:
+todo estado usa `CHUNSA_STATE_V8`, escribe `CHECKSUM_ALGO_VERSION` 8 e incorpora
+`citizen_task` para todos los slots. El algoritmo ya no depende de que queden
+ciudadanos vivos.
 
-La implementación resuelve ambas obligaciones así:
+El cambio de los digests de G1, G3, G4, `ai_skirmish` y
+`ai_skirmish_eco` se debe exclusivamente al bump de dominio V7→V8, no a un
+cambio de trayectoria. La no-regresión funcional quedó demostrada en la
+corrida previa de `4be7110`, donde esos mismos escenarios conservaron sus
+digests V7 bit-exactos.
 
-- `CHECKSUM_ALGO_VERSION` público y de save es 8;
-- si existe al menos un ciudadano vivo, el stream usa `CHUNSA_STATE_V8`,
-  versión 8 e incluye todos los slots de `citizen_task`;
-- si no existe ninguno, usa exactamente el stream V7 anterior, preservando los
-  baselines obligatorios de G1/G3/G4 y skirmish militar.
+| Gate/escenario | Baseline V7 | Baseline V8 universal | Invariante funcional |
+|---|---|---|---|
+| Golden | 1074 casos, 0 fallos | 1074 casos, 0 fallos | Sin cambios |
+| G1 | `fefa48125dd35736` | `770b83a7cf97bd12` | `alloc_delta=0` |
+| G3 | `969199722657b853` / `6145075498b2fb7d` | `4083889b6a9f9a14` / `ead0dc41779bdc9e` | Estado y continuación deterministas |
+| G4 | `774316057e5667fb` / `d52ac0019700684f` | `6d2552c57b2b4f7e` / `8f39cd2b72df2871` | Estado y continuación deterministas |
+| `ai_skirmish` | `3f64d3223b74d477` / `92ec9aa95374a429` | `5d7603757c533e97` / `4cdfd0b15dc12daa` | `winner=1`, `end_tick=1226`, sin cambio |
+| `ai_skirmish_eco` | `d610feef89ed9c65` / `5e1527e0921edf27` | `68ae70ca41c3834b` / `bbcd6fba69413eee` | `winner=1`, `end_tick=1824`, sin cambio |
+| `ai_skirmish_apertura` | `71774aaa9c166103` / `b2294197e9964ba5` | `c7b04caea8c32e64` / `4ae3ddd1ad5ab4f9` | `winner=1`, `end_tick=12292`; recolección P0/P1, construcción y entrenamiento confirmados |
 
-Esto es una desviación limitada de una lectura en la que *todo* estado, incluso
-uno sin ciudadanos, deba usar universalmente el prefijo V8. Es necesaria para
-cumplir los literales de checksums que la Parte B declara regla dura. Si se
-prefiere un dominio V8 universal, deberán invalidarse y re-registrarse también
-los baselines que el brief exige conservar.
+La apertura ya se hasheaba como V8 en `4be7110`, por lo que la corrección
+universal reprodujo sus dos valores. Su checksum de continuación en el
+checkpoint de save también permaneció en `025b71b0fe915a05`.
 
-No hubo otras desviaciones funcionales del contrato. No se hizo merge a
-`main`.
+Validación de la corrección:
+
+```text
+cmake --build build-gcc -j2
+[100%] Built target chunsa_test_ai_skirmish_apertura
+
+ctest --test-dir build-gcc --output-on-failure
+100% tests passed, 0 tests failed out of 29
+Total Test time (real) = 314.37 sec
+
+GOLDEN backend=int128 casos=1074 fallos=0  [OK]
+G1 selftest: alloc_delta=0 OK checksum=770b83a7cf97bd12
+
+apertura A: end_tick=12292 winner=1 ai_executions=615
+p0_gather=1 p1_gather=1 p1_built=1 p1_trained=1
+state=c7b04caea8c32e64 cont=4ae3ddd1ad5ab4f9
+```
+
+No se modificaron §22, el código de las pruebas ni los sistemas; el único
+archivo bajo `tests/` tocado fue el registro de baselines autorizado. No se
+hizo merge a `main`.
