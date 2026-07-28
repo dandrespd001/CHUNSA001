@@ -2403,6 +2403,17 @@ uint32_t ChunsaSimNode::enqueue_build_assignments(int64_t tx, int64_t ty) {
 
 uint32_t ChunsaSimNode::enqueue_gather_orders(int64_t x_raw, int64_t y_raw) {
     if (!have_curr) return 0;
+    // Revisión del Arquitecto: `screen_to_map` devuelve el origen del rayo de
+    // cámara SIN acotar (solo comprueba isfinite), así que un punto muy lejano
+    // haría desbordar `dx*dx + dy*dy` en int64 — desbordamiento con signo, es
+    // UB. Con la cámara acotada el valor real se queda lejos del límite, pero
+    // el guard es gratis y elimina la dependencia de esa suposición. Fuera del
+    // mundo no hay depósito posible, así que devolver 0 es además correcto: el
+    // flujo cae a MOVE_TO, que ya delega la validación de cota en el kernel.
+    if (x_raw < 0 || x_raw >= chunsa::WORLD_RAW_MAX ||
+        y_raw < 0 || y_raw >= chunsa::WORLD_RAW_MAX) {
+        return 0;
+    }
     const uint32_t deposit_count = std::min(snap_curr.n_deposits,
                                             chunsa::ECO_MAX_DEPOSITS);
     const uint64_t radius = static_cast<uint64_t>(chunsa::GATHER_PICK_RADIUS_RAW);
