@@ -501,3 +501,114 @@ función pura, cero `g.tick`/float/heap/RNG fuera de `AI_TIEBREAK`):
   determinismo de la extensión de la IA.
 - **Codex/Luna Max**: adaptador Godot (órdenes de recolección por clic, HUD de aldeanos por
   recurso, escenario de apertura jugable) — al final, contra main con K2.
+
+# Parte IV — Control del ciudadano (Sprint 1.7)
+
+## §22 Modelo de tareas del ciudadano
+
+**Motivación (sesión de verificación del Director, 2026-07-28).** El ciudadano
+es hoy el único cuerpo del juego que el jugador **no puede mandar**. Sus dos
+modos son implícitos: si `build_target != BUILD_NO_TARGET` lo mueve
+`construction_system`; si no, lo posee `economy_system`, que le reescribe la
+posición cada tick. No existe hueco para «vete ahí». Un `MOVE_TO` sobre un
+ciudadano es aceptado por `apply_command` y **no hace nada**: `movement_v1`
+excluye `unit_class > 2` y economía le sobrescribe `pos` en la misma fase.
+
+Referencia de género (Age of Empires II): el aldeano es **unidad primero y
+trabajador después**. El clic derecho es contextual según el objetivo (suelo →
+mover · recurso → recolectar · obra → construir) y la orden de moverse siempre
+funciona y cancela lo anterior.
+
+### §22.1 La tarea es explícita y única
+
+Cada ciudadano tiene exactamente **una** tarea, en un campo nuevo
+`citizen_task[ENTITY_HARD_CAP]` (`uint8_t`):
+
+| Valor | Nombre | Quién le mueve | Se fija con |
+|---|---|---|---|
+| 0 | `IDLE` | nadie — quieto, `vel = 0` | al completar `MOVE`; al quedar sin depósito |
+| 1 | `MOVE` | `citizen_move_system` (§22.3) | `MOVE_TO` |
+| 2 | `GATHER` | `economy_system` | `GATHER` |
+| 3 | `BUILD` | `construction_system` | `ASSIGN_BUILD` |
+
+`citizen_task` es la **única** autoridad sobre qué sistema posee al ciudadano.
+`build_target` y `eco_assigned_deposit` pasan a ser datos **de** la tarea, no
+selectores de sistema.
+
+**Invariante rector:** en un tick dado, a lo sumo un sistema escribe
+`pos_x/pos_y` de un ciudadano. Cada sistema comprueba `citizen_task` al entrar y
+sale si no es la suya. Esto deroga y sustituye al guard
+`if (g.unit_class[i] > 2) continue;` de `movement_v1` como mecanismo de
+exclusión — **`movement_v1` NO se modifica** (sigue CONGELADO, SPEC-001 §12) y
+sigue sin tocar ciudadanos.
+
+### §22.2 Transiciones
+
+Fijar una tarea **cancela la anterior sin residuo**:
+
+- `MOVE_TO` sobre ciudadano propio vivo, destino dentro de cota:
+  `citizen_task = MOVE`, `tgt_x/tgt_y = destino`, `build_target = BUILD_NO_TARGET`.
+  **`eco_assigned_deposit`, `eco_carry` y `eco_carry_resource` NO se tocan**: el
+  ciudadano sigue transportando lo que llevaba mientras camina.
+- `GATHER`: `citizen_task = GATHER`, más las reglas de §18 (incluida la **regla
+  de carga**, que se mantiene íntegra).
+- `ASSIGN_BUILD`: `citizen_task = BUILD`, `build_target = objetivo`.
+- Al llegar al destino de `MOVE`: `citizen_task = IDLE`, `vel = 0`.
+- Al completar o perder la obra: `citizen_task = IDLE`.
+- En `GATHER`, si no queda ningún depósito alcanzable:
+  `citizen_task = IDLE` (hoy queda en `SEEK` girando en vacío).
+
+**Divergencia deliberada frente a AoE2 — se documenta y se conserva.** AoE2
+**pierde** la carga al reasignar a un recurso distinto (comportamiento que su
+propia comunidad reporta como defecto). CHUNSA **conserva** el recurso: la regla
+de carga de §18 hace volver al dropoff primero. No se copia el defecto.
+
+### §22.3 `citizen_move_system`
+
+Sistema nuevo, fase propia, **antes** de `economy_system` y de
+`construction_system`, iteración ascendente por índice.
+
+- Actúa solo sobre ciudadanos vivos con `citizen_task == MOVE`.
+- Locomoción: **idéntica en forma** a la rama de aproximación de
+  `economy.hpp::try_move` (normalize + step entero, con snap si el paso cubre la
+  distancia restante). Cero float, cero heap.
+- Llegada: cuando la distancia al objetivo es `<= arrive_r_sq`,
+  `citizen_task = IDLE` y `vel = 0`.
+
+**Alcance de la navegación en este sprint: línea recta, sin pathfinding.** No es
+una rebaja: `movement_v1` mueve a los militares con `MOVE_TO` **también en línea
+recta**; el flow field solo interviene con `FLOW_MOVE`, y el motor mantiene **un
+único** campo global (`g.flow`, `g.flow_goal_cell`), no uno por unidad, así que
+no es reutilizable para destinos individuales. Dar `MOVE_TO` recto al ciudadano
+lo deja **a la misma altura que el resto del ejército**, no por debajo.
+
+**Deuda declarada:** navegación por obstáculos para órdenes individuales
+(ciudadanos y militares por igual) es un problema de motor sin resolver, no un
+agujero de este sprint. Va a su propio sprint. Hasta entonces, un ciudadano
+enviado al otro lado del muro de `x=128` empujará la pared — igual que hoy
+haría un soldado.
+
+### §22.4 Auto-asignación al aparecer: se conserva
+
+AoE2 hace que los aldeanos nuevos queden **parados**. CHUNSA los auto-asigna al
+depósito más cercano. **En este sprint se conserva la auto-asignación.**
+
+Razón: cambiarla altera la apertura de la IA y **todas** las trayectorias
+económicas de golpe, incluido el gate de fase del Sprint 1.4. La libertad que el
+Director reclama la aporta `MOVE` (§22.1), no este comportamiento por defecto.
+Pasar a «nacen parados» es un cambio de diseño legítimo y va **después**, con el
+reajuste de la apertura de la IA, para no mezclar dos fuentes de divergencia en
+el mismo incremento.
+
+### §22.5 Versionado
+
+`citizen_task` es estado nuevo persistido y entra en el checksum:
+
+- `SAVE_FORMAT_VERSION` **12 → 13**.
+- `CHECKSUM_ALGO_VERSION` **7 → 8** (`CHUNSA_STATE_V8`).
+- Los baselines de determinismo de escenarios **con ciudadanos** cambian y se
+  re-registran. Los que **no** tienen ciudadanos deben quedar **bit-idénticos**;
+  si alguno se mueve, es una regresión y se para.
+
+`gs_init` inicializa `citizen_task = GATHER` para ciudadanos (coherente con
+§22.4) e `IDLE` para el resto de clases, que no lo consultan.
