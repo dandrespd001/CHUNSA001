@@ -64,6 +64,24 @@ constexpr int64_t SKIRMISH_BASE_TY = 128;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 
+const char* resource_label(uint8_t resource_idx) {
+    switch (resource_idx) {
+        case 0u: return "A";
+        case 1u: return "B";
+        case 2u: return "Me";
+        default: return "?";
+    }
+}
+
+godot::Color resource_color(uint8_t resource_idx) {
+    switch (resource_idx) {
+        case 0u: return godot::Color(0.95, 0.75, 0.2, 1.0);
+        case 1u: return godot::Color(0.35, 0.85, 0.95, 1.0);
+        case 2u: return godot::Color(0.85, 0.5, 0.95, 1.0);
+        default: return godot::Color(0.8, 0.8, 0.8, 1.0);
+    }
+}
+
 godot::Color fog_overlay_color(chunsa::presentation::FogLevel level) {
     using chunsa::presentation::FogLevel;
     switch (level) {
@@ -308,6 +326,17 @@ void ChunsaSimNode::sim_loop() {
                 s->rally_set[i] = gs->rally_set[i];
                 s->research_tech[i] = gs->research_tech[i];
                 s->research_progress[i] = gs->research_progress[i];
+                s->eco_carry[i] = gs->eco_carry[i];
+                s->eco_carry_resource[i] = gs->eco_carry_resource[i];
+                s->eco_state[i] = static_cast<uint8_t>(gs->eco_state[i]);
+                s->eco_assigned_deposit[i] = gs->eco_assigned_deposit[i];
+            }
+            s->n_deposits = gs->n_deposits;
+            for (uint32_t i = 0; i < chunsa::ECO_MAX_DEPOSITS; ++i) {
+                s->dep_x_raw[i] = gs->deposits[i].x_raw;
+                s->dep_y_raw[i] = gs->deposits[i].y_raw;
+                s->dep_remaining[i] = gs->deposits[i].remaining;
+                s->dep_resource_idx[i] = gs->deposits[i].resource_idx;
             }
             s->stock_a = gs->player_stock[0][0];
             s->stock_b = gs->player_stock[0][1];
@@ -445,7 +474,7 @@ void ChunsaSimNode::_draw() {
     const godot::Color muted(0.72, 0.82, 0.9, 1.0);
     draw_world_overlay(font, text);
 
-    draw_rect(godot::Rect2(godot::Vector2(14, 14), godot::Vector2(720, 118)),
+    draw_rect(godot::Rect2(godot::Vector2(14, 14), godot::Vector2(720, 144)),
               godot::Color(0.02, 0.04, 0.08, 0.9));
 
     godot::String resources = godot::String("CHUNSA  A ") +
@@ -456,6 +485,43 @@ void ChunsaSimNode::_draw() {
             godot::String::num_int64(snap_curr.pop_used) + "/200";
     draw_string(font, godot::Vector2(28, 42), resources,
                  static_cast<godot::HorizontalAlignment>(0), -1, 18, text);
+
+    uint32_t citizens_by_resource[3] = {};
+    uint32_t constructing = 0;
+    uint32_t idle = 0;
+    const uint32_t economy_cap = snap_curr.capacity < 1024u
+            ? snap_curr.capacity
+            : 1024u;
+    for (uint32_t i = 0; i < economy_cap; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u ||
+            snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) {
+            continue;
+        }
+        if (snap_curr.build_target[i] != chunsa::BUILD_NO_TARGET) {
+            ++constructing;
+            continue;
+        }
+        uint8_t resource_idx = 3u;
+        const uint32_t deposit = snap_curr.eco_assigned_deposit[i];
+        if (deposit != chunsa::ECO_NO_DEPOSIT &&
+            deposit < snap_curr.n_deposits &&
+            snap_curr.dep_resource_idx[deposit] < 3u) {
+            resource_idx = snap_curr.dep_resource_idx[deposit];
+        } else if (snap_curr.eco_carry[i] > 0 &&
+                   snap_curr.eco_carry_resource[i] < 3u) {
+            resource_idx = snap_curr.eco_carry_resource[i];
+        }
+        if (resource_idx < 3u) ++citizens_by_resource[resource_idx];
+        else ++idle;
+    }
+    const godot::String citizen_line = "Aldeanos — A:" +
+            godot::String::num_int64(citizens_by_resource[0]) + "  B:" +
+            godot::String::num_int64(citizens_by_resource[1]) + "  Me:" +
+            godot::String::num_int64(citizens_by_resource[2]) + "  constr:" +
+            godot::String::num_int64(constructing) + "  ocioso:" +
+            godot::String::num_int64(idle);
+    draw_string(font, godot::Vector2(28, 120), citizen_line,
+                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
 
     godot::String controls =
             "1..9 grupos | WASD/flechas: cámara | rueda: zoom | MMB: pan";
@@ -757,6 +823,8 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         if (!screen_to_map(mb->get_position(), world_px, world_py)) return;
         const int64_t x_raw = static_cast<int64_t>((world_px / 4.0f) * 65536.0f);
         const int64_t y_raw = static_cast<int64_t>((world_py / 4.0f) * 65536.0f);
+
+        if (enqueue_gather_orders(x_raw, y_raw) > 0u) return;
 
         bool issued = false;
         std::lock_guard<std::mutex> lock(input_mutex);
@@ -1239,6 +1307,20 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
         }
     }
 
+    const uint32_t deposit_count = std::min(snap_curr.n_deposits,
+                                            chunsa::ECO_MAX_DEPOSITS);
+    for (uint32_t d = 0; d < deposit_count; ++d) {
+        if (snap_curr.dep_remaining[d] <= 0 ||
+            !presentation_tile_visible(snap_curr.dep_x_raw[d], snap_curr.dep_y_raw[d])) {
+            continue;
+        }
+        const godot::Vector2 p = map.position + godot::Vector2(
+                static_cast<float>(snap_curr.dep_x_raw[d]) / 65536.0f * 4.0f * scale,
+                static_cast<float>(snap_curr.dep_y_raw[d]) / 65536.0f * 4.0f * scale);
+        draw_circle(p, std::max(1.5f, 2.5f * scale),
+                    resource_color(snap_curr.dep_resource_idx[d]));
+    }
+
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     for (uint32_t i = 0; i < cap; ++i) {
@@ -1359,6 +1441,30 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
     }
 
+    const bool single_citizen = count == 1 && first >= 0 &&
+            snap_curr.entity_kind[static_cast<uint32_t>(first)] == 0u &&
+            snap_curr.unit_class[static_cast<uint32_t>(first)] == 3u;
+    if (single_citizen) {
+        const uint32_t citizen = static_cast<uint32_t>(first);
+        const char* state = "SEEK";
+        if (snap_curr.eco_state[citizen] == 1u) state = "HARVEST";
+        else if (snap_curr.eco_state[citizen] == 2u) state = "RETURN";
+        const uint32_t deposit = snap_curr.eco_assigned_deposit[citizen];
+        const godot::String deposit_text = deposit != chunsa::ECO_NO_DEPOSIT &&
+                        deposit < snap_curr.n_deposits
+                ? godot::String::num_int64(static_cast<int64_t>(deposit))
+                : "ninguno";
+        const godot::String carry_resource = resource_label(
+                snap_curr.eco_carry_resource[citizen]);
+        const godot::String economy = "Estado " + godot::String(state) +
+                " · depósito " + deposit_text + " · carga " +
+                godot::String::num_int64(snap_curr.eco_carry[citizen]) + "/" +
+                godot::String::num_int64(chunsa::ECO_CARRY_CAP) + " " +
+                carry_resource;
+        draw_string(font, panel.position + godot::Vector2(16, 106), economy,
+                    static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
+    }
+
     const int32_t selected_building = selected_single_building_slot();
     if (selected_building >= 0 &&
         snap_curr.building_id[selected_building] < catalog_storage.catalog().building_count) {
@@ -1433,9 +1539,9 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
         }
     } else {
-        const float actions_y = single_combat_unit ? 126.0f : 116.0f;
+        const float actions_y = single_combat_unit || single_citizen ? 126.0f : 116.0f;
         draw_string(font, panel.position + godot::Vector2(16, actions_y),
-                    "Acciones: clic derecho mueve · B construye · R rally",
+                    "Acciones: clic derecho mueve/recolecta · B construye · R rally",
                     static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
 }
@@ -1454,6 +1560,42 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
         draw_circle(p, 7.0f, marker, false, 2.0f);
         draw_line(p - godot::Vector2(10, 0), p + godot::Vector2(10, 0), marker, 2.0f);
         draw_line(p - godot::Vector2(0, 10), p + godot::Vector2(0, 10), marker, 2.0f);
+    }
+
+    const uint32_t deposit_count = std::min(snap_curr.n_deposits,
+                                            chunsa::ECO_MAX_DEPOSITS);
+    for (uint32_t d = 0; d < deposit_count; ++d) {
+        if (snap_curr.dep_remaining[d] <= 0 ||
+            !presentation_tile_visible(snap_curr.dep_x_raw[d], snap_curr.dep_y_raw[d])) {
+            continue;
+        }
+        const float px = static_cast<float>(snap_curr.dep_x_raw[d]) / 65536.0f * 4.0f;
+        const float py = static_cast<float>(snap_curr.dep_y_raw[d]) / 65536.0f * 4.0f;
+        const godot::Vector2 p = cam3d->unproject_position(
+                godot::Vector3(px, -py, py + 14.0f));
+        const godot::Color color = resource_color(snap_curr.dep_resource_idx[d]);
+        switch (snap_curr.dep_resource_idx[d]) {
+            case 0u:
+                draw_circle(p, 8.0f, color);
+                break;
+            case 1u:
+                draw_rect(godot::Rect2(p - godot::Vector2(7, 7),
+                                       godot::Vector2(14, 14)), color, false, 3.0f);
+                break;
+            case 2u:
+                draw_line(p + godot::Vector2(0, -9), p + godot::Vector2(9, 0), color, 3.0f);
+                draw_line(p + godot::Vector2(9, 0), p + godot::Vector2(0, 9), color, 3.0f);
+                draw_line(p + godot::Vector2(0, 9), p + godot::Vector2(-9, 0), color, 3.0f);
+                draw_line(p + godot::Vector2(-9, 0), p + godot::Vector2(0, -9), color, 3.0f);
+                break;
+            default:
+                draw_circle(p, 8.0f, color, false, 2.0f);
+                break;
+        }
+        draw_string(font, p + godot::Vector2(11, 5),
+                    godot::String(resource_label(snap_curr.dep_resource_idx[d])) + " " +
+                            godot::String::num_int64(snap_curr.dep_remaining[d]),
+                    static_cast<godot::HorizontalAlignment>(0), -1, 12, color);
     }
 
     for (uint32_t i = 0; i < cap; ++i) {
@@ -2255,6 +2397,55 @@ uint32_t ChunsaSimNode::enqueue_build_assignments(int64_t tx, int64_t ty) {
     if (count > 0u) {
         godot::UtilityFunctions::print("CHUNSA ASSIGN_BUILD enqueued citizens=", count,
                                        " tile=", tx, ",", ty);
+    }
+    return count;
+}
+
+uint32_t ChunsaSimNode::enqueue_gather_orders(int64_t x_raw, int64_t y_raw) {
+    if (!have_curr) return 0;
+    const uint32_t deposit_count = std::min(snap_curr.n_deposits,
+                                            chunsa::ECO_MAX_DEPOSITS);
+    const uint64_t radius = static_cast<uint64_t>(chunsa::GATHER_PICK_RADIUS_RAW);
+    const uint64_t radius_sq = radius * radius;
+    uint32_t deposit = chunsa::ECO_NO_DEPOSIT;
+    uint64_t best_distance_sq = UINT64_MAX;
+    for (uint32_t d = 0; d < deposit_count; ++d) {
+        if (snap_curr.dep_remaining[d] <= 0) continue;
+        const int64_t dx = x_raw - snap_curr.dep_x_raw[d];
+        const int64_t dy = y_raw - snap_curr.dep_y_raw[d];
+        const uint64_t distance_sq = static_cast<uint64_t>(dx * dx + dy * dy);
+        if (distance_sq <= radius_sq && distance_sq < best_distance_sq) {
+            best_distance_sq = distance_sq;
+            deposit = d;
+        }
+    }
+    if (deposit == chunsa::ECO_NO_DEPOSIT) return 0;
+
+    uint32_t count = 0;
+    std::lock_guard<std::mutex> lock(input_mutex);
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i) || snap_curr.owner[i] != 0u ||
+            snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) {
+            continue;
+        }
+        chunsa::RawCommand c;
+        std::memset(&c, 0, sizeof(c));
+        c.target_tick = 0;
+        c.emitter = 0;
+        c.type = chunsa::CommandType::GATHER;
+        c.sequence = next_player_sequence++;
+        c.p.handle = chunsa::EntityHandle{i, snap_curr.generation[i]};
+        c.p.x_raw = snap_curr.dep_x_raw[deposit];
+        c.p.y_raw = snap_curr.dep_y_raw[deposit];
+        pending_player_commands.push_back(c);
+        ++count;
+    }
+    if (count > 0u) {
+        add_order_marker(static_cast<float>(snap_curr.dep_x_raw[deposit]) /
+                                 65536.0f * 4.0f,
+                         static_cast<float>(snap_curr.dep_y_raw[deposit]) /
+                                 65536.0f * 4.0f);
     }
     return count;
 }

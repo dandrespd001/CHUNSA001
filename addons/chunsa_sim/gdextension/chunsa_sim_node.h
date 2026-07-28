@@ -81,6 +81,19 @@ public:
         uint32_t research_tech[1024];
         uint32_t research_progress[1024];
 
+        // Sprint 1.6B: economía visible para la presentación. Los depósitos
+        // conservan el layout del kernel (slots fijos hasta ECO_MAX_DEPOSITS)
+        // y el resto es estado económico POR-SLOT.
+        uint32_t n_deposits;
+        int64_t dep_x_raw[chunsa::ECO_MAX_DEPOSITS];
+        int64_t dep_y_raw[chunsa::ECO_MAX_DEPOSITS];
+        int32_t dep_remaining[chunsa::ECO_MAX_DEPOSITS];
+        uint8_t dep_resource_idx[chunsa::ECO_MAX_DEPOSITS];
+        int32_t eco_carry[1024];
+        uint8_t eco_carry_resource[1024];
+        uint8_t eco_state[1024]; // 0=SEEK 1=HARVEST 2=RETURN
+        uint32_t eco_assigned_deposit[1024];
+
         // Sprint 1.2: estado escalar del jugador 0 para el HUD.
         int64_t stock_a;
         int64_t stock_b;
@@ -205,6 +218,7 @@ private:
                          int64_t ty) const;
     void enqueue_place_building(int64_t tx, int64_t ty);
     uint32_t enqueue_build_assignments(int64_t tx, int64_t ty);
+    uint32_t enqueue_gather_orders(int64_t x_raw, int64_t y_raw);
     int32_t selected_building_slot() const;
     void enqueue_selected_action(uint32_t action_index, bool research);
     void enqueue_rally(int64_t tx, int64_t ty);
