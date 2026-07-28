@@ -154,6 +154,13 @@ inline int drive(const DriveOpts& o, GameState& gs, AiJobBox& box, AiRuntimeV1& 
             // --- G5: replay-feed. IA JAMÁS se ejecuta aquí. ---
             if (t < o.feed->batches.size()) {
                 const auto& b = o.feed->batches[t];
+                // Auditoría multimodelo 2026-07-27, F-00: el loader admite hasta
+                // MAX_PER_TICK (4096) comandos por tick (replay.hpp), muy por encima de la
+                // cota de la IA con la que se dimensiona el buffer. Sin esta línea un replay
+                // legal escribe fuera del heap. Amortizado O(1): los batches reales del
+                // escenario son < 72 y jamás redimensionan, así que ninguna trayectoria
+                // existente cambia.
+                if (b.size() > batch.size()) batch.resize(b.size());
                 // v2: la agenda grabada debe reproducir bit a bit la recomputada
                 // bajo la config §6.2 del propio replay (auto-verificación).
                 const bool has_agenda = (o.feed->version >= 2u)

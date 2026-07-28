@@ -28,6 +28,13 @@ inline constexpr uint32_t AGGRO_RADIUS_CELLS = 5;
 // independiente — comparten semántica "a un tile o menos del objetivo").
 inline constexpr int64_t BUILD_ARRIVE_RADIUS_RAW = ECO_ARRIVE_RADIUS_RAW;
 
+// GATHER (Sprint 1.6B, SPEC-004 §18): radio de "pick" del depósito objetivo —
+// 1 tile, mismo valor que ECO_ARRIVE_RADIUS_RAW pero constante PROPIA (alias
+// explícito, no la reutiliza directamente): semántica distinta ("¿hay un
+// depósito aquí?" vs "¿llegué al depósito/dropoff?"), aunque el valor
+// numérico coincida en v1.
+inline constexpr int64_t GATHER_PICK_RADIUS_RAW = FX_ONE_RAW;
+
 // EPOCH_UP (Sprint 1.2, SPEC-004 §12.3, ADR-015): constantes v1 (brief K2, no
 // re-litigar). EPOCH_MIN_TICKS = 20 ticks/s * 300 s = 6000 (gate b: tiempo
 // mínimo desde la época inicial). EPOCH_COST_*: coste fijo v1. EPOCH_MAX_V1:
@@ -647,6 +654,45 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.player_stock[c.emitter][1] -= EPOCH_COST_B;
             g.player_stock[c.emitter][2] -= EPOCH_COST_ME;
             g.player_epoch[c.emitter] = cur_epoch + 1u;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::GATHER: {
+            // SPEC-004 §18: p.handle = ciudadano propio; p.x_raw/p.y_raw =
+            // punto raw del depósito objetivo. Orden de validación es
+            // CONTRATO (testeado): handle vivo/propio, unit_class==3, resolver
+            // depósito (índice más bajo con remaining>0 dentro de
+            // GATHER_PICK_RADIUS_RAW del punto; ninguno -> INVALID_ENTITY).
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t ci = c.p.handle.index;
+            if (g.owner[ci] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.unit_class[ci] != 3u) return RejectReason::ILLEGAL_STATE;
+
+            const Vec2Fx point{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            const uint64_t pick_r_sq = static_cast<uint64_t>(GATHER_PICK_RADIUS_RAW)
+                                      * static_cast<uint64_t>(GATHER_PICK_RADIUS_RAW);
+            uint32_t found = ECO_NO_DEPOSIT;
+            for (uint32_t d = 0; d < g.n_deposits; ++d) {
+                if (g.deposits[d].remaining <= 0) continue;
+                const Vec2Fx there{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
+                FatalReason local_fatal{};  // descartado a propósito, mismo patrón que combat/aggro/eco
+                const uint64_t d_sq = dist_sq_raw(point, there, local_fatal);
+                if (d_sq <= pick_r_sq) { found = d; break; }  // índice más bajo: primer match ascendente
+            }
+            if (found == ECO_NO_DEPOSIT) return RejectReason::INVALID_ENTITY;
+
+            g.eco_assigned_deposit[ci] = found;
+            // Auditoría multimodelo 2026-07-27, F-01: si la redirección cambia
+            // de recurso, la carga previa debe volver al dropoff antes de
+            // buscar el depósito nuevo. RETURN conserva assigned_deposit y,
+            // tras descargar, pasa a SEEK sin convertir el tipo transportado.
+            const bool changes_loaded_resource =
+                g.eco_carry[ci] > 0
+                && g.deposits[found].resource_idx != g.eco_carry_resource[ci];
+            g.eco_state[ci] = changes_loaded_resource ? EcoState::RETURN : EcoState::SEEK;
+            // Recolectar cancela construir — decisión explícita del contrato
+            // (SPEC-004 §18), mismo patrón que el resto del kernel usa
+            // BUILD_NO_TARGET como centinela de "sin objetivo".
+            g.build_target[ci] = BUILD_NO_TARGET;
             return RejectReason::ACCEPTED;
         }
         case CommandType::MOVE_TO: {

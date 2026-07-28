@@ -31,6 +31,10 @@ enum class CommandType : uint16_t {
     SET_RALLY = 10,
     RESEARCH_TECH = 11,
     EPOCH_UP = 12,
+    // Sprint 1.6B (SPEC-004 §18): recolección explícita. p.handle = ciudadano
+    // propio; p.x_raw/p.y_raw = punto raw del depósito objetivo (mismo patrón
+    // de reutilización de campos que MOVE_TO/SET_RALLY).
+    GATHER = 13,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

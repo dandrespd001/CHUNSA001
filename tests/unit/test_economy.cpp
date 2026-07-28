@@ -76,7 +76,7 @@ static void test_nearest_tie_and_invalid_retarget() {
     };
     FatalReason fatal = FatalReason::NONE;
 
-    CHECK(eco_find_nearest_deposit(deposits, 2, 0, 0, fatal) == 0u);
+    CHECK(eco_find_nearest_deposit(deposits, 2, 0, 0, ECO_ANY_RESOURCE, fatal) == 0u);
 
     const EcoCitizenIn invalid = citizen_at(0, 0, EcoState::SEEK, 99u);
     const EcoCitizenOut out =

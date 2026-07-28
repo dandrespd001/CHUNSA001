@@ -432,8 +432,32 @@ Hoy los aldeanos recolectan **solos** (state machine autónoma SEEK/HARVEST/RETU
   **NOT_OWNER**) · `unit_class == 3` (**ILLEGAL_STATE**) · resolver depósito: el de índice más
   bajo cuyo `remaining > 0` y cuya distancia al punto sea ≤ `GATHER_PICK_RADIUS_RAW` (1 tile);
   si ninguno ⇒ **INVALID_ENTITY**. Efecto: `eco_assigned_deposit = ese índice`,
-  `eco_state = SEEK`, y `build_target = BUILD_NO_TARGET` (una orden de recolectar cancela la de
-  construir — decisión explícita).
+  `build_target = BUILD_NO_TARGET` (una orden de recolectar cancela la de construir — decisión
+  explícita) y `eco_state` según la **regla de carga** de abajo.
+- **Regla de carga (enmienda del Arquitecto, 2026-07-28)**: la redacción original fijaba
+  `eco_state = SEEK` de forma incondicional. Eso era un defecto de integridad económica: un
+  ciudadano que transportaba parcialmente el recurso A y recibía `GATHER` hacia B conservaba la
+  cantidad de A, cosechaba B y `HARVEST` sobrescribía `eco_carry_resource` con B — acreditando
+  **toda** la suma como B en el dropoff. Reproducido en la auditoría multimodelo del 2026-07-27
+  (10 unidades de A → carga de 15 unidades de B tras una sola cosecha de 5 B). Rompía
+  conservación de recursos y afectaba tanto a órdenes humanas como a la reasignación automática
+  de la IA (§19). Semántica correcta, por casos:
+
+  | Condición | `eco_assigned_deposit` | `eco_state` |
+  |---|---|---|
+  | `eco_carry == 0` | índice resuelto | `SEEK` |
+  | `eco_carry > 0` y `deposits[idx].resource_idx == eco_carry_resource` | índice resuelto | `SEEK` |
+  | `eco_carry > 0` y el recurso **difiere** | índice resuelto | **`RETURN`** |
+
+  El tercer caso deposita primero y **no necesita campos nuevos**: `RETURN`, al llegar al
+  dropoff, pone `carry = 0` y `eco_state = SEEK` conservando `eco_assigned_deposit`; en el `SEEK`
+  siguiente `need_reassign` es falso si el depósito nuevo tiene `remaining > 0`, así que el
+  aldeano marcha directo al que pidió el jugador. **`SAVE_FORMAT_VERSION` 12 y
+  `CHECKSUM_ALGO_VERSION` 7 quedan intactos**: el formato serializado y el algoritmo de checksum
+  no cambian; lo que cambia es el comportamiento del kernel, que es justo lo que la versión de
+  checksum no cubre. El caso "mismo recurso" mantiene `SEEK` a propósito: la carga sigue siendo
+  homogénea, no hay corrupción posible y forzar un viaje de vuelta sería una regresión de
+  jugabilidad injustificada.
 - **Órdenes de grupo**: el host emite un GATHER por ciudadano seleccionado (N comandos), como ya
   hace con MOVE_TO. El kernel no agrupa (mantiene un comando = una entidad).
 - **Agotamiento y reasignación deterministas**: cuando `remaining <= 0`, el aldeano asignado

@@ -133,6 +133,25 @@ target_compile_definitions(chunsa_test_civ_deposits PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME civ_deposits COMMAND chunsa_test_civ_deposits)
 
+# --- Test Sprint 1.6B (K2): comando GATHER + agotamiento/reasignación (SPEC-004
+# §18) ----------------------------------------------------------------------
+add_executable(chunsa_test_gather tests/unit/test_gather.cpp)
+target_link_libraries(chunsa_test_gather PRIVATE chunsa_sim_core)
+add_test(NAME gather COMMAND chunsa_test_gather)
+
+# --- Test Sprint 1.6B (K2): la IA juega la apertura (SPEC-004 §19) -------------
+add_executable(chunsa_test_ai_apertura tests/unit/test_ai_apertura.cpp)
+target_link_libraries(chunsa_test_ai_apertura PRIVATE chunsa_sim_core)
+add_test(NAME ai_apertura COMMAND chunsa_test_ai_apertura)
+
+# --- Test Sprint 1.6B (K2): el escenario del DoD — apertura económica real
+# (SPEC-004 §20, el corazón del sprint) --------------------------------------
+add_executable(chunsa_test_ai_skirmish_apertura tests/unit/test_ai_skirmish_apertura.cpp)
+target_link_libraries(chunsa_test_ai_skirmish_apertura PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_ai_skirmish_apertura PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME ai_skirmish_apertura COMMAND chunsa_test_ai_skirmish_apertura)
+
 # --- Test Sprint 1.5A: política pura de fog para presentación -------------------
 add_executable(chunsa_test_fog_view tests/unit/test_fog_view.cpp)
 target_link_libraries(chunsa_test_fog_view PRIVATE chunsa_sim_core)
