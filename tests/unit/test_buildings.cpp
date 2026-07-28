@@ -589,6 +589,7 @@ static void test_dropoff_building_vs_fallback() {
         RawCommand spawn = spawn_citizen(0, 0, 1, 0, 100 * 65536, 100 * 65536);
         step(*g, &spawn, 1);
         g->eco_state[0] = EcoState::RETURN;
+        g->citizen_task[0] = CITIZEN_TASK_GATHER;
         g->eco_carry[0] = 50;
         g->eco_carry_resource[0] = 0;  // A
         const int64_t legacy_x = g->dropoff_x[0], legacy_y = g->dropoff_y[0];
@@ -615,6 +616,7 @@ static void test_dropoff_building_vs_fallback() {
         RawCommand spawn = spawn_citizen(1, 0, 2, 1, 100 * 65536, 96 * 65536);
         step(*g, &spawn, 1);
         g->eco_state[1] = EcoState::RETURN;
+        g->citizen_task[1] = CITIZEN_TASK_GATHER;
         g->eco_carry[1] = 30;
         g->eco_carry_resource[1] = 0;  // A
 

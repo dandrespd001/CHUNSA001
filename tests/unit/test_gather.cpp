@@ -8,7 +8,9 @@
 // YA está recolectando otro recurso · agotamiento -> reasignación al MISMO
 // recurso (economy.hpp::eco_find_nearest_deposit, nivel unitario) -> a
 // cualquiera si no queda ninguno de ese recurso -> ocioso (ECO_NO_DEPOSIT) si
-// no queda ninguno.
+// no queda ninguno · zona aliada de auto-recolección (§23): filtro a 32 tiles
+// de edificios completos, desempates, GATHER remoto explícito, retorno tras
+// agotamiento y expansión de zona al completar un edificio.
 //
 // NOTA: GameState SIEMPRE en heap (make_unique) — un GameState en pila
 // segfaultea bajo ctest (lección K1, ver game_state.hpp).
@@ -164,6 +166,69 @@ static RawCommand gather(uint32_t tick, uint16_t emitter, uint64_t seq,
     c.sequence = seq; c.p.handle = citizen; c.p.x_raw = x_raw; c.p.y_raw = y_raw;
     return c;
 }
+
+namespace allied_zone_fixture {
+
+inline constexpr int64_t CENTER_X = 40 * FX_ONE_RAW;
+inline constexpr int64_t CENTER_Y = 40 * FX_ONE_RAW;
+
+static EntityHandle spawn_building(GameState& g, BuildingId bid,
+                                   int64_t x_raw, int64_t y_raw,
+                                   uint32_t progress, uint8_t owner = 0u) {
+    const EntityHandle h = et_spawn(g.entities);
+    CHECK(!handle_eq(h, NULL_HANDLE));
+    if (handle_eq(h, NULL_HANDLE)) return h;
+    g.entity_kind[h.index] = 1u;
+    g.building_id[h.index] = bid;
+    g.build_progress[h.index] = progress;
+    g.owner[h.index] = owner;
+    g.pos_x[h.index] = x_raw;
+    g.pos_y[h.index] = y_raw;
+    g.unit_class[h.index] = 255u;
+    g.hp[h.index] = g.max_hp[h.index] = 500;
+    return h;
+}
+
+static EntityHandle spawn_citizen(GameState& g, int64_t x_raw, int64_t y_raw,
+                                  uint8_t owner = 0u) {
+    const EntityHandle h = et_spawn(g.entities);
+    CHECK(!handle_eq(h, NULL_HANDLE));
+    if (handle_eq(h, NULL_HANDLE)) return h;
+    g.owner[h.index] = owner;
+    g.unit_id[h.index] = 0u;
+    g.unit_class[h.index] = 3u;
+    g.hp[h.index] = g.max_hp[h.index] = 20;
+    g.speed_mtpt[h.index] = 1000;
+    g.pos_x[h.index] = x_raw;
+    g.pos_y[h.index] = y_raw;
+    g.eco_state[h.index] = EcoState::SEEK;
+    g.eco_assigned_deposit[h.index] = ECO_NO_DEPOSIT;
+    g.eco_carry[h.index] = 0;
+    g.eco_carry_resource[h.index] = 0u;
+    g.build_target[h.index] = BUILD_NO_TARGET;
+    g.citizen_task[h.index] = CITIZEN_TASK_GATHER;
+    return h;
+}
+
+static std::unique_ptr<GameState> make_state(uint32_t n_deposits) {
+    static DataCatalogV1 cat = gather_fixture::make_catalog();
+    auto g = std::make_unique<GameState>();
+    gs_init(*g, make_cfg());
+    gs_bind_catalog(*g, cat);
+    gs_init_epoch_from_catalog(*g);
+    g->n_deposits = n_deposits;
+    for (uint32_t d = 0; d < n_deposits; ++d) g->deposits[d] = EcoDeposit{};
+
+    const EntityHandle center =
+        spawn_building(*g, 0u, CENTER_X, CENTER_Y, 0u);
+    CHECK(center.index == 0u);
+    const EntityHandle citizen =
+        spawn_citizen(*g, CENTER_X, CENTER_Y);
+    CHECK(citizen.index == 1u);
+    return g;
+}
+
+}  // namespace allied_zone_fixture
 
 // ============================================================================
 // 1) GATHER camino feliz: ciudadano propio + punto sobre un depósito vivo ->
@@ -365,7 +430,8 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     in.speed_mtpt = 100;
 
     // a) Reasigna al A lejano (índice 2), NO al B cercano (índice 1).
-    EcoCitizenOut out_a = eco_step_citizen(in, deposits, 3, 20 * T, 20 * T, fatal);
+    EcoCitizenOut out_a = eco_step_citizen(
+        in, deposits, 3, ECO_ALL_DEPOSITS_MASK, 20 * T, 20 * T, fatal);
     CHECK(fatal == FatalReason::NONE);
     CHECK(out_a.assigned_deposit == 2u);
 
@@ -373,7 +439,8 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     deposits[2].remaining = 0;
     EcoCitizenIn in_b = in;
     in_b.assigned_deposit = 2u;
-    EcoCitizenOut out_b = eco_step_citizen(in_b, deposits, 3, 20 * T, 20 * T, fatal);
+    EcoCitizenOut out_b = eco_step_citizen(
+        in_b, deposits, 3, ECO_ALL_DEPOSITS_MASK, 20 * T, 20 * T, fatal);
     CHECK(fatal == FatalReason::NONE);
     CHECK(out_b.assigned_deposit == 1u);
 
@@ -381,7 +448,8 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     deposits[1].remaining = 0;
     EcoCitizenIn in_c = in;
     in_c.assigned_deposit = 1u;
-    EcoCitizenOut out_c = eco_step_citizen(in_c, deposits, 3, 20 * T, 20 * T, fatal);
+    EcoCitizenOut out_c = eco_step_citizen(
+        in_c, deposits, 3, ECO_ALL_DEPOSITS_MASK, 20 * T, 20 * T, fatal);
     CHECK(fatal == FatalReason::NONE);
     CHECK(out_c.assigned_deposit == ECO_NO_DEPOSIT);
     CHECK(out_c.vel_x == 0 && out_c.vel_y == 0);
@@ -389,10 +457,12 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     // Control directo de eco_find_nearest_deposit con preferencia explícita:
     // preferir A cuando SOLO el B cercano vive -> cae a "cualquiera" (B).
     deposits[1].remaining = 50; deposits[2].remaining = 0;
-    const uint32_t idx = eco_find_nearest_deposit(deposits, 3, 0, 0, /*preferred=*/0u, fatal);
+    const uint32_t idx = eco_find_nearest_deposit(
+        deposits, 3, 0, 0, /*preferred=*/0u, ECO_ALL_DEPOSITS_MASK, fatal);
     CHECK(idx == 1u);  // no queda A vivo -> el más cercano de cualquiera (B)
     // Con preferencia ECO_ANY_RESOURCE, el resultado es el legacy (más cercano, cualquiera).
-    const uint32_t idx_any = eco_find_nearest_deposit(deposits, 3, 0, 0, ECO_ANY_RESOURCE, fatal);
+    const uint32_t idx_any = eco_find_nearest_deposit(
+        deposits, 3, 0, 0, ECO_ANY_RESOURCE, ECO_ALL_DEPOSITS_MASK, fatal);
     CHECK(idx_any == 1u);
 }
 
@@ -615,6 +685,143 @@ static void test_save_load_and_replay_preserve_redirect_transition() {
     std::remove(replay_path);
 }
 
+// ============================================================================
+// 7) Reproducción del defecto del Director (SPEC-004 §23.1): al agotarse A,
+//    otro A remoto queda fuera de zona y un B cercano queda dentro. La
+//    auto-asignación debe elegir B, no marchar 100+ tiles por preferencia.
+// ============================================================================
+static void test_auto_gather_prefers_in_zone_over_remote_same_resource() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(3u);
+    g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0};
+    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+    g->deposits[2] = EcoDeposit{50 * FX_ONE_RAW, CENTER_Y, 1u, 100};
+    g->eco_assigned_deposit[1] = 0u;
+
+    step(*g, nullptr, 0u);
+
+    CHECK(g->eco_assigned_deposit[1] == 2u);
+    CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
+}
+
+// ============================================================================
+// 8) Dos preferidos dentro de zona: proximidad primero; con distancia exacta
+//    igual, el recorrido ascendente conserva el índice menor.
+// ============================================================================
+static void test_auto_gather_nearest_and_low_index_tiebreak() {
+    using namespace allied_zone_fixture;
+    {
+        auto g = make_state(3u);
+        g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0};
+        g->deposits[1] = EcoDeposit{55 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+        g->deposits[2] = EcoDeposit{45 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+        g->eco_assigned_deposit[1] = 0u;
+
+        step(*g, nullptr, 0u);
+        CHECK(g->eco_assigned_deposit[1] == 2u);
+    }
+    {
+        auto g = make_state(3u);
+        g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0};
+        g->deposits[1] = EcoDeposit{35 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+        g->deposits[2] = EcoDeposit{45 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+        g->eco_assigned_deposit[1] = 0u;
+
+        step(*g, nullptr, 0u);
+        CHECK(g->eco_assigned_deposit[1] == 1u);
+    }
+}
+
+// ============================================================================
+// 9) Sin depósitos vivos dentro de zona, SEEK termina en IDLE y no conserva
+//    una asignación remota ni velocidad residual.
+// ============================================================================
+static void test_auto_gather_without_in_zone_deposit_becomes_idle() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(2u);
+    g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0};
+    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 1u, 100};
+    g->eco_assigned_deposit[1] = 0u;
+    g->vel_x[1] = FX_ONE_RAW;
+
+    step(*g, nullptr, 0u);
+
+    CHECK(g->eco_assigned_deposit[1] == ECO_NO_DEPOSIT);
+    CHECK(g->eco_state[1] == EcoState::SEEK);
+    CHECK(g->citizen_task[1] == CITIZEN_TASK_IDLE);
+    CHECK(g->vel_x[1] == 0 && g->vel_y[1] == 0);
+}
+
+// ============================================================================
+// 10) Agencia del jugador (§23.3): GATHER directo a un depósito remoto se
+//     acepta y la locomoción comienza hacia él aunque la máscara automática
+//     esté vacía para ese depósito.
+// ============================================================================
+static void test_player_gather_outside_allied_zone_is_accepted() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(1u);
+    g->deposits[0] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+    const EntityHandle citizen{1u, g->entities.generation[1]};
+    const int64_t x_before = g->pos_x[1];
+    RawCommand cmd = gather(g->tick, 0u, 1u, citizen,
+                            g->deposits[0].x_raw, g->deposits[0].y_raw);
+
+    const StepResult result = step(*g, &cmd, 1u);
+
+    CHECK(result.accepted == 1u);
+    CHECK(last_result(g->mailbox[0]) == RejectReason::ACCEPTED);
+    CHECK(g->eco_assigned_deposit[1] == 0u);
+    CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
+    CHECK(g->pos_x[1] > x_before);
+}
+
+// ============================================================================
+// 11) Un GATHER remoto conserva su objetivo hasta agotarlo. Después, el
+//     siguiente retarget vuelve a la búsqueda automática acotada y trae al
+//     ciudadano a un recurso local, aunque sea de tipo distinto.
+// ============================================================================
+static void test_remote_player_deposit_exhaustion_returns_to_allied_zone() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(2u);
+    g->deposits[0] = EcoDeposit{50 * FX_ONE_RAW, CENTER_Y, 1u, 100};
+    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100};
+    const EntityHandle citizen{1u, g->entities.generation[1]};
+    RawCommand cmd = gather(g->tick, 0u, 1u, citizen,
+                            g->deposits[1].x_raw, g->deposits[1].y_raw);
+    CHECK(step(*g, &cmd, 1u).accepted == 1u);
+    CHECK(g->eco_assigned_deposit[1] == 1u);
+
+    g->deposits[1].remaining = 0;
+    g->eco_state[1] = EcoState::SEEK;
+    g->eco_carry[1] = 0;
+    step(*g, nullptr, 0u);
+
+    CHECK(g->eco_assigned_deposit[1] == 0u);
+    CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
+}
+
+// ============================================================================
+// 12) La completitud se evalúa dinámicamente con el helper compartido de
+//     dropoff/zona: un sitio incompleto no habilita el depósito; al alcanzar
+//     build_time_ticks, el mismo depósito entra en la máscara y se asigna.
+// ============================================================================
+static void test_completed_expansion_building_extends_allied_zone() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(1u);
+    g->deposits[0] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 2u, 100};
+    const EntityHandle expansion =
+        spawn_building(*g, 1u, 100 * FX_ONE_RAW, CENTER_Y, 49u);
+    CHECK(expansion.index == 2u);
+    CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) == 0u);
+
+    g->build_progress[expansion.index] = 50u;
+    CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) != 0u);
+    step(*g, nullptr, 0u);
+
+    CHECK(g->eco_assigned_deposit[1] == 0u);
+    CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
+}
+
 int main() {
     test_gather_happy_path();
     test_gather_rejections_in_order();
@@ -626,6 +833,12 @@ int main() {
     test_full_load_redirect_different_resource_drops_first();
     test_ai_redirect_loaded_donor_preserves_type();
     test_save_load_and_replay_preserve_redirect_transition();
+    test_auto_gather_prefers_in_zone_over_remote_same_resource();
+    test_auto_gather_nearest_and_low_index_tiebreak();
+    test_auto_gather_without_in_zone_deposit_becomes_idle();
+    test_player_gather_outside_allied_zone_is_accepted();
+    test_remote_player_deposit_exhaustion_returns_to_allied_zone();
+    test_completed_expansion_building_extends_allied_zone();
 
     if (g_fails == 0) { std::printf("gather: OK\n"); return 0; }
     std::printf("gather: %d fallos\n", g_fails);

@@ -1224,6 +1224,57 @@ inline void morale_system(GameState& g) noexcept {
     }
 }
 
+// Criterio compartido de edificio aliado completo (SPEC-004 §6/§23). Tanto
+// el dropoff como la zona de auto-recolección deben decidirlo en un único
+// sitio: entidad viva, edificio, dueño correcto, definición válida y progreso
+// suficiente.
+inline bool is_complete_owned_building(const GameState& g, uint32_t entity,
+                                       uint8_t owner) noexcept {
+    if (g.catalog == nullptr || entity >= g.entities.capacity) return false;
+    if (!g.entities.alive[entity]) return false;
+    if (g.entity_kind[entity] != 1u || g.owner[entity] != owner) return false;
+    const BuildingId bid = g.building_id[entity];
+    if (bid >= g.catalog->building_count) return false;
+    return g.build_progress[entity] >= g.catalog->buildings[bid].build_time_ticks;
+}
+
+// Máscaras de depósitos en zona aliada para la auto-asignación económica
+// (Sprint 1.7, SPEC-004 §23). Bit d de out[owner] está activo si deposits[d]
+// queda a <=32 tiles del centro de algún edificio aliado completo. Se recorre
+// la tabla de entidades una sola vez y, por cada edificio completo, los <=32
+// depósitos: evita multiplicar el barrido por MAX_EMITTERS. Todo es ascendente,
+// entero y fijo: cero heap/STL dentro de Step().
+inline void allied_auto_gather_deposit_masks(
+        const GameState& g, uint32_t out[MAX_EMITTERS]) noexcept {
+    for (uint32_t owner = 0; owner < MAX_EMITTERS; ++owner) out[owner] = 0u;
+    const uint64_t radius_sq =
+        static_cast<uint64_t>(ECO_AUTO_GATHER_RADIUS_RAW)
+        * static_cast<uint64_t>(ECO_AUTO_GATHER_RADIUS_RAW);
+
+    for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+        const uint8_t owner = g.owner[j];
+        if (owner >= MAX_EMITTERS
+            || !is_complete_owned_building(g, j, owner)) continue;
+        const Vec2Fx building{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
+        for (uint32_t d = 0; d < g.n_deposits && d < ECO_MAX_DEPOSITS; ++d) {
+            FatalReason local_fatal = FatalReason::NONE;
+            const Vec2Fx deposit{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
+            if (dist_sq_raw(deposit, building, local_fatal) <= radius_sq) {
+                out[owner] |= (uint32_t{1} << d);
+            }
+        }
+    }
+}
+
+// Conveniencia de consulta aislada para pruebas del predicado dinámico.
+inline uint32_t allied_auto_gather_deposit_mask(const GameState& g,
+                                                uint8_t owner) noexcept {
+    if (owner >= MAX_EMITTERS) return 0u;
+    uint32_t eligible[MAX_EMITTERS] = {};
+    allied_auto_gather_deposit_masks(g, eligible);
+    return eligible[owner];
+}
+
 // Dropoff-edificio (Sprint 1.1, SPEC-004 §6). Wiring en step.hpp (NO en
 // economy.hpp, que sigue autocontenido y sin conocer GameState): resuelve el
 // punto de entrega para el ciudadano `citizen_x/y` del jugador `owner` que
@@ -1244,13 +1295,8 @@ inline bool find_building_dropoff(const GameState& g, uint8_t owner, uint8_t res
     const Vec2Fx here{Fx{citizen_x}, Fx{citizen_y}};
 
     for (uint32_t j = 0; j < t.capacity; ++j) {
-        if (!t.alive[j]) continue;
-        if (g.entity_kind[j] != 1u) continue;
-        if (g.owner[j] != owner) continue;
-        const BuildingId bid = g.building_id[j];
-        if (bid >= g.catalog->building_count) continue;  // defensivo: catálogo desalineado
-        const BuildingDefinitionV1& def = g.catalog->buildings[bid];
-        if (g.build_progress[j] < def.build_time_ticks) continue;      // no completo
+        if (!is_complete_owned_building(g, j, owner)) continue;
+        const BuildingDefinitionV1& def = g.catalog->buildings[g.building_id[j]];
         if ((def.dropoff_mask & (1u << resource_idx)) == 0u) continue; // no acepta este recurso
 
         FatalReason local_fatal = FatalReason::NONE;  // descartado a propósito, mismo patrón que combat/aggro
@@ -1284,6 +1330,14 @@ inline bool find_building_dropoff(const GameState& g, uint8_t owner, uint8_t res
 // los aplica, garantizando mutación en orden determinista y sin doble aplicación.
 inline void economy_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
+    // El módulo puro economy.hpp no conoce edificios ni GameState. El wiring
+    // precalcula una máscara fija por jugador una sola vez por fase y se la
+    // entrega a cada ciudadano. La máscara solo interviene si SEEK necesita
+    // auto-reasignar: un GATHER explícito ya válido puede seguir fuera de zona
+    // hasta que su depósito se agote (§23.3).
+    uint32_t auto_gather_eligible[MAX_EMITTERS] = {};
+    allied_auto_gather_deposit_masks(g, auto_gather_eligible);
+
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.unit_class[i] != 3) continue;  // solo ciudadanos
@@ -1317,7 +1371,8 @@ inline void economy_system(GameState& g) noexcept {
             }
         }
         const EcoCitizenOut out = eco_step_citizen(
-                in, g.deposits, g.n_deposits, drop_x, drop_y, g.fatal);
+                in, g.deposits, g.n_deposits,
+                auto_gather_eligible[owner_i], drop_x, drop_y, g.fatal);
 
         g.pos_x[i] = out.pos_x; g.pos_y[i] = out.pos_y;
         g.vel_x[i] = out.vel_x; g.vel_y[i] = out.vel_y;

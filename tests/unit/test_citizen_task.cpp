@@ -177,6 +177,10 @@ void test_spawn_paths_default_to_gather() {
     // SPAWN_CITIZEN data-driven.
     {
         auto g = make_state(&fixture.catalog);
+        // §23: la auto-asignación solo puede persistir si existe una zona
+        // aliada. Centro completo junto al depósito legacy 0.
+        const EntityHandle center = add_building(*g, 39u, 39u, 10u);
+        CHECK(center.index == 0u);
         RawCommand c{};
         c.target_tick = 0u;
         c.emitter = 0u;
@@ -186,13 +190,15 @@ void test_spawn_paths_default_to_gather() {
         c.p.y_raw = g->deposits[0].y_raw;
         c.p.unit_id = 0u;
         CHECK(step(*g, &c, 1u).accepted == 1u);
-        CHECK(g->unit_class[0] == 3u);
-        CHECK(g->citizen_task[0] == CITIZEN_TASK_GATHER);
+        CHECK(g->unit_class[1] == 3u);
+        CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
     }
 
     // SPAWN_UNIT de clase Citizen comparte la misma inicialización.
     {
         auto g = make_state(&fixture.catalog);
+        const EntityHandle center = add_building(*g, 39u, 39u, 10u);
+        CHECK(center.index == 0u);
         RawCommand c{};
         c.target_tick = 0u;
         c.emitter = 0u;
@@ -202,8 +208,8 @@ void test_spawn_paths_default_to_gather() {
         c.p.y_raw = g->deposits[0].y_raw;
         c.p.unit_id = 0u;
         CHECK(step(*g, &c, 1u).accepted == 1u);
-        CHECK(g->unit_class[0] == 3u);
-        CHECK(g->citizen_task[0] == CITIZEN_TASK_GATHER);
+        CHECK(g->unit_class[1] == 3u);
+        CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
     }
 
     // TRAIN_UNIT: production_system materializa el ciudadano de la cola.

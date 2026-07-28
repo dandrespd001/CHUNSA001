@@ -59,6 +59,7 @@ std::unique_ptr<GameState> make_skirmish_eco_state(const DataCatalogV1& cat, uin
     gs_init(*g, skirmish_eco_cfg(seed));
     gs_bind_catalog(*g, cat);
     gs_init_epoch_from_catalog(*g);
+    skirmish_eco_init_allied_resources(*g);
     return g;
 }
 

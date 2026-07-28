@@ -15,10 +15,21 @@ inline constexpr uint32_t ECO_NO_DEPOSIT = 0xFFFFFFFFu;
 inline constexpr int32_t  ECO_HARVEST_PER_TICK = 5;
 inline constexpr int32_t  ECO_CARRY_CAP = 50;
 inline constexpr int64_t  ECO_ARRIVE_RADIUS_RAW = 65536; // 1 tile
+// Sprint 1.7 (SPEC-004 §23.4): la auto-asignación solo considera depósitos
+// a <=32 tiles de un edificio aliado completo. Los recursos de base están a
+// 8..20 tiles y los neutrales disputados a 100+; 32 separa ambos conjuntos y
+// deja margen para edificios de expansión. Es balance temporal hasta que el
+// catálogo exponga parámetros de partida.
+inline constexpr int64_t  ECO_AUTO_GATHER_RADIUS_RAW = 32 * FX_ONE_RAW;
 // Sprint 1.6B (SPEC-004 §18): sentinela "sin preferencia de recurso" para
 // eco_find_nearest_deposit — mismo patrón que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
 // 0/1/2 son los índices reales (A/B/Me); 0xFF nunca choca con ellos.
 inline constexpr uint8_t  ECO_ANY_RESOURCE = 0xFFu;
+// ECO_MAX_DEPOSITS==32 permite transportar el conjunto elegible sin heap ni
+// STL: bit i habilita deposits[i]. Útil para tests unitarios del módulo puro;
+// el wiring real siempre pasa la máscara de zona aliada calculada en step.hpp.
+inline constexpr uint32_t ECO_ALL_DEPOSITS_MASK = UINT32_MAX;
+static_assert(ECO_MAX_DEPOSITS <= 32u);
 
 enum class EcoState : uint8_t { SEEK = 0, HARVEST = 1, RETURN = 2 };
 
@@ -52,26 +63,29 @@ struct EcoCitizenOut {
     uint8_t  dropoff_resource_idx;
 };
 
-// Depósito con remaining>0 más cercano a (x_raw,y_raw). Desempate: menor índice
-// (recorrido ascendente, `d_sq < best_d_sq` estricto conserva el primer
-// mínimo). Sprint 1.6B (SPEC-004 §18): endurecido con `preferred_resource_idx`
-// — dos pasadas deterministas, mismo criterio dist_sq/desempate en ambas:
+// Depósito ELEGIBLE con remaining>0 más cercano a (x_raw,y_raw). El caller
+// expresa la zona aliada en `eligible_mask` (bit i = deposits[i] permitido);
+// economy.hpp permanece puro y sin conocer GameState/edificios. Desempate:
+// menor índice (recorrido ascendente, `d_sq < best_d_sq` estricto conserva el
+// primer mínimo). Sprint 1.6B (SPEC-004 §18): dos pasadas deterministas, mismo
+// criterio dist_sq/desempate en ambas:
 //   1) si preferred_resource_idx != ECO_ANY_RESOURCE, solo depósitos vivos de
 //      ESE recurso; si hay alguno, gana (agotamiento -> reasignar al mismo
 //      recurso, SPEC-004 §18).
 //   2) si no se pidió preferencia, o la pasada 1 no encontró ninguno, cae al
-//      criterio legacy (cualquier recurso vivo) — preserva bit a bit el
-//      comportamiento de todo caller que no pasa preferencia (ECO_ANY_RESOURCE),
-//      incluidos los escenarios sintéticos/golden previos a este sprint.
+//      criterio de cualquier recurso vivo, siempre dentro de la misma máscara.
 inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_deposits,
                                          int64_t x_raw, int64_t y_raw,
                                          uint8_t preferred_resource_idx,
+                                         uint32_t eligible_mask,
                                          FatalReason& f) noexcept {
     Vec2Fx here{Fx{x_raw}, Fx{y_raw}};
     if (preferred_resource_idx != ECO_ANY_RESOURCE) {
         uint32_t best = ECO_NO_DEPOSIT;
         uint64_t best_d_sq = UINT64_MAX;
         for (uint32_t i = 0; i < n_deposits; ++i) {
+            if (i >= ECO_MAX_DEPOSITS
+                || (eligible_mask & (uint32_t{1} << i)) == 0u) continue;
             if (deposits[i].remaining <= 0) continue;
             if (deposits[i].resource_idx != preferred_resource_idx) continue;
             Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
@@ -87,6 +101,8 @@ inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_
     uint32_t best = ECO_NO_DEPOSIT;
     uint64_t best_d_sq = UINT64_MAX;
     for (uint32_t i = 0; i < n_deposits; ++i) {
+        if (i >= ECO_MAX_DEPOSITS
+            || (eligible_mask & (uint32_t{1} << i)) == 0u) continue;
         if (deposits[i].remaining <= 0) continue;
         Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
         uint64_t d_sq = dist_sq_raw(here, there, f);
@@ -101,6 +117,7 @@ inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_
 // Tick de la SM SEEK/HARVEST/RETURN. No muta deposits[] ni stock: emite deltas.
 inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
                                       const EcoDeposit* deposits, uint32_t n_deposits,
+                                      uint32_t auto_gather_eligible_mask,
                                       int64_t dropoff_x, int64_t dropoff_y,
                                       FatalReason& f) noexcept {
     EcoCitizenOut out{};
@@ -182,7 +199,9 @@ inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
             if (in.assigned_deposit != ECO_NO_DEPOSIT && in.assigned_deposit < n_deposits) {
                 pref = deposits[in.assigned_deposit].resource_idx;
             }
-            uint32_t idx = eco_find_nearest_deposit(deposits, n_deposits, in.pos_x, in.pos_y, pref, f);
+            uint32_t idx = eco_find_nearest_deposit(
+                deposits, n_deposits, in.pos_x, in.pos_y, pref,
+                auto_gather_eligible_mask, f);
             if (idx == ECO_NO_DEPOSIT) {
                 out.assigned_deposit = ECO_NO_DEPOSIT;
                 out.vel_x = 0;
