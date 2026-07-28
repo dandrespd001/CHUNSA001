@@ -136,20 +136,29 @@ inline DataCatalogV1 skirmish_eco_make_catalog() noexcept {
 // footprint, SPEC-004 §3), a ~0.7 tile del dropoff: dentro del radio de
 // llegada de economía (ECO_ARRIVE_RADIUS_RAW = 1 tile). Consecuencia: TODA
 // vez que un ciudadano completa su tramo RETURN (economy.hpp), termina, por
-// construcción, a un paso de la propia base — sin importar cuánto se haya
-// alejado en su tramo SEEK/HARVEST (los depósitos fijos están a ~90 tiles,
-// vértices del mapa). Cuando el ejército atacante destruye el centro y se
-// queda plantado en las ruinas (aggro_system reintenta objetivo cada tick
-// mientras esté ocioso), el regreso del último ciudadano lo trae de vuelta
-// exactamente a esa posición — dentro de rango de combate/aggro de
-// cualquier soldado atacante allí apostado — así que la derrota (0
-// edificios Y 0 ciudadanos, SPEC-005 §6) se alcanza en, como mucho, un ciclo
-// económico completo (~2000-3000 ticks a esta velocidad) después de la
-// caída del centro, con margen amplio bajo el límite de 36000 del gate.
+// construcción, a un paso de la propia base. Desde Sprint 1.7 el fixture
+// coloca además su depósito A de base a 8 tiles (§23: zona aliada); cuando el
+// ejército atacante destruye el centro y se queda plantado en las ruinas,
+// cualquier ciudadano que regresa queda dentro de su alcance. La derrota (0
+// edificios Y 0 ciudadanos, SPEC-005 §6) sigue siendo alcanzable con margen
+// amplio bajo el límite de 36000 del gate.
 inline constexpr int64_t SKIRMISH_ECO_DEFENDER_TX = 20;
 inline constexpr int64_t SKIRMISH_ECO_DEFENDER_TY = 128;
 inline constexpr int64_t SKIRMISH_ECO_ATTACKER_TX = 180;
 inline constexpr int64_t SKIRMISH_ECO_ATTACKER_TY = 128;
+
+// Adaptación del mapa sintético a SPEC-004 §23: el patrón legacy de
+// gs_init_economy tenía todos sus depósitos a ~90 tiles del centro defensor,
+// por lo que la nueva zona aliada quedaba vacía y este gate dejaba de probar
+// "economía real". El recurso A de índice 0 se sitúa a 8 tiles de la base,
+// misma escala 8..20 del mapa real. Es init de escenario, fuera de Step.
+inline void skirmish_eco_init_allied_resources(GameState& g) noexcept {
+    if (g.n_deposits == 0u) return;
+    g.deposits[0].x_raw = (SKIRMISH_ECO_DEFENDER_TX + 8) * FX_ONE_RAW;
+    g.deposits[0].y_raw = SKIRMISH_ECO_DEFENDER_TY * FX_ONE_RAW;
+    g.deposits[0].resource_idx = 0u;
+    g.deposits[0].remaining = 500;
+}
 
 // Batch de escenario, SOLO en t==0 (exención de setup, SPEC-004 §10.3):
 // mismo contrato que build_skirmish_batch de skirmish.hpp, con el añadido de
@@ -335,6 +344,7 @@ inline int drive_skirmish_eco_fresh(const SkirmishEcoOpts& o, SkirmishEcoOut& ou
     gs_init(*gs, cfg);
     gs_bind_catalog(*gs, cat);
     gs_init_epoch_from_catalog(*gs);
+    skirmish_eco_init_allied_resources(*gs);
 
     AiJobBox box; ai_box_init(box, 1);
     AiRuntimeV1 rt{0u, static_cast<uint64_t>(o.attacker_soldiers + 1u)};  // seq tras el setup del atacante

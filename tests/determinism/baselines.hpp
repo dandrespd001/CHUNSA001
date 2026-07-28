@@ -39,16 +39,16 @@ inline constexpr uint64_t AI_SKIRMISH_STATE = 0x5d7603757c533e97ull;
 inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x4cdfd0b15dc12daaull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
-// Cambió solo por el bump V7→V8; trayectoria V7 bit-exacta probada en 4be7110.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x68ae70ca41c3834bull;
-// Cambió solo por el bump V7→V8; trayectoria V7 bit-exacta probada en 4be7110.
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0xbbcd6fba69413eeeull;
+// Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
+// fixture sintético; conserva economía real, winner=1 y fin <36000.
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xf2d313552c5c23aaull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x9e817f78a66239dbull;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
-// Ya era V8; la corrección universal reprodujo el valor medido en 4be7110.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xc7b04caea8c32e64ull;
-// Ya era V8; la corrección universal reprodujo el valor medido en 4be7110.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x4ae3ddd1ad5ab4f9ull;
-inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 12292u;
+// Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
+// remotos; winner=1 y las cuatro fases se conservan, fin 12292→9317.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xe99b6ca32cf0b78dull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x9670e9e87ba25b50ull;
+inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 9317u;
 
 }  // namespace chunsa::determinism_baselines
