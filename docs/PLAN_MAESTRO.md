@@ -1,6 +1,6 @@
 # PLAN MAESTRO — CHUNSA: Ascenso de las Civilizaciones
 
-**Versión:** 1.2 · **Fecha:** 2026-07-24 · **Autor:** Arquitecto Jefe · **Aprobación:** Director (replan mecánico desde Sprint 1.6, 2026-07-24)
+**Versión:** 1.3 · **Fecha:** 2026-07-28 · **Autor:** Arquitecto Jefe · **Aprobación:** Director (SPEC-007 recursos/edades aprobada; TDD como metodología, 2026-07-28)
 **Estado:** VIGENTE — documento vivo, se actualiza al cierre de cada sprint (§7).
 
 ---
@@ -21,7 +21,7 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 
 ---
 
-## §1 Estado actual (2026-07-24)
+## §1 Estado actual (2026-07-28)
 
 ### Hecho — gate técnico de Fase 1 y legibilidad RTS cerrados
 
@@ -38,6 +38,27 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | **1.3** | ✅ COMPLETO (`690a241`) | **UI/HUD v1**: cámara, minimapa sin fog, selección, barras de vida, grupos de control y botones de producción. Frontend puro; core intacto. `docs/REPORTE_SPRINT_1.3.md`. |
 | **1.4** | ✅ CIERRE TÉCNICO (`afbe66f` + `e03da59`) | **IA oponente + partida concluyente**: IA de tres capas, victoria/derrota, perfil data-driven, aldeanos vulnerables y skirmish humano contra IA en Godot. Golden 1074/1074, save/replay deterministas, ctest 20/20 y headless hasta `winner=1 tick=2554`. La evidencia demuestra conclusión antes del límite de 30 min, no un playtest humano de 30+ min. `docs/REPORTE_SPRINT_1.4.md`. |
 | **1.5A** | ✅ COMPLETO | **Fog de presentación y legibilidad RTS**: `visible`/`explored` por snapshot, tres estados de niebla, cero fuga de enemigos por mundo/minimapa/overlays y prueba pura de la política. Core, save, replay e IA intactos; ctest 21/21 y `winner=1 tick=2554` sin cambios. `docs/REPORTE_SPRINT_1.5.md`. |
+
+| **1.5B/1.6** | ✅ COMPLETO | Mecánicas de partida y correcciones de combate integradas desde la rama de GPT. |
+| **1.6B** | ✅ COMPLETO (`ac904fe`) | **Apertura económica real**: civ tipada por jugador, 12 depósitos simétricos desde el mapa, comando `GATHER=13`, capa económica de la IA, escenario del DoD (centro + 3 aldeanos → victoria). Auditoría multimodelo encontró 2 bloqueantes (heap-overflow en replay con ASan; conversión de recurso al redirigir carga) → cerrados en K3. `docs/REVISION_SPRINT_1.6B_K3.md`. |
+| **1.7** | ✅ COMPLETO (`44ba852`) | **Tareas del ciudadano + zona aliada + HUD**: SPEC-004 §22 (`citizen_task` como autoridad única de posición) y §23 (auto-recolección acotada a zona aliada, que corrigió el defecto que dejaba la partida sin economía) · checksum V8 universal · **G1/G3/G4 dentro de `ctest` con baselines aserverados** · HUD con codificación UTF-8 y feedback descriptivo de rechazos. ctest 29/29. `docs/REPORTE_SPRINT_1.7.md`. |
+
+### Desviación de numeración (registrada 2026-07-28)
+
+El «Sprint 1.7 — órdenes de combate (ATTACK/ATTACK_MOVE + proyectiles)» que
+este plan describe en §4 **no se ha ejecutado**. El número 1.7 se consumió con
+tareas del ciudadano, zona aliada y HUD.
+
+Consecuencias, para que nadie las descubra por sorpresa:
+
+- El **cierre mecánico de Fase 1** sigue **abierto**: su DoD son las órdenes de
+  combate, no lo entregado. Pasa a llamarse **Sprint 1.13**.
+- **Arte y audio (post-1.7)** siguen bloqueados: su condición de entrada es ese
+  cierre mecánico, que no ha ocurrido.
+- La **profundidad económica** (recursos completos, cadenas bronce/acero) estaba
+  planificada en **Fase 2, sprint 2.2**. Por directriz del Director del
+  2026-07-28 se **adelanta a Fase 1** como sprints 1.8A–1.12 sobre SPEC-007.
+  Fase 2 §2.2 queda reducida a contenido por civilización y época.
 
 ### Deuda documentada
 
@@ -81,7 +102,9 @@ Este documento es la **fuente de verdad del roadmap** desde el estado actual has
 | **SPEC-006** | UI/HUD: cámara/minimapa/selección/grupos (I) + fog de presentación y política anti-fugas (II) | APPROVED+ejecutada (Partes I–II) | 1.3 + 1.5A | Arquitecto |
 | **SPEC-003** | Pipeline de assets/render/audio: formatos, presupuesto, atlas/batching sobre ADR-009 y QA | DIFERIDA hasta cierre mecánico + presupuesto | Post-1.7 | Arquitecto |
 | **SPEC-TRAYECTORIA** | Contrato final de ADR-016: sucesión/legado de módulos históricos, IDs namespaced, reglas de era | POR ESCRIBIR | Fase 2 (antes de integrar la 3ª civ) | Arquitecto |
-| **SPEC-007** | Campaña y escenarios: YAML de misión (doc 08), triggers deterministas como Commands, árbol de decisiones, saves de campaña | POR ESCRIBIR | Fase 3 | Arquitecto |
+| **SPEC-007** | **Recursos y edades**: 15 edades, 17 recolectados + 8 producidos + energía streaming, upkeep, reserva/recuperación, granjas | **APROBADA** (2026-07-28) | 1.8A–1.12 | Arquitecto |
+| **SPEC-008** | **Rendimiento, fiabilidad y escalabilidad**: presupuestos medibles, degradación, límites de escala | POR ESCRIBIR | 1.8A (esqueleto) | Arquitecto |
+| **SPEC-009** | Campaña y escenarios: YAML de misión (doc 08), triggers deterministas como Commands, árbol de decisiones, saves de campaña | POR ESCRIBIR | Fase 3 | Arquitecto |
 
 Documentos de diseño canónicos que alimentan cada SPEC (rutas en `/home/adquiod/Imágenes/Project/Investigación/`): `03_EPOCAS` · `13_PIPELINE_ASSETS` · `24_RECURSOS_Y_CADENAS_PRODUCTIVAS` · `27_CIVILIZACIONES_INSTITUCIONES_Y_TECNOLOGIAS` · `23_ARBOL_TECNOLOGICO_FUNDAMENTADO` · `07_COMBATE` · `30_DISENO_IA_OPONENTE` · `33_METODOLOGIA_BALANCE_Y_ECONOMIA` · `34_GAME_FEEL_UX_Y_DISENO_DE_JUGABILIDAD` · `35_OPTIMIZACION_DEFINITIVA_Y_PRESUPUESTO_UNICO` · `08_CAMPAÑAS` · `09_MODOS_DE_JUEGO`. Consultar SIEMPRE la tabla de canonicidad de `INDICE_MAESTRO.md` §0 antes de citar (04/05/06/11 están supersedidos).
 
@@ -328,7 +351,7 @@ Ver `docs/REPORTE_SPRINT_1.5.md`.
 
 ### FASE 3 — Beta de contenido — *bosquejo, se detalla al cerrar Fase 2*
 
-- **SPEC-007** + campaña piloto (doc 08: misiones YAML, árbol de decisiones, triggers deterministas como Commands — los saves de campaña heredan G3/G4).
+- **SPEC-009** + campaña piloto (doc 08: misiones YAML, árbol de decisiones, triggers deterministas como Commands — los saves de campaña heredan G3/G4).
 - Modos: escenarios históricos, supervivencia, sandbox (doc 09).
 - Onboarding por época (doc 34), localización ES/EN, accesibilidad básica.
 - Beta cerrada: replays de testers como telemetría de balance (ventaja directa del determinismo).
