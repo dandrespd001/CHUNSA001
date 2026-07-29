@@ -15,10 +15,10 @@ stats:
   hp: 600
 constructible: true
 resource_costs:
-  B: 60
+  chunsa:wood: 60
 build_time_ticks: 500
 dropoff_resources:
-  - A
+  - chunsa:food
 trains: []
 researches: []
 required_capabilities: []

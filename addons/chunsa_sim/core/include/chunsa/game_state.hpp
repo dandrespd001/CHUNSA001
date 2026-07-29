@@ -190,7 +190,7 @@ struct GameState {
     uint32_t   n_deposits;
     int64_t    dropoff_x[MAX_EMITTERS];
     int64_t    dropoff_y[MAX_EMITTERS];
-    int64_t    player_stock[MAX_EMITTERS][RESOURCE_COUNT]; // 0=A, 1=B, 2=Me
+    int64_t    player_stock[MAX_EMITTERS][RESOURCE_COUNT]; // 0=comida, 1=madera, 2=piedra
     EcoState   eco_state[ENTITY_HARD_CAP];
     uint32_t   eco_assigned_deposit[ENTITY_HARD_CAP];
     int32_t    eco_carry[ENTITY_HARD_CAP];

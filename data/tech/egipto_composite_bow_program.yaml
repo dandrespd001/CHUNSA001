@@ -8,8 +8,8 @@ epoch: 4
 branch: M
 evidence: H
 resource_costs:
-  A: 60
-  Me: 40
+  chunsa:food: 60
+  chunsa:stone: 40
 required_capabilities: []
 research_time_ticks: 800
 prerequisites: []

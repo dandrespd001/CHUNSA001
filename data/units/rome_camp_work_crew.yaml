@@ -10,7 +10,7 @@ class: citizen
 tags:
   - drop_off_carrier
 resource_costs:
-  A: 20
+  chunsa:food: 20
 stats:
   hp: 45
   attack: 0

@@ -4,12 +4,12 @@
 
 namespace chunsa {
 
-// Sprint 1.8A (SPEC-007 §9.3): capacidad estructural completa del stock y de
-// los costes. Los índices 0=A, 1=B y 2=Me conservan su significado actual;
-// 3..31 permanecen reservados y en cero hasta los sprints de contenido.
+// Sprint 1.8A/1.8B (SPEC-007 §9.3/§18): capacidad estructural completa del
+// stock y nombres estables de los tres recursos existentes. Los autores de
+// YAML usan record_id; estos slots los asigna el compilador de datos.
 inline constexpr uint32_t RESOURCE_COUNT = 32u;
-inline constexpr uint32_t RESOURCE_INDEX_A = 0u;
-inline constexpr uint32_t RESOURCE_INDEX_B = 1u;
-inline constexpr uint32_t RESOURCE_INDEX_ME = 2u;
+inline constexpr uint32_t RESOURCE_INDEX_FOOD = 0u;
+inline constexpr uint32_t RESOURCE_INDEX_WOOD = 1u;
+inline constexpr uint32_t RESOURCE_INDEX_STONE = 2u;
 
 }  // namespace chunsa

@@ -7,11 +7,14 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import struct
 import tempfile
 import unittest
 
 import yaml
+from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -28,24 +31,33 @@ FILES = {
     "manifest": "manifest.yaml", "unit": "units/a.yaml",
     "building": "buildings/a.yaml", "tech": "tech/a.yaml",
     "civ": "civilizations/a.yaml", "map": "maps/a.yaml",
-    "ai-profile": "ai_profiles/a.yaml",
+    "ai-profile": "ai_profiles/a.yaml", "resource": "resources/a.yaml",
 }
 
 
 def directory(blob: bytes):
-    return [struct.unpack_from("<HHIQQ", blob, 40 + 24 * pos) for pos in range(7)]
+    section_count = struct.unpack_from("<I", blob, 20)[0]
+    return [
+        struct.unpack_from("<HHIQQ", blob, 40 + 24 * pos)
+        for pos in range(section_count)
+    ]
 
 
 def rebuild(blob: bytes, replacements: dict[int, bytes]):
     entries = directory(blob)
     sections = [blob[offset:offset + size] for _, _, _, offset, size in entries]
     sections = [replacements.get(pos, section) for pos, section in enumerate(sections)]
-    flags = struct.unpack_from("<I", blob, 16)[0]
-    offset = 208; new_entries = []
+    major, minor, schema_set, flags, section_count, entry_size, reserved = (
+        struct.unpack_from("<HHIIIII", blob, 8)
+    )
+    offset = 40 + section_count * entry_size
+    new_entries = []
     for pos, section in enumerate(sections):
         kind, version, count, _, _ = entries[pos]
         new_entries.append((kind, version, count, offset, len(section))); offset += len(section)
-    return (b"CHNSDB1\0" + struct.pack("<HHIIIIIQ", 1, 0, 1, flags, 7, 24, 0, offset)
+    return (b"CHNSDB1\0" + struct.pack(
+                "<HHIIIIIQ", major, minor, schema_set, flags,
+                section_count, entry_size, reserved, offset)
             + b"".join(struct.pack("<HHIQQ", *entry) for entry in new_entries)
             + b"".join(sections))
 
@@ -139,6 +151,7 @@ class CompilerTests(unittest.TestCase):
             "civ": lambda d: d["historical_window"].__setitem__("start_year", 0),
             "map": lambda d: d.__setitem__("width_tiles", 0),
             "ai-profile": lambda d: d["strategic_weights_bp"].__setitem__("risk_tolerance_bp", 10001),
+            "resource": lambda d: d.__setitem__("id", "not_namespaced"),
         }
         for kind, mutate in mutations.items():
             td, root = self.make_root()
@@ -149,8 +162,8 @@ class CompilerTests(unittest.TestCase):
         for kind in ("unit", "building", "tech"):
             td, root = self.make_root()
             with td, self.subTest(zero_cost=kind):
-                value = self.read(root, kind); value["resource_costs"] = {"A": 0}
-                if kind == "building": value.pop("material_costs", None)
+                value = self.read(root, kind)
+                value["resource_costs"] = {"chunsa:food": 0}
                 self.write(root, kind, value); self.assert_validation_error(root, "E_SCHEMA")
 
     def test_semantic_continues_and_typed_references(self):
@@ -176,13 +189,17 @@ class CompilerTests(unittest.TestCase):
                 value = self.read(root, kind); mutate(value); self.write(root, kind, value)
                 self.assert_validation_error(root, expected)
 
-    def test_material_recipe_map_ai_and_provenance_semantics(self):
+    def test_recipe_map_ai_and_provenance_semantics(self):
         td, root = self.make_root()
         with td:
             building = self.read(root, "building")
-            building["recipes"] = [{"id":"rome:smelt", "input_resource_costs":{},
-                "input_material_costs":[{"material_id":"base:copper","amount":1}],
-                "output_material_id":"base:copper","output_amount":1,"duration_ticks":1}]
+            building["recipes"] = [{
+                "id": "rome:smelt",
+                "input_resource_costs": {"chunsa:food": 1},
+                "output_resource_id": "chunsa:food",
+                "output_amount": 1,
+                "duration_ticks": 1,
+            }]
             self.write(root, "building", building); self.assert_validation_error(root, "E_CYCLE")
         td, root = self.make_root()
         with td:
@@ -263,19 +280,22 @@ class CompilerTests(unittest.TestCase):
             out, stdout = self.compile_valid(root)
             blob = out.read_bytes(); entries = directory(blob)
             self.assertEqual(blob[:8], b"CHNSDB1\0")
-            self.assertEqual(struct.unpack_from("<HHIIIIIQ", blob, 8), (1,0,1,0,7,24,0,len(blob)))
-            cursor = 208
+            self.assertEqual(
+                struct.unpack_from("<HHIIIIIQ", blob, 8),
+                (1, 1, 2, 0, 8, 24, 0, len(blob)),
+            )
+            cursor = 232
             for pos, (kind, version, count, offset, size) in enumerate(entries, 1):
                 self.assertEqual((kind, version, offset), (pos, 2 if pos == 2 else 1, cursor)); cursor += size
                 self.assertEqual(count, 1)
             self.assertEqual(cursor, len(blob))
             content_hash = stdout.splitlines()[0].split(":", 1)[1]
-            expected = (f'{{"algorithm":"sha256","algorithm_version":1,"blob_format":"1.0",'
-                        f'"content_hash":"{content_hash}","schema_set_version":1}}\n').encode()
+            expected = (f'{{"algorithm":"sha256","algorithm_version":1,"blob_format":"1.1",'
+                        f'"content_hash":"{content_hash}","schema_set_version":2}}\n').encode()
             self.assertEqual(out.with_name(out.name + ".content.json").read_bytes(), expected)
-            self.assertRegex(stdout, r"^content_hash=sha256-v1:[0-9a-f]{64}\nrecords unit=1 building=1 tech=1 civ=1 map=1 ai-profile=1\n$")
+            self.assertRegex(stdout, r"^content_hash=sha256-v1:[0-9a-f]{64}\nrecords unit=1 building=1 tech=1 civ=1 map=1 ai-profile=1 resource=1\n$")
             rc, plain, err = self.invoke(["inspect", str(out)])
-            self.assertEqual((rc, err), (0, "")); self.assertIn("CHDB 1.0 flags=0", plain)
+            self.assertEqual((rc, err), (0, "")); self.assertIn("CHDB 1.1 flags=0", plain)
             rc, encoded, err = self.invoke(["inspect", str(out), "--json"])
             self.assertEqual((rc, err), (0, "")); self.assertEqual(json.loads(encoded)["counts"]["manifest"], 1)
             self.assertEqual(self.invoke([])[0], 2)
@@ -312,7 +332,11 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual((rc, stderr), (0, ""), stderr)
             self.assertEqual(out.read_bytes(), golden.read_bytes())
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
-            self.assertIn("records unit=5 building=6 tech=4 civ=2 map=1 ai-profile=1", stdout)
+            self.assertIn(
+                "records unit=5 building=6 tech=4 civ=2 map=1 "
+                "ai-profile=1 resource=3",
+                stdout,
+            )
             flags, records = compiler.parse_blob(out.read_bytes())
             self.assertEqual(flags, 0)
             self.assertEqual(
@@ -377,12 +401,10 @@ class CompilerTests(unittest.TestCase):
         with self.assertRaises(compiler.CompileError): compiler.cve_encode("a\0b")
         with self.assertRaises(compiler.CompileError): compiler.cve_encode({"a\0b":1})
 
-    def test_epoch_overlap_shared_periods_and_nonstrategic_tech_material(self):
+    def test_epoch_overlap_and_shared_periods(self):
         td, root=self.make_root()
         with td:
             unit=self.read(root,"unit"); unit["epoch_window"]=[4,5]; self.write(root,"unit",unit)
-            manifest=self.read(root,"manifest"); manifest["declared_materials"][0]["strategic"]=False; self.write(root,"manifest",manifest)
-            tech=self.read(root,"tech"); tech["material_costs"]=[{"material_id":"base:copper","amount":1}]; self.write(root,"tech",tech)
             self.compile_valid(root)
 
         td, root=self.make_root()
@@ -405,6 +427,258 @@ class CompilerTests(unittest.TestCase):
             reader=compiler.Reader(section[4:4+size]); unit=reader.value(); unit["civ_id"]="rome:missing"
             payload=compiler.cve_encode(compiler._normalize(unit))
             with self.assertRaises(compiler.CompileError): compiler.parse_blob(replace_first_payload(blob,1,payload))
+
+
+class ResourceReconciliationTests(unittest.TestCase):
+    """SPEC-007 §18.5 / Brief 1.8B acceptance tests.
+
+    These tests intentionally exercise the source schema/compiler boundary:
+    authors use record ids, while only the compiler may assign kernel indices.
+    """
+
+    RESOURCE_IDS = ("chunsa:food", "chunsa:wood", "chunsa:stone")
+    RESOURCE_INDEX = {
+        "chunsa:food": 0,
+        "chunsa:wood": 1,
+        "chunsa:stone": 2,
+    }
+    RECORD_ID = re.compile(
+        r"^[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_]{0,63}$"
+    )
+
+    def invoke(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = compiler.main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    @staticmethod
+    def resource_record(resource_id):
+        slug = resource_id.split(":", 1)[1]
+        return {
+            "schema_version": 1,
+            "id": resource_id,
+            "display_name_key": f"chunsa:resource.{slug}",
+            "provenance": schema_fixtures.provenance(),
+        }
+
+    def make_root(self, resource_filenames=None):
+        td = tempfile.TemporaryDirectory()
+        root = Path(td.name)
+        data = copy.deepcopy(schema_fixtures.fixtures())
+        if "chunsa" not in data["manifest"]["owned_namespaces"]:
+            data["manifest"]["owned_namespaces"].append("chunsa")
+        aliases = {
+            "A": "chunsa:food",
+            "B": "chunsa:wood",
+            "P": "chunsa:stone",
+            "Me": "chunsa:stone",
+        }
+        for kind in ("unit", "building", "tech"):
+            costs = data[kind]["resource_costs"]
+            data[kind]["resource_costs"] = {
+                aliases.get(resource_id, resource_id): amount
+                for resource_id, amount in costs.items()
+            }
+        for kind, relative in FILES.items():
+            if kind == "resource":
+                continue
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                yaml.safe_dump(data[kind], sort_keys=False),
+                encoding="utf-8",
+            )
+        report = root / "verify" / "report.md"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(
+            "Fixture de evidencia de procedencia para tests.\n",
+            encoding="utf-8",
+        )
+        filenames = resource_filenames or {
+            "chunsa:food": "food.yaml",
+            "chunsa:wood": "wood.yaml",
+            "chunsa:stone": "stone.yaml",
+        }
+        for resource_id, filename in filenames.items():
+            path = root / "resources" / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                yaml.safe_dump(self.resource_record(resource_id), sort_keys=False),
+                encoding="utf-8",
+            )
+        return td, root
+
+    @staticmethod
+    def compile_once(invoke, root, name):
+        out = root / name
+        rc, stdout, stderr = invoke([
+            "compile", str(root), "--out", str(out),
+            "--profile", "release", "--print-hash",
+        ])
+        return rc, stdout, stderr, out
+
+    def test_common_schema_has_no_legacy_resource_enum(self):
+        common = json.loads(
+            (ROOT / "data/schemas/common.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(
+            "resource",
+            common["$defs"],
+            "the eight-letter storable-resource enum must be removed",
+        )
+        resource_costs = common["$defs"]["resource_costs"]
+        self.assertEqual(
+            resource_costs.get("propertyNames"),
+            {"$ref": "#/$defs/record_id"},
+        )
+
+    def test_material_cost_vocabulary_is_absent_from_every_schema(self):
+        offenders = []
+        for path in sorted((ROOT / "data/schemas").glob("*.schema.json")):
+            text = path.read_text(encoding="utf-8")
+            for token in ('"material_cost"', '"material_costs"'):
+                if token in text:
+                    offenders.append(f"{path.name}:{token}")
+        self.assertEqual([], offenders)
+
+    def test_namespaced_resource_validates_against_resource_schema(self):
+        common_path = ROOT / "data/schemas/common.schema.json"
+        resource_path = ROOT / "data/schemas/resource.schema.json"
+        self.assertTrue(resource_path.is_file(), "resource.schema.json is required")
+        common = json.loads(common_path.read_text(encoding="utf-8"))
+        resource_schema = json.loads(resource_path.read_text(encoding="utf-8"))
+        registry = Registry().with_resources([
+            (common["$id"], Resource.from_contents(common)),
+            (resource_schema["$id"], Resource.from_contents(resource_schema)),
+        ])
+        validator = Draft202012Validator(resource_schema, registry=registry)
+        self.assertEqual(
+            [],
+            list(validator.iter_errors(self.resource_record("chunsa:food"))),
+        )
+
+    def test_repository_resource_references_are_namespaced(self):
+        legacy = []
+
+        def inspect(node, path):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key in {"resource_costs", "input_resource_costs"}:
+                        for resource_id in value:
+                            if not self.RECORD_ID.fullmatch(resource_id):
+                                legacy.append(f"{path}:{resource_id}")
+                    elif key == "dropoff_resources":
+                        for resource_id in value:
+                            if not self.RECORD_ID.fullmatch(resource_id):
+                                legacy.append(f"{path}:{resource_id}")
+                    elif key == "resource_spawns":
+                        for spawn in value:
+                            if (spawn.get("kind") == "resource"
+                                    and not self.RECORD_ID.fullmatch(spawn["id"])):
+                                legacy.append(f"{path}:{spawn['id']}")
+                    elif key == "output_resource_id":
+                        if not self.RECORD_ID.fullmatch(value):
+                            legacy.append(f"{path}:{value}")
+                    else:
+                        inspect(value, path)
+            elif isinstance(node, list):
+                for value in node:
+                    inspect(value, path)
+
+        for directory in ("units", "buildings", "tech", "maps"):
+            for path in sorted((ROOT / "data" / directory).glob("*.yaml")):
+                inspect(yaml.safe_load(path.read_text(encoding="utf-8")), path.name)
+        self.assertEqual([], legacy)
+
+    def test_repository_declares_three_resources_at_indices_zero_one_two(self):
+        resource_paths = sorted((ROOT / "data/resources").glob("*.yaml"))
+        authored_ids = sorted(
+            yaml.safe_load(path.read_text(encoding="utf-8"))["id"]
+            for path in resource_paths
+        )
+        self.assertEqual(sorted(self.RESOURCE_IDS), authored_ids)
+
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "repository.chdb"
+            rc, _, stderr = self.invoke([
+                "compile", str(ROOT / "data"), "--out", str(out),
+                "--profile", "release",
+            ])
+            self.assertEqual((0, ""), (rc, stderr))
+            _, records = compiler.parse_blob(out.read_bytes())
+            resource_kind = next(
+                number for kind, _, number, _ in compiler.KIND_INFO
+                if kind == "resource"
+            )
+            mapping = {
+                record["id"]: record["index"]
+                for record in records[resource_kind]
+            }
+            self.assertEqual(self.RESOURCE_INDEX, mapping)
+
+    def test_two_compilations_are_byte_identical(self):
+        td, root = self.make_root()
+        with td:
+            first = self.compile_once(self.invoke, root, "first.chdb")
+            second = self.compile_once(self.invoke, root, "second.chdb")
+            self.assertEqual(
+                (0, "", 0, ""),
+                (first[0], first[2], second[0], second[2]),
+            )
+            self.assertEqual(first[3].read_bytes(), second[3].read_bytes())
+
+    def test_resource_indices_do_not_depend_on_file_order(self):
+        first_names = {
+            "chunsa:food": "00-food.yaml",
+            "chunsa:wood": "01-wood.yaml",
+            "chunsa:stone": "02-stone.yaml",
+        }
+        second_names = {
+            "chunsa:stone": "00-stone.yaml",
+            "chunsa:food": "01-food.yaml",
+            "chunsa:wood": "02-wood.yaml",
+        }
+        td_a, root_a = self.make_root(first_names)
+        td_b, root_b = self.make_root(second_names)
+        with td_a, td_b:
+            first = self.compile_once(self.invoke, root_a, "ordered.chdb")
+            second = self.compile_once(self.invoke, root_b, "permuted.chdb")
+            self.assertEqual(
+                (0, "", 0, ""),
+                (first[0], first[2], second[0], second[2]),
+            )
+            self.assertEqual(first[3].read_bytes(), second[3].read_bytes())
+
+    def test_unknown_resource_reference_is_coded_load_error(self):
+        td, root = self.make_root()
+        with td:
+            unit_path = root / FILES["unit"]
+            unit = yaml.safe_load(unit_path.read_text(encoding="utf-8"))
+            unit["resource_costs"] = {"chunsa:missing": 1}
+            unit_path.write_text(
+                yaml.safe_dump(unit, sort_keys=False),
+                encoding="utf-8",
+            )
+            rc, _, stderr = self.invoke(["validate", str(root)])
+            self.assertEqual(1, rc)
+            self.assertIn("ERROR E_REFERENCE unit", stderr)
+            self.assertIn("chunsa:missing", stderr)
+
+    def test_duplicate_resource_id_is_coded_load_error(self):
+        td, root = self.make_root()
+        with td:
+            duplicate = root / "resources" / "duplicate-food.yaml"
+            duplicate.write_text(
+                yaml.safe_dump(
+                    self.resource_record("chunsa:food"),
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            rc, _, stderr = self.invoke(["validate", str(root)])
+            self.assertEqual(1, rc)
+            self.assertIn("ERROR E_DUPLICATE_ID resource chunsa:food", stderr)
 
 
 if __name__ == "__main__": unittest.main()

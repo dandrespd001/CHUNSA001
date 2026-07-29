@@ -1,0 +1,19 @@
+schema_version: 1
+id: chunsa:food
+display_name_key: chunsa:resource.food
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.8B-resource-schema
+  generated_on: "2026-07-29"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Identidad estable del recurso alimentario existente; este sprint solo renombra el índice 0."
+    reviewed_by:
+      - architect
