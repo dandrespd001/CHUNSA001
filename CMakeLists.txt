@@ -249,3 +249,22 @@ if(CHUNSA_BUILD_GODOT)
         OUTPUT_NAME "chunsa_godot"
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo/bin)
 endif()
+
+# --- SPEC-008 §2.2: reparto rápido/lento de la suite ---
+# La suite completa ronda los 254 s y ai_skirmish_apertura sola son 187 s.
+# Una suite de varios minutos en cada PR es una suite que se deja de ejecutar,
+# y una suite que no se ejecuta no protege nada.
+#   ctest -L fast   -> ciclo de desarrollo, objetivo <= 60 s (SPEC-008 §2.2)
+#   ctest           -> todo, en merge y nightly
+#
+# TODA prueba nueva debe llevar etiqueta. Sin etiqueta no entra en `-L fast`
+# y deja de protegernos en el ciclo de desarrollo sin que nadie se entere.
+set_tests_properties(ai_skirmish_apertura ai_skirmish_eco ai_skirmish
+                     PROPERTIES LABELS "slow")
+set_tests_properties(props golden gate_g1 gate_g3 gate_g4
+                     state ring flow_field flow_move combat
+                     morale economy aggro replay_v2 data_blob
+                     buildings replay_v3 production_tech victory_ai_profile ai_layers
+                     civ_deposits gather citizen_task resource_count ai_apertura
+                     fog_view data_compile
+                     PROPERTIES LABELS "fast")
