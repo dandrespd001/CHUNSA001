@@ -44,6 +44,9 @@ implementando tres recursos.
 | H8 | **Órdenes de combate**: `ATTACK`, `ATTACK_MOVE`, proyectiles | **SPEC-004 Parte V §24** ✅ escrita | 1.13 |
 | H9 | **Coste de la selección económica** sin cota superior con fuentes construidas | **SPEC-007 §17** ✅ escrita | 1.12 (medición) |
 | H10 | **Presupuestos y límites** de rendimiento, fiabilidad y escala | **SPEC-008** ✅ escrita | 1.8A en adelante |
+| H11 | **Reconciliación del esquema de datos**: enum de 8 letras, `material_costs`, `El` como stock | **SPEC-007 §18** ✅ escrita | 1.8B |
+| H12 | **Fuerza motriz por edad** con radio creciente; la energía es local hasta la electricidad | **SPEC-007 §20** ✅ escrita | 1.10 |
+| H13 | **Terreno como requisito de emplazamiento** (rueda hidráulica junto al río) | **SPEC-007 §20.4** ✅ escrita | 1.10 |
 
 ## §3 Falsos conflictos (parecen contradicción y no lo son)
 
@@ -81,7 +84,7 @@ queda ningún sistema aprobado sin contrato escrito:
 | SPEC-006 Parte III | HUD de recursos por familias |
 | SPEC-008 | Rendimiento, fiabilidad, escalabilidad |
 
-**Total de criterios de aceptación en formato TDD: 90.** Cada uno es una prueba
+**Total de criterios de aceptación en formato TDD: 115.** Cada uno es una prueba
 que debe poder fallar.
 
 ## §4 Orden de aplicación
