@@ -165,6 +165,13 @@ add_executable(chunsa_test_resource_count tests/unit/test_resource_count.cpp)
 target_link_libraries(chunsa_test_resource_count PRIVATE chunsa_sim_core)
 add_test(NAME resource_count COMMAND chunsa_test_resource_count)
 
+# --- Test Sprint 1.8C: metadatos tipados del catálogo de recursos -----------
+add_executable(chunsa_test_resource_catalog tests/unit/test_resource_catalog.cpp)
+target_link_libraries(chunsa_test_resource_catalog PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_resource_catalog PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME resource_catalog COMMAND chunsa_test_resource_catalog)
+
 # --- Test Sprint 1.6B (K2): la IA juega la apertura (SPEC-004 §19) -------------
 add_executable(chunsa_test_ai_apertura tests/unit/test_ai_apertura.cpp)
 target_link_libraries(chunsa_test_ai_apertura PRIVATE chunsa_sim_core)
@@ -266,5 +273,5 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      morale economy aggro replay_v2 data_blob
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
-                     fog_view data_compile
+                     resource_catalog fog_view data_compile
                      PROPERTIES LABELS "fast")
