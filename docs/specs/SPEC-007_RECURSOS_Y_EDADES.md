@@ -381,13 +381,16 @@ esta tabla en otra sección, manda ésta.
 | 26 | acero | hierro forjado + coque | 12 |
 | 27 | aluminio | bauxita + **electricidad** | 12 |
 | 28 | derivados del petróleo | petróleo | 13 |
+| 29 | **cal viva** | caliza | 8 |
+| 30 | **cemento** | caliza + arcilla (requiere energía) | 13 |
 
 **Streaming (1)** — **no** ocupa índice de stock (§8.1): **electricidad**,
 desde la edad 12. No se almacena: se deriva por tick y su falta **para en seco**
 las recetas dependientes.
 
-**Total almacenado: 28** de `RESOURCE_COUNT = 32`. Quedan 4 slots libres, que
-es el margen que §9.3 reservó deliberadamente.
+**Total almacenado: 30** de `RESOURCE_COUNT = 32` (§20.5). Quedan **2 slots**.
+El margen que §9.3 reservó ya se ha consumido en dos rondas de investigación;
+cualquier adición futura debe justificar el slot o asumir la migración.
 
 **El carbón vegetal aparece en la edad 5**, no en la 7: la reducción de mena de
 hierro lo exige desde el primer día del hierro. Y el coque **no lo sustituye**
@@ -1281,3 +1284,110 @@ exige *misma decisión aguas abajo*. Se mueve a la edad 3 y se queda solo.
 **Añadir forraje/leguminosas** como precursor del nitrógeno: no en v1. Es
 correcto históricamente pero añade un recurso para suavizar una transición que
 ocurre en la edad 12, y no justifica su coste de carga.
+
+---
+
+# §20 Fuerza motriz por edad — revisión de §13 (2026-07-29)
+
+**Directriz del Director:** antes de la electricidad, la energía debe venir de
+otras fuentes. Investigación en `docs/research/RESULTADO_ENERGIA_minimax.md` y
+`panel/energia-1015/`.
+
+## §20.1 El anacronismo que se corrige
+
+§13 hacía que toda receta con dependencia energética consumiera **electricidad**.
+Un molino del siglo XIII no se enchufa. La fuerza motriz tiene su propia
+sucesión y cada etapa mueve cosas distintas.
+
+## §20.2 El hallazgo que cambia la mecánica: la energía es LOCAL
+
+`[I]` «La energía hidráulica o de vapor clásica **no se transportaba a
+distancia**; el taller debía estar físicamente junto a la fuente».
+`[V]` La transmisión mecánica a distancia llega hacia **1850** (sistema
+telodinámico de los hermanos Hirn).
+`[V]` El transporte real y generalizado llega con la electricidad: **Pearl
+Street 1882** (Edison, DC, ~1,5 km) y **AC con transformadores, Westinghouse
+1886**.
+
+Por tanto **el contador global de energía de §13 es incorrecto** salvo en las
+últimas edades. Y la transición **no es binaria: es gradual**.
+
+## §20.3 Modelo: una sola magnitud, con RADIO que crece por edad
+
+Se rechaza la alternativa de «tipos de fuerza motriz» como enum. La
+observación decisiva de la investigación:
+
+> «(B) *fuerza motriz por tipo* **no es más fiel por ser un enum**: gana si el
+> jugador lee "construyo junto al río / junto a la caldera / enchufado a la
+> red" como decisión legible. **(B) sin adyacencia es solo cosmético.**»
+
+La fidelidad **no viene de tener tipos**: viene de que la adyacencia **cree
+decisiones de emplazamiento**. Así que una sola magnitud con un **radio de
+alcance** parametrizado por edad es a la vez más simple y más fiel.
+
+```cpp
+// Radio de alcance de la fuerza motriz, por época. 0 = solo el propio edificio.
+inline constexpr int64_t ENERGY_RADIUS_RAW_BY_EPOCH[16] = { ... };
+```
+
+| Edad | Fuente | Combustible | Alcance | Consecuencia de juego |
+|---|---|---|---|---|
+| 1–3 | músculo humano y animal | comida | **el propio edificio** | sin mecánica: los edificios funcionan |
+| 4–8 | rueda hidráulica · molino de viento | ninguno (corriente, viento) | **adyacente a la fuente** | **hay que construir junto al río** |
+| 9–11 | vapor: caldera y eje de transmisión | carbón, coque | **manzana industrial** | **el vapor libera del río**; ahora hay que llevar carbón |
+| 12 | vapor de alta presión · electricidad DC | carbón | **radio corto** (~Pearl Street) | primeras redes; el aluminio (1886) exige electricidad |
+| 13–15 | electricidad AC con transformadores | hidro, turbina de vapor, petróleo, uranio | **regional / mapa** | la energía deja de condicionar el emplazamiento |
+
+**La máquina de vapor no es "más potencia": es libertad de emplazamiento.** Es
+lo que fue históricamente, y es la mejor razón de juego para investigarla.
+
+## §20.4 Implementación
+
+Mismo patrón que la zona aliada (§23 de SPEC-004) y que la selección económica
+(§17): **máscara precalculada una vez por tick**, no una consulta por edificio.
+
+Un edificio con dependencia energética produce **solo si** existe una fuente
+propia y activa dentro de `ENERGY_RADIUS_RAW_BY_EPOCH[player_epoch]`. Si no,
+**se para en seco** — la regla de §13.3 se conserva; lo que cambia es **quién
+cuenta como fuente alcanzable**.
+
+Las fuentes de las edades 4–8 exigen además **terreno**: una rueda hidráulica
+necesita río. Eso se valida en `PLACE_BUILDING` como el footprint, no en
+tiempo de ejecución.
+
+`ENERGY_RADIUS_RAW_BY_EPOCH` es **calibración de playtest**, no dato duro.
+
+## §20.5 Revisión de los producidos
+
+| Producido | Decisión | Motivo |
+|---|---|---|
+| **cal viva** | **AÑADIR** (e8) | Horno de cal junto al alto horno; alternativa a la caliza cruda |
+| **cemento** | **AÑADIR** (e13) | Portland 1824, horno rotatorio 1885; sin vapor no hay cemento moderno |
+| acero | **reformular** (e12) | Bessemer **exige vapor**: pasa a depender de energía |
+| aluminio | mantener (e12) | Hall-Héroult 1886 cae en la ventana 1840–1900 de §2 |
+| bronce, carbón vegetal, hierro forjado, pólvora, coque, derivados | mantener | — |
+| **papel** | **NO** | No desbloquea ningún proceso posterior |
+| **vidrio** | **NO** | Sin brecha industrial clara |
+| **ladrillo** | **NO** | Se abstrae en «construcción» |
+| **ácido sulfúrico** | **NO** | Solo tendría sentido con una cadena de fertilizantes que no modelamos |
+
+Los cuatro rechazos comparten criterio: **son materiales reales que no crean
+ninguna decisión**. Aplicando la regla de §19.4, un paso más no es un recurso.
+
+**Recuento nuevo: 20 recolectados + 10 producidos = 30 de 32.** Quedan **dos
+slots**. Cualquier adición futura debe justificar por qué merece uno de los dos,
+o ampliar `RESOURCE_COUNT` con el coste de migración que eso implica.
+
+## §20.6 Criterios de aceptación (amplían §13.6)
+
+12. Un edificio con dependencia energética **sin fuente en radio** no avanza su
+    receta.
+13. El mismo edificio, con una fuente dentro del radio, **sí** avanza.
+14. El radio **crece con la época**: una configuración que no produce en la
+    edad 8 sí produce en la 12 sin mover nada.
+15. Una rueda hidráulica **no se puede colocar lejos del río**; el rechazo es
+    de `PLACE_BUILDING`, no un fallo silencioso en ejecución.
+16. Una caldera de vapor **sin carbón** deja de ser fuente válida.
+17. La máscara de alcance se calcula **una vez por tick**, no por edificio.
+18. Un escenario anterior a la edad 4 es **bit-idéntico**: sin mecánica de
+    energía no hay cambio de trayectoria.

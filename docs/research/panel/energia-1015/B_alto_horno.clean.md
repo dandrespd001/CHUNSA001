@@ -1,0 +1,8 @@
+[V] Los primeros fuelles de los altos hornos eran manuales o hidráulicos desde la Edad Media (ej. siglo XII en Suecia) (https://www.jernkontoret.se) -> permitieron inyectar aire de forma continua para elevar la combustión.
+[V] Los fuelles pasaron a ser accionados por máquinas de vapor a finales del siglo XVIII (hacia 1776 con Boulton y Watt) (https://www.britannica.com/technology/blast-furnace) -> posibilitó un flujo de aire mucho más potente y constante para incrementar la producción.
+[V] La temperatura necesaria para fundir hierro
+[V] La temperatura necesaria para fundir hierro en el alto horno alcanza aproximadamente los 1500°C (3000°F) (https://www.nps.gov/hofu/learn/historyculture/iron-making.htm) -> se logró mediante la optimización del tiro de aire y la combustión interna del carbono.
+[V] El coque sustituyó al carbón vegetal debido a la escasez de madera y fue introducido por Abraham Darby en 1709 (https://www.britannica.com/biography/Abraham-Darby) -> evitó el colapso de la industria maderera e hizo posible construir hornos mucho más grandes gracias a su mayor resistencia mecánica.
+[V] La caliza actúa como fundente reaccionando con la sílice y otras impurezas de la ganga del mineral para formar escoria líquida (https://www.jernkontoret.se/en/the-steel-industry/the-history-of-swedish-steel-industry/blast-furnace-in-earlect-times/) -> permitió limpiar el hierro fundido separando los residuos indeseados de manera eficiente.
+[I] No era posible producir acero ni arrabio
+[I] No era posible producir acero ni arrabio a gran escala industrial sin la máquina de vapor (https://www.britannica.com/technology/blast-furnace) -> la potencia requerida para los sopladores masivos y el drenaje dependía críticamente de la energía mecánica del vapor.
