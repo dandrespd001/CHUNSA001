@@ -275,16 +275,16 @@ inline bool ai_find_unassigned_site(const GameState& g, uint8_t ai_player, uint3
 // que la capa 1 acababa de emitir — desperdicio determinista, no un bug de
 // determinismo, pero evitable con este chequeo barato.
 struct AiEcoStateV1 {
-    int32_t  resource_count[3] = {0, 0, 0};  // ciudadanos gathering activo, por recurso (0=A,1=B,2=Me)
+    int32_t  resource_count[RESOURCE_COUNT] = {};
     bool     has_idle = false;               // primer ciudadano SIN depósito vivo asignado (ascendente)
     uint32_t idle_index = 0;
     uint32_t idle_gen   = 0;
     // Primer (menor índice) ciudadano gathering cada recurso — candidato
     // "donante" si ese recurso resulta ser el más abundante y hay que pulsar
     // uno hacia el recurso escaso.
-    bool     has_first_of[3] = {false, false, false};
-    uint32_t first_of_index[3] = {0, 0, 0};
-    uint32_t first_of_gen[3]   = {0, 0, 0};
+    bool     has_first_of[RESOURCE_COUNT] = {};
+    uint32_t first_of_index[RESOURCE_COUNT] = {};
+    uint32_t first_of_gen[RESOURCE_COUNT] = {};
 };
 
 inline void ai_scan_economy(const GameState& g, uint8_t ai_player,
@@ -311,7 +311,7 @@ inline void ai_scan_economy(const GameState& g, uint8_t ai_player,
             continue;
         }
         const uint8_t r = g.deposits[dep].resource_idx;
-        if (r < 3u) {
+        if (r < RESOURCE_COUNT) {
             ++e.resource_count[r];
             if (!e.has_first_of[r]) {
                 e.has_first_of[r]   = true;
@@ -426,11 +426,20 @@ inline AiOwnedBuildingV1 ai_find_owned_building_of_type(const GameState& g, uint
     return r;
 }
 
-inline bool ai_afford(const GameState& g, uint8_t player, int32_t cost_a, int32_t cost_b,
-                      int32_t cost_me) noexcept {
-    return g.player_stock[player][0] >= cost_a
-        && g.player_stock[player][1] >= cost_b
-        && g.player_stock[player][2] >= cost_me;
+inline bool ai_afford(const GameState& g, uint8_t player,
+                      const int32_t (&cost)[RESOURCE_COUNT]) noexcept {
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        if (g.player_stock[player][resource] < cost[resource]) return false;
+    }
+    return true;
+}
+
+inline bool ai_afford_epoch(const GameState& g, uint8_t player,
+                            int32_t cost0, int32_t cost1,
+                            int32_t cost2) noexcept {
+    return g.player_stock[player][0] >= cost0
+        && g.player_stock[player][1] >= cost1
+        && g.player_stock[player][2] >= cost2;
 }
 
 inline bool ai_epoch_ok(uint8_t player_epoch, uint8_t epoch_min, uint8_t epoch_max) noexcept {
@@ -667,7 +676,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         // empate -> menor índice de recurso (0=A,1=B,2=Me, recorrido ascendente).
         int32_t best_r = -1;
         int64_t best_deficit = 0;
-        for (uint8_t r = 0; r < 3u; ++r) {
+        for (uint8_t r = 0; r < RESOURCE_COUNT; ++r) {
+            // 1.8A reserva 3..31 pero no activa recursos nuevos. La política
+            // de IA ampliada pertenece a 1.8B (CONCORDANCIA C6).
+            if (r > RESOURCE_INDEX_ME) continue;
             const int64_t deficit = threshold - g.player_stock[ai_player][r];
             if (deficit > 0 && deficit > best_deficit) { best_deficit = deficit; best_r = static_cast<int32_t>(r); }
         }
@@ -686,7 +698,8 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 // asignado (no vaciar por completo esa recolección).
                 int32_t donor_r = -1;
                 int32_t donor_count = 0;
-                for (uint8_t r = 0; r < 3u; ++r) {
+                for (uint8_t r = 0; r < RESOURCE_COUNT; ++r) {
+                    if (r > RESOURCE_INDEX_ME) continue;
                     if (r == need_r) continue;
                     if (eco.resource_count[r] > 1 && eco.resource_count[r] > donor_count) {
                         donor_count = eco.resource_count[r];
@@ -733,7 +746,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 if (own.has_complete) {
                     const UnitDefinitionV1& udef = cat.units[tt.unit_to_train];
                     if (ai_epoch_ok(epoch, udef.epoch_min, udef.epoch_max)
-                        && ai_afford(g, ai_player, udef.cost_a, udef.cost_b, udef.cost_me)
+                        && ai_afford(g, ai_player, udef.cost)
                         && g.pop_used[ai_player] + udef.pop_cost <= static_cast<int32_t>(POP_CAP_V1)
                         && g.prod_count[own.complete_index] < PROD_QUEUE_CAP) {
                         econ_ok = true;
@@ -758,7 +771,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                     if (bdef.constructible == 1u
                         && ai_epoch_ok(epoch, bdef.epoch_min, bdef.epoch_max)
                         && ai_caps_ok(g, ai_player, bdef)
-                        && ai_afford(g, ai_player, bdef.cost_a, bdef.cost_b, bdef.cost_me)) {
+                        && ai_afford(g, ai_player, bdef.cost)) {
                         build_cell = ai_find_free_cell(g, macro.anchor_tx, macro.anchor_ty,
                                                        bdef.footprint_w, bdef.footprint_h);
                         if (build_cell.found) {
@@ -782,7 +795,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 if (own.has_complete) {
                     const UnitDefinitionV1& udef = cat.units[mt.unit_to_train];
                     if (ai_epoch_ok(epoch, udef.epoch_min, udef.epoch_max)
-                        && ai_afford(g, ai_player, udef.cost_a, udef.cost_b, udef.cost_me)
+                        && ai_afford(g, ai_player, udef.cost)
                         && g.pop_used[ai_player] + udef.pop_cost <= static_cast<int32_t>(POP_CAP_V1)
                         && g.prod_count[own.complete_index] < PROD_QUEUE_CAP) {
                         mil_ok = true;
@@ -858,7 +871,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                     }
                     if (!mutex_clear) continue;
 
-                    if (!ai_afford(g, ai_player, tdef.cost_a, tdef.cost_b, tdef.cost_me)) continue;
+                    if (!ai_afford(g, ai_player, tdef.cost)) continue;
 
                     research_ok = true;
                     research_building = bi;
@@ -866,7 +879,8 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 }
             }
             if (epoch < EPOCH_MAX_V1 && epoch_building_count >= 2u
-                && ai_afford(g, ai_player, EPOCH_COST_A, EPOCH_COST_B, EPOCH_COST_ME)) {
+                && ai_afford_epoch(g, ai_player,
+                                   EPOCH_COST_A, EPOCH_COST_B, EPOCH_COST_ME)) {
                 epoch_up_try = true;
             }
         }

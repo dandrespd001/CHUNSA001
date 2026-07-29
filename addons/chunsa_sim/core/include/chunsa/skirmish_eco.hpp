@@ -50,7 +50,7 @@ inline UnitDefinitionV1 make_soldier() {
     d.hp = 60; d.attack = 8; d.range_millitiles = 1000;  // 1 tile
     d.speed_millitile_tick = 150; d.morale = 100; d.build_time_ticks = 100;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -60,14 +60,15 @@ inline UnitDefinitionV1 make_soldier() {
 // SEEK/HARVEST/RETURN completo quepa muchas veces en el presupuesto de
 // ticks del gate. No se entrena vía producción en este escenario (SPAWN_
 // CITIZEN directo en el batch de t==0, mismo patrón que test_ai_layers.cpp)
-// — cost_a/pop_cost son valores de catálogo válidos pero irrelevantes aquí.
+// — coste de recurso 0/pop_cost son valores de catálogo válidos pero
+// irrelevantes aquí.
 inline UnitDefinitionV1 make_citizen() {
     UnitDefinitionV1 d{};
     d.id = 1; d.unit_class = UnitClassV1::Citizen; d.tags_mask = 0;
     d.hp = 20; d.attack = 0; d.range_millitiles = 0;
     d.speed_millitile_tick = 200; d.morale = 100; d.build_time_ticks = 1;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 5; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -76,7 +77,7 @@ inline BuildingDefinitionV1 make_center() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.hp = 400; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;  // nace completo (pre-colocado por escenario)
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     // dropoff_mask=0 a propósito (igual que skirmish.hpp): el fallback
     // legacy dropoff_x/y[owner] de gs_init_economy es EXACTAMENTE el punto
     // geométrico que este escenario usa para anclar la base del defensor

@@ -2,7 +2,7 @@
 //
 // Cubre las transiciones MOVE/GATHER/BUILD, conservación de carga, propiedad
 // exclusiva de pos por sistema, auto-asignación al spawn, fin de tarea,
-// save v13/load, replay y dominio de checksum v8.
+// save/load, replay y pertenencia de citizen_task al dominio de checksum.
 //
 // GameState siempre vive en heap: su tamaño excede una pila segura bajo ctest.
 #include <cstdint>
@@ -391,11 +391,11 @@ void test_no_deposit_transitions_to_idle() {
     CHECK(g->vel_y[citizen.index] == 0);
 }
 
-void test_save_v13_load_replay_and_checksum_preserve_task() {
-    const char* save_path = "test_citizen_task_v13.sav";
+void test_save_load_replay_and_checksum_preserve_task() {
+    const char* save_path = "test_citizen_task_v14.sav";
     const char* replay_path = "test_citizen_task_v3.curp";
-    CHECK(SAVE_FORMAT_VERSION == 13u);
-    CHECK(CHECKSUM_ALGO_VERSION == 8u);
+    CHECK(SAVE_FORMAT_VERSION == 14u);
+    CHECK(CHECKSUM_ALGO_VERSION == 9u);
 
     auto direct = make_state();
     const EntityHandle citizen = add_citizen(*direct, 10 * TILE, 10 * TILE);
@@ -434,7 +434,7 @@ void test_save_v13_load_replay_and_checksum_preserve_task() {
     CHECK(replayed->citizen_task[citizen.index] == CITIZEN_TASK_MOVE);
     CHECK(state_checksum_v1(*replayed) == direct_checksum);
 
-    // El nuevo campo pertenece de verdad al dominio V8.
+    // El campo pertenece de verdad al dominio vigente.
     loaded->citizen_task[citizen.index] = CITIZEN_TASK_GATHER;
     CHECK(state_checksum_v1(*loaded) != direct_checksum);
 
@@ -451,7 +451,7 @@ int main() {
     test_assign_build_interrupts_move_and_finishes_idle();
     test_exactly_one_position_owner_per_task();
     test_no_deposit_transitions_to_idle();
-    test_save_v13_load_replay_and_checksum_preserve_task();
+    test_save_load_replay_and_checksum_preserve_task();
 
     if (g_fails == 0) {
         std::printf("citizen_task: OK\n");

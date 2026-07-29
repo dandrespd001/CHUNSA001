@@ -94,7 +94,13 @@ namespace chunsa {
 // final para todos los slots y usa universalmente el dominio V8, sin depender
 // del contenido del estado. El bump V7→V8 invalida por diseño todos los
 // baselines previos, aunque la trayectoria funcional permanezca bit-idéntica.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 8;
+//
+// Sprint 1.8A (SPEC-007 §9.3/§11): bump a v9 — el dominio de player_stock
+// pasa universalmente de 3 a RESOURCE_COUNT entradas por emisor. Incluso un
+// estado con 3..31 en cero usa CHUNSA_STATE_V9; no hay rutas condicionales por
+// contenido. La trayectoria sigue intacta y todos los baselines cambian solo
+// por este nuevo dominio.
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 9;
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -122,7 +128,7 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     detail::Hasher h;
     h.init();
     const EntityTable& t = g.entities;
-    h.bytes("CHUNSA_STATE_V8", 15);
+    h.bytes("CHUNSA_STATE_V9", 15);
     h.u32(CHECKSUM_ALGO_VERSION);
     h.u32(g.tick);
     h.u32(static_cast<uint32_t>(g.fatal));
@@ -208,9 +214,9 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         h.i64(g.dropoff_x[e]);
         h.i64(g.dropoff_y[e]);
-        h.i64(g.player_stock[e][0]);
-        h.i64(g.player_stock[e][1]);
-        h.i64(g.player_stock[e][2]);
+        for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+            h.i64(g.player_stock[e][resource]);
+        }
     }
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(static_cast<uint8_t>(g.eco_state[i]));
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.eco_assigned_deposit[i]);

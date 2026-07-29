@@ -18,14 +18,14 @@ implementando tres recursos.
 
 | # | Dónde | Dice hoy | Debe decir | Sprint |
 |---|---|---|---|---|
-| C1 | SPEC-004 §4.1 (línea ~37) | `BuildingDefinitionV1` con `cost_a, cost_b, cost_me` | Vector de costes de longitud `RESOURCE_COUNT` | 1.8A |
-| C2 | SPEC-004 §4.2 (~96) | «`player_stock[emitter]` cubre `cost_a/b/me`» | Cubre el vector completo de costes | 1.8A |
-| C3 | SPEC-004 §11 (~258) | `UnitDefinitionV1` con `cost_a/cost_b/cost_me` | Vector de costes | 1.8A |
-| C4 | SPEC-004 §12.1 (~300) | `TechDefinitionV1` con `cost_a/b/me` | Vector de costes | 1.8A |
+| C1 | SPEC-004 §4.1 (línea ~37) | `BuildingDefinitionV1` con `cost_a, cost_b, cost_me` | Vector de costes de longitud `RESOURCE_COUNT` | **1.8A ✅** |
+| C2 | SPEC-004 §4.2 (~96) | «`player_stock[emitter]` cubre `cost_a/b/me`» | Cubre el vector completo de costes | **1.8A ✅** |
+| C3 | SPEC-004 §11 (~258) | `UnitDefinitionV1` con `cost_a/cost_b/cost_me` | Vector de costes | **1.8A ✅** |
+| C4 | SPEC-004 §12.1 (~300) | `TechDefinitionV1` con `cost_a/b/me` | Vector de costes | **1.8A ✅** |
 | C5 | SPEC-004 §12.3 (~327) | `EPOCH_COST_A/B/ME` constantes | Coste de época **por dato**, no constante, y por recurso | 1.8B |
 | C6 | SPEC-004 §19 (~473) | La IA cuenta «stock A/B/Me» | Recorre `RESOURCE_COUNT`; prioriza por déficit relativo | 1.8B |
 | C7 | SPEC-005 §5 (~80) | Observación de IA incluye «stock A/B/Me» | Vector completo; la observación crece | 1.8B |
-| C8 | SPEC-004 §16–§18 | Economía con tres índices de recurso | `RESOURCE_COUNT` índices | 1.8A |
+| C8 | SPEC-004 §16–§18 | Economía con tres índices de recurso | `RESOURCE_COUNT` índices | **1.8A ✅** |
 | C9 | SPEC-004 §16–§18, §23 | `eco_assigned_deposit` como índice único en `deposits[]` | `eco_target_kind` + `eco_target_index`: un ciudadano puede ir a depósito **o** a fuente construida (SPEC-007 §15.3) | 1.12 |
 | C10 | SPEC-004 §23 | La zona aliada considera solo `deposits[]` | Considera también las fuentes construidas propias (SPEC-007 §15.4) | 1.12 |
 | C11 | SPEC-004 §16 | `EcoDeposit.remaining` | `reserve_total` + `extracted` (SPEC-007 §14.1) | 1.11 |
@@ -93,3 +93,7 @@ donde se lleva la cuenta; si una fila no está marcada, el cambio no está hecho
 **1.8A** no toca datos ni contenido: C1, C2, C3, C4, C8. Al terminar, el juego
 debe comportarse **exactamente igual** —solo cambian los checksums—. Cualquier
 otra diferencia observable es un error, no un efecto esperado.
+
+Estado 2026-07-29: **C1, C2, C3, C4 y C8 resueltas en Sprint 1.8A**. Los
+`end_tick` canónicos permanecen en 1107 y 9317; los baselines cambiaron
+exclusivamente por el dominio universal `CHUNSA_STATE_V9`.

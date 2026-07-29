@@ -300,7 +300,7 @@ inline UnitDefinitionV1 make_worker() {
     d.hp = 20; d.attack = 0; d.range_millitiles = 0;
     d.speed_millitile_tick = 800; d.morale = 100; d.build_time_ticks = 1;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -308,7 +308,7 @@ inline BuildingDefinitionV1 make_post() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.hp = 100; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;  // nace completo (mismo patrón "center"/"barracks")
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;

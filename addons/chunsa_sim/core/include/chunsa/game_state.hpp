@@ -190,7 +190,7 @@ struct GameState {
     uint32_t   n_deposits;
     int64_t    dropoff_x[MAX_EMITTERS];
     int64_t    dropoff_y[MAX_EMITTERS];
-    int64_t    player_stock[MAX_EMITTERS][3];   // índice: 0=A, 1=B, 2=Me
+    int64_t    player_stock[MAX_EMITTERS][RESOURCE_COUNT]; // 0=A, 1=B, 2=Me
     EcoState   eco_state[ENTITY_HARD_CAP];
     uint32_t   eco_assigned_deposit[ENTITY_HARD_CAP];
     int32_t    eco_carry[ENTITY_HARD_CAP];
@@ -287,9 +287,9 @@ inline void gs_init_economy(GameState& g) noexcept {
         const int64_t dtx = 20 + static_cast<int64_t>(e) * 28;
         g.dropoff_x[e] = dtx * T + T / 2;
         g.dropoff_y[e] = 128 * T + T / 2;
-        g.player_stock[e][0] = 0;
-        g.player_stock[e][1] = 0;
-        g.player_stock[e][2] = 0;
+        for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+            g.player_stock[e][resource] = 0;
+        }
     }
 }
 

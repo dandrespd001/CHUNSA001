@@ -90,6 +90,7 @@ static void test_skirmish_eco_concludes_in_victory() {
     // escenario (mismo patrón que skirmish.hpp), ahora con economía real en
     // juego del lado del defensor.
     CHECK(out.winner == 1u);
+    CHECK(out.end_tick == determinism_baselines::AI_SKIRMISH_ECO_END_TICK);
     check_baseline("ai_skirmish_eco.state",
                    determinism_baselines::AI_SKIRMISH_ECO_STATE,
                    out.final_checksum);

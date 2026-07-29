@@ -160,6 +160,11 @@ add_executable(chunsa_test_citizen_task tests/unit/test_citizen_task.cpp)
 target_link_libraries(chunsa_test_citizen_task PRIVATE chunsa_sim_core)
 add_test(NAME citizen_task COMMAND chunsa_test_citizen_task)
 
+# --- Test Sprint 1.8A: capacidad estructural de 32 recursos (SPEC-007 §9.3) --
+add_executable(chunsa_test_resource_count tests/unit/test_resource_count.cpp)
+target_link_libraries(chunsa_test_resource_count PRIVATE chunsa_sim_core)
+add_test(NAME resource_count COMMAND chunsa_test_resource_count)
+
 # --- Test Sprint 1.6B (K2): la IA juega la apertura (SPEC-004 §19) -------------
 add_executable(chunsa_test_ai_apertura tests/unit/test_ai_apertura.cpp)
 target_link_libraries(chunsa_test_ai_apertura PRIVATE chunsa_sim_core)

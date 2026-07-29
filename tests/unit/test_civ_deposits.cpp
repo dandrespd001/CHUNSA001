@@ -531,7 +531,7 @@ inline constexpr CivId CIV_B = 1;
 inline BuildingDefinitionV1 make_probe(BuildingId id, CivId civ, uint8_t epoch_min) {
     BuildingDefinitionV1 d{};
     d.id = id; d.civ_id = civ; d.hp = 100; d.footprint_w = 1; d.footprint_h = 1;
-    d.build_time_ticks = 0; d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 0; d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = epoch_min; d.epoch_max = 15;
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
@@ -598,7 +598,7 @@ inline UnitDefinitionV1 make_warrior(UnitId id, CivId civ) {
     d.hp = 50; d.attack = 10; d.range_millitiles = 1000;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 2;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 10; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -609,7 +609,7 @@ inline UnitDefinitionV1 make_warrior(UnitId id, CivId civ) {
 inline BuildingDefinitionV1 make_barracks_a() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.civ_id = CIV_A; d.hp = 300; d.footprint_w = 1; d.footprint_h = 1;
-    d.build_time_ticks = 0; d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 0; d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 0; d.trains[1] = 1; d.train_count = 2;  // warrior_a(0), warrior_b(1)
@@ -625,7 +625,7 @@ inline BuildingDefinitionV1 make_barracks_a() {
 inline BuildingDefinitionV1 make_outpost_b() {
     BuildingDefinitionV1 d{};
     d.id = 1; d.civ_id = CIV_B; d.hp = 200; d.footprint_w = 2; d.footprint_h = 2;
-    d.build_time_ticks = 5; d.cost_a = 5; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 5; d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
@@ -638,7 +638,7 @@ inline BuildingDefinitionV1 make_outpost_b() {
 }
 inline TechDefinitionV1 make_tech(TechId id, CivId civ) {
     TechDefinitionV1 d{};
-    d.id = id; d.civ_id = civ; d.cost_a = 5; d.cost_b = 0; d.cost_me = 0;
+    d.id = id; d.civ_id = civ; d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0;
     d.research_time_ticks = 3; d.epoch = 1;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) d.prerequisites[k] = INVALID_TECH_ID;
     d.prereq_count = 0;
