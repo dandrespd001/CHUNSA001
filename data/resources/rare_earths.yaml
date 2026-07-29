@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:rare_earths
+display_name_key: chunsa:resource.rare_earths
+family: high_tech
+appearance_epoch: 15
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Tierras raras fusionadas en un solo recurso por criterio §19.4 (misma cadena aguas arriba, misma decisión aguas abajo); edad 15."
     reviewed_by:
       - architect

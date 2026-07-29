@@ -1,9 +1,9 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
-nature: collected
+id: chunsa:steel
+display_name_key: chunsa:resource.steel
+family: metallurgy
+appearance_epoch: 12
+nature: produced
 provenance:
   status: promoted
   generator: human
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Acero Bessemer de hierro forjado y coque; el Bessemer exige vapor y pasa a depender de energía; SPEC-007 §9.2 y §20.5."
     reviewed_by:
       - architect

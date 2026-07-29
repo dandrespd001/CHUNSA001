@@ -1,9 +1,9 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
-nature: collected
+id: chunsa:coke
+display_name_key: chunsa:resource.coke
+family: metallurgy
+appearance_epoch: 9
+nature: produced
 provenance:
   status: promoted
   generator: human
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Coque por destilación seca del carbón (Darby I, 1709); desplaza al carbón vegetal en el alto horno hacia 1850 sin jubilarlo (§19.3); edad 9 según §19.1."
     reviewed_by:
       - architect

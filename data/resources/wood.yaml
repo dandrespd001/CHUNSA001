@@ -1,10 +1,13 @@
 schema_version: 1
 id: chunsa:wood
 display_name_key: chunsa:resource.wood
+family: construction
+appearance_epoch: 1
+nature: collected
 provenance:
   status: promoted
   generator: human
-  task_id: Sprint-1.8B-resource-schema
+  task_id: Sprint-1.8C-resource-definitions
   generated_on: "2026-07-29"
   reviewed_by:
     - architect
@@ -14,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Identidad estable del recurso de madera existente; este sprint solo renombra el índice 1."
+    rationale: "Madera como recurso de construcción; índice 1 fijado por arranque (SPEC-007 §9.2)."
     reviewed_by:
       - architect
