@@ -353,7 +353,7 @@ Es históricamente cierto y resuelve la directriz sin reglas artificiales.
 | 6 | oro | 3 | |
 | 7 | estaño | 4 | escaso: es el cuello de botella del bronce |
 | 8 | mena de hierro | 5 | |
-| 9 | plomo | 8 | proyectiles → baterías (14) |
+| 9 | plomo | **3** | fundido desde el 7º milenio a.C. (§19.1) · proyectiles → baterías |
 | 10 | salitre | 8 | pólvora |
 | 11 | azufre | 8 | pólvora → ácido sulfúrico |
 | 12 | carbón | 11 | energético |
@@ -371,9 +371,9 @@ Es históricamente cierto y resuelve la directriz sin reglas artificiales.
 | 19 | bronce | cobre + estaño | 4 |
 | 20 | hierro forjado | mena de hierro + carbón vegetal | 5 |
 | 21 | pólvora | salitre + azufre + carbón vegetal | 8 |
-| 22 | coque | carbón | 11 |
+| 22 | coque | carbón | **9** |
 | 23 | acero | hierro forjado + coque | 12 |
-| 24 | aluminio | bauxita + electricidad | 14 |
+| 24 | aluminio | bauxita + electricidad | **12** |
 | 25 | derivados del petróleo | petróleo | 13 |
 
 **Streaming (1)** — no ocupa índice de stock (§8.1): **electricidad**, desde la
@@ -1172,3 +1172,101 @@ Es la clase de deuda que sale barata hoy y carísima en tres sprints.
 31. Los tres recursos actuales se renombran a `chunsa:food`, `chunsa:wood` y
     `chunsa:stone` **conservando los índices 0, 1 y 2**, para que las
     trayectorias no cambien.
+
+---
+
+# §19 Correcciones tras la investigación de materiales (2026-07-29)
+
+Panel: MiniMax-M3 con `WebFetch`. Material en
+`docs/research/panel/20260729-1000/`. Las tres rutas Gemini devolvieron
+respuestas genéricas y corruptas; **el valor de esta ronda vino entero de
+MiniMax**.
+
+## §19.1 Errores de fecha en §9.2 — corregidos
+
+Los seis son `[V]` con fuente citada. Mi lista original tenía anacronismos que
+un jugador con formación técnica habría notado.
+
+| Recurso | Tenía | Pasa a | Motivo |
+|---|---:|---:|---|
+| **plomo** | 8 | **3** | Se funde desde el **7º milenio a.C.** Ponerlo en la edad de la pólvora era un anacronismo de 6000 años |
+| **coque** | 11 | **9** | Abraham Darby I lo industrializa en **1709** |
+| **aluminio** | 14 | **12** | Hall-Héroult es de **1886**: pertenece a la electrificación, no a la era atómica |
+
+## §19.2 Materiales que faltaban — añadidos
+
+| Recurso | Edad | Por qué es indispensable |
+|---|---:|---|
+| **caliza** (fundente) | 5 | La reducción de mena de hierro **necesita** fundente para arrastrar la ganga como escoria. Sin ella, la receta de hierro forjado es falsa |
+| **sal** | 3 | Conservación de alimentos. Un ejército en campaña sin sal es históricamente absurdo, y conecta con el upkeep de §10 |
+| **nitrógeno fijado** | 12 | Haber-Bosch, **1913**. Sin él, los fertilizantes y explosivos del s. XX no se sostienen |
+
+`[V]` «limestone (or dolomite), to remove the accompanying rock gangue as slag».
+`[V]` La sal es «the best-known food preservative, especially for meat, for many
+thousands of years».
+
+**Recuento nuevo**: 20 recolectados + 8 producidos = **28 almacenados**. Sigue
+por debajo de `RESOURCE_COUNT = 32`, que era el margen que §9.3 reservó
+precisamente para esto.
+
+## §19.3 El coque NO sustituye al carbón vegetal
+
+Corrige §9.5 y §2. `[V]` El coque desplaza al carbón vegetal en el **alto
+horno** hacia 1850, pero el carbón vegetal **sigue usándose** en fraguas
+pequeñas mucho después. Coexisten.
+
+Encaja con la directriz del Director de que los energéticos se acumulan en vez
+de sustituirse: aquí la historia le da la razón.
+
+## §19.4 El criterio de fusión — la aportación más valiosa
+
+Yo pregunté qué se puede fusionar. La respuesta útil no fue la lista sino
+**la regla**:
+
+> **Misma cadena aguas arriba + misma decisión aguas abajo = fusionable.**
+
+Dicho de otro modo: si dos materiales salen del mismo yacimiento **y** el
+jugador no toma decisiones distintas con ellos, son un solo recurso. Si toma
+decisiones distintas, son dos aunque salgan del mismo sitio.
+
+Aplicación:
+
+| Caso | Veredicto | Por qué |
+|---|---|---|
+| Tierras raras (17 elementos) | **fusionar** | No hay decisión de «¿extraigo neodimio o europio?» |
+| Derivados del petróleo (plástico, combustible, lubricante) | **fusionar** | Misma refinería, mismo uso desde la perspectiva del jugador |
+| Salitre y azufre | **NO** | Decisiones distintas: la salitre además es fertilizante |
+| Madera y carbón vegetal | **NO** | El jugador **elige**: quemar madera para carbón o usarla para construir |
+| Cobre y oro | **NO** | Cadenas y rareza distintas; el jugador espera verlos aparte |
+
+**Esta regla queda como criterio permanente** para cualquier duda futura sobre
+si algo merece ser un recurso propio. Es preferible a decidir caso por caso.
+
+## §19.5 Umbral de saturación: sin dato duro
+
+`[?]` MiniMax buscó y **no encontró** ningún estudio cuantitativo del máximo de
+recursos simultáneos que tolera un jugador de RTS. Lo dijo en vez de
+inventarlo, que es la conducta correcta.
+
+Lo que sí hay son referencias: AoE2 funciona con **4**, Rise of Nations con
+**6**, y Anno 1800 sostiene **~25 bienes** en fase final con éxito comercial.
+El techo real está entre 8 y 25 y **depende de la agrupación, no del conteo
+bruto**.
+
+Nuestro pico de 26 activos (§9.4) queda en el límite superior conocido. Eso
+**refuerza** que la agrupación por familias del HUD (SPEC-006 Parte III) no es
+cosmética: es lo que decide si el diseño es jugable.
+
+Técnica de Rise of Nations digna de copiar: `[V]` la mayoría de unidades cuesta
+solo **2 recursos**. Aunque existan 28, que cada decisión concreta implique
+pocos es lo que mantiene la carga baja.
+
+## §19.6 Lo que se rechaza de la investigación
+
+**Fusionar plomo con estaño en «metales blandos»**: no. El plomo tiene un uso
+tardío propio —baterías, blindaje— y la fusión rompería la regla de §19.4, que
+exige *misma decisión aguas abajo*. Se mueve a la edad 3 y se queda solo.
+
+**Añadir forraje/leguminosas** como precursor del nitrógeno: no en v1. Es
+correcto históricamente pero añade un recurso para suavizar una transición que
+ocurre en la edad 12, y no justifica su coste de carga.
