@@ -12,35 +12,21 @@
     "epoch": {"type": "integer", "minimum": 1, "maximum": 15},
     "epoch_window": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/epoch"}},
     "year": {"type": "integer", "not": {"const": 0}},
-    "resource": {"enum": ["A", "B", "P", "W", "Me", "F", "I", "El"]},
     "resource_costs": {
-      "type": "object", "additionalProperties": false, "maxProperties": 8,
-      "properties": {
-        "A": {"type": "integer", "minimum": 0, "maximum": 1000000}, "B": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "P": {"type": "integer", "minimum": 0, "maximum": 1000000}, "W": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "Me": {"type": "integer", "minimum": 0, "maximum": 1000000}, "F": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "I": {"type": "integer", "minimum": 0, "maximum": 1000000}, "El": {"type": "integer", "minimum": 0, "maximum": 1000000}
-      }
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/record_id"},
+      "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1000000},
+      "maxProperties": 32
     },
     "positive_resource_costs": {
       "allOf": [
         {"$ref": "#/$defs/resource_costs"},
         {"minProperties": 1},
-        {"anyOf": [
-          {"required": ["A"], "properties": {"A": {"minimum": 1}}}, {"required": ["B"], "properties": {"B": {"minimum": 1}}},
-          {"required": ["P"], "properties": {"P": {"minimum": 1}}}, {"required": ["W"], "properties": {"W": {"minimum": 1}}},
-          {"required": ["Me"], "properties": {"Me": {"minimum": 1}}}, {"required": ["F"], "properties": {"F": {"minimum": 1}}},
-          {"required": ["I"], "properties": {"I": {"minimum": 1}}}, {"required": ["El"], "properties": {"El": {"minimum": 1}}}
-        ]}
+        {"not": {"additionalProperties": {"const": 0}}}
       ]
     },
-    "material_cost": {
-      "type": "object", "additionalProperties": false, "required": ["material_id", "amount"],
-      "properties": {"material_id": {"$ref": "#/$defs/record_id"}, "amount": {"type": "integer", "minimum": 1, "maximum": 1000000}}
-    },
-    "material_costs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/material_cost"}},
     "record_id_set": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}},
-    "resource_set": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/resource"}},
+    "resource_set": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/record_id"}},
     "availability": {
       "type": "object", "additionalProperties": false,
       "required": ["playable_period_ids", "availability_mode"],

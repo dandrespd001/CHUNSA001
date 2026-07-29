@@ -368,6 +368,7 @@ enum class CatalogLoadCode : uint8_t {
     InvalidTech,      // Sprint 1.2 (SPEC-004 §12.1); append-only, no renumerar.
     InvalidAiProfile, // Sprint 1.4 (SPEC-005 §3); append-only, no renumerar.
     InvalidMap,       // Sprint 1.6B (SPEC-004 §16); append-only, no renumerar.
+    InvalidResource,  // Sprint 1.8B (SPEC-007 §18); append-only.
 };
 
 class DataCatalogStorageV1 {
@@ -418,7 +419,8 @@ inline constexpr uint32_t RECORD_PAYLOAD_CAP = 1u << 20;       // 1 MiB
 inline constexpr uint32_t RECORD_PAYLOAD_CAP_MAP = 16u << 20;  // 16 MiB
 inline constexpr size_t DIRECTORY_ENTRY_SIZE = 24;
 inline constexpr size_t HEADER_SIZE = 40;
-inline constexpr uint32_t SECTION_COUNT_D1 = 7;
+inline constexpr uint32_t SECTION_COUNT_LEGACY = 7;
+inline constexpr uint32_t SECTION_COUNT_RESOURCE_V1 = 8;
 
 // Control de flujo interno: nunca cruza la API pública (atrapado en el borde).
 struct LoadFail { CatalogLoadCode code; };
@@ -663,7 +665,7 @@ inline bool bonus_index_from_string(const std::string& s, size_t& idx) noexcept 
 inline bool is_known_unit_key(const std::string& k) noexcept {
     static constexpr const char* T[] = {
         "schema_version", "id", "display_name_key", "description_key", "civ_id",
-        "epoch_window", "class", "tags", "resource_costs", "material_costs",
+        "epoch_window", "class", "tags", "resource_costs",
         "playable_period_ids", "availability_mode", "counterfactual_label_key",
         "stats", "bonus_vs_bp", "provenance",
     };
@@ -698,14 +700,30 @@ inline void parse_epoch_window(const CveValue& obj, uint8_t& emin, uint8_t& emax
     emax = static_cast<uint8_t>(hi.i);
 }
 
-// `resource_costs` (common.schema.json): objeto con hasta 8 claves de recurso.
-// Sprint 1.8A conserva A/B/Me en 0/1/2; P/W/F/I/El se aceptan sin tipar hasta
-// que 1.8B aporte el catálogo de recursos. Ausencia de la clave ⇒ costes en 0
-// (defensivo: el schema exige la clave del objeto en unit/building/tech, pero
-// el loader no impone esa completitud — ese rigor ya lo ejerce el compilador).
+inline bool resolve_resource_index(
+        const std::vector<std::string>& resource_ids,
+        const std::vector<uint8_t>& resource_indices,
+        const std::string& target,
+        uint8_t& out_index) noexcept {
+    if (resource_ids.size() != resource_indices.size()) return false;
+    for (size_t pos = 0; pos < resource_ids.size(); ++pos) {
+        if (resource_ids[pos] == target) {
+            out_index = resource_indices[pos];
+            return true;
+        }
+    }
+    return false;
+}
+
+// `resource_costs` (common.schema.json): objeto de record_id→cantidad. La
+// tabla id→slot viene del índice asignado por el compilador en kind=8; para
+// CHDB 1.0 legados, load_impl instala la tabla histórica A/B/Me. Ausencia de
+// la clave ⇒ costes en 0 (defensivo: los schemas la exigen donde corresponde).
 inline void parse_resource_costs(const CveValue& obj,
                                  int32_t (&cost)[RESOURCE_COUNT],
-                                 CatalogLoadCode range_fail) {
+                                 CatalogLoadCode range_fail,
+                                 const std::vector<std::string>& resource_ids,
+                                 const std::vector<uint8_t>& resource_indices) {
     for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
         cost[resource] = 0;
     }
@@ -715,10 +733,13 @@ inline void parse_resource_costs(const CveValue& obj,
     for (const auto& kv : costs->obj) {
         if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
         if (kv.second.i < 0 || kv.second.i > 1000000) fail(range_fail);
-        if (kv.first == "A") cost[0] = static_cast<int32_t>(kv.second.i);
-        else if (kv.first == "B") cost[1] = static_cast<int32_t>(kv.second.i);
-        else if (kv.first == "Me") cost[2] = static_cast<int32_t>(kv.second.i);
-        // Otros recursos (P/W/F/I/El): se tipan en 1.8B.
+        uint8_t resource_index = 0;
+        if (!resolve_resource_index(
+                resource_ids, resource_indices, kv.first, resource_index)
+                || resource_index >= RESOURCE_COUNT) {
+            fail(range_fail);
+        }
+        cost[resource_index] = static_cast<int32_t>(kv.second.i);
     }
 }
 
@@ -761,7 +782,9 @@ inline bool resolve_id(const std::vector<std::string>& ids, const std::string& t
 // unit en el blob; load_impl resuelve tras parsear todas las secciones,
 // mismo patrón que las referencias diferidas de building/tech).
 inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
-                                              std::string& civ_id_raw_out) {
+                                              std::string& civ_id_raw_out,
+                                              const std::vector<std::string>& resource_ids,
+                                              const std::vector<uint8_t>& resource_indices) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
     for (const auto& kv : obj.obj) {
         if (!is_known_unit_key(kv.first)) fail(CatalogLoadCode::SchemaMismatch);
@@ -826,7 +849,9 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
 
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): costes de entrenamiento, pop_cost
     // constante, epoch_window.
-    parse_resource_costs(obj, def.cost, CatalogLoadCode::InvalidUnit);
+    parse_resource_costs(
+        obj, def.cost, CatalogLoadCode::InvalidUnit,
+        resource_ids, resource_indices);
     def.pop_cost = 1;  // constante v1, no viene de datos
     parse_epoch_window(obj, def.epoch_min, def.epoch_max, CatalogLoadCode::InvalidUnit);
 
@@ -847,24 +872,6 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
 // ---------------------------------------------------------------------------
 // Sprint 1.1 (SPEC-004 §2): tabla tipada de edificios.
 // ---------------------------------------------------------------------------
-
-// Mapea una string del "resource enum" (SPEC-002 common.schema.json) al bit de
-// dropoff_mask que el kernel rastrea hoy (A=bit0, B=bit1, Me=bit2). Devuelve
-// `false` SOLO si la string no pertenece al enum (dato corrupto); recursos
-// fuera de A/B/Me (P/W/F/I/El) son válidos mas fuera de alcance en Parte I —
-// se reconocen (no fallan la carga) pero no marcan ningún bit (`tracked=false`).
-inline bool building_resource_bit_from_string(const std::string& s, uint8_t& bit, bool& tracked) noexcept {
-    static constexpr const char* KNOWN[] = {"A", "B", "P", "W", "Me", "F", "I", "El"};
-    bool valid = false;
-    for (const char* k : KNOWN) if (s == k) { valid = true; break; }
-    if (!valid) return false;
-    tracked = true;
-    if (s == "A") bit = 0;
-    else if (s == "B") bit = 1;
-    else if (s == "Me") bit = 2;
-    else tracked = false;
-    return true;
-}
 
 // Sprint 1.2 (SPEC-004 §11.1): referencias de building AÚN sin resolver a la
 // hora de parsear el record (trains apunta a unit — resoluble en el momento;
@@ -891,7 +898,9 @@ struct BuildingRawRefs {
 // (SPEC-004 §11.1/§12.1/§12.4) añade epoch_window y las tres listas de
 // referencia (`raw_out`, sin resolver todavía).
 inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, BuildingId id,
-                                                      BuildingRawRefs& raw_out) {
+                                                      BuildingRawRefs& raw_out,
+                                                      const std::vector<std::string>& resource_ids,
+                                                      const std::vector<uint8_t>& resource_indices) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
 
     const CveValue* footprint = obj.find("footprint");
@@ -926,7 +935,9 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     if (btv->i < 0 || btv->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
 
     int32_t cost[RESOURCE_COUNT] = {};
-    parse_resource_costs(obj, cost, CatalogLoadCode::InvalidBuilding);
+    parse_resource_costs(
+        obj, cost, CatalogLoadCode::InvalidBuilding,
+        resource_ids, resource_indices);
 
     uint32_t dropoff_mask = 0;
     if (const CveValue* dr = obj.find("dropoff_resources")) {
@@ -934,11 +945,12 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         for (const auto& item : dr->arr) {
             if (!item.is_str()) fail(CatalogLoadCode::SchemaMismatch);
             uint8_t bit = 0;
-            bool tracked = false;
-            if (!building_resource_bit_from_string(item.s, bit, tracked)) {
+            if (!resolve_resource_index(
+                    resource_ids, resource_indices, item.s, bit)
+                    || bit >= RESOURCE_COUNT) {
                 fail(CatalogLoadCode::InvalidBuilding);
             }
-            if (tracked) dropoff_mask |= (uint32_t{1} << bit);
+            dropoff_mask |= (uint32_t{1} << bit);
         }
     }
 
@@ -1001,9 +1013,12 @@ struct TechRawRefs {
 // (SPEC-004 §12.1: rangos exactos; ver data/schemas/tech.schema.json). Mismo
 // patrón que build_building_definition (sin gate is_known_key: available_to/
 // branch/evidence/playable_period_ids/availability_mode/provenance/
-// material_costs/regional_variant_group/required_buildings NO se tipan en
+// regional_variant_group/required_buildings NO se tipan en
 // Parte II — ver el comentario de TechDefinitionV1 sobre required_buildings).
-inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, TechRawRefs& raw_out) {
+inline TechDefinitionV1 build_tech_definition(
+        const CveValue& obj, TechId id, TechRawRefs& raw_out,
+        const std::vector<std::string>& resource_ids,
+        const std::vector<uint8_t>& resource_indices) {
     if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
 
     const CveValue* epoch_v = obj.find("epoch");
@@ -1019,7 +1034,9 @@ inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, Te
     def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     def.epoch = static_cast<uint8_t>(epoch_v->i);
     def.research_time_ticks = static_cast<uint32_t>(rtt->i);
-    parse_resource_costs(obj, def.cost, CatalogLoadCode::InvalidTech);
+    parse_resource_costs(
+        obj, def.cost, CatalogLoadCode::InvalidTech,
+        resource_ids, resource_indices);
 
     def.prereq_count = 0; def.grant_count = 0; def.mutex_count = 0;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) def.prerequisites[k] = INVALID_TECH_ID;
@@ -1152,6 +1169,11 @@ struct DataCatalogStorageV1::Impl {
     // nombre-índice.
     std::vector<std::string> civ_ids;
     std::vector<CivNameIndexV1> civ_names;
+    // Sprint 1.8B (SPEC-007 §18): record_id de recurso (orden bytewise del
+    // blob) y slot numérico asignado por el compilador (vector paralelo).
+    // Máximo RESOURCE_COUNT; solo se usa durante carga/resolución.
+    std::vector<std::string> resource_ids;
+    std::vector<uint8_t> resource_indices;
     // Sprint 1.6B (SPEC-004 §16): resource_spawns tipados del mapa activo
     // (ver ResourceSpawnV1 y el comentario de load_impl sobre "mapa activo").
     std::vector<ResourceSpawnV1> map_resource_spawns;
@@ -1209,10 +1231,10 @@ inline void push_u16(std::vector<uint8_t>& b, uint16_t v) {
 
 struct KindSpec { uint16_t kind; uint16_t version; uint32_t cap; };
 
-// KIND_INFO (SPEC-002 §6.1): manifest, unit, building, tech, civ, map, ai-profile.
-inline constexpr KindSpec kKindTable[7] = {
+// CHDB 1.1 añade kind=8 resource de forma append-only.
+inline constexpr KindSpec kKindTable[8] = {
     {1, 1, 1}, {2, 2, 65535}, {3, 1, 65535}, {4, 1, 65535},
-    {5, 1, 1024}, {6, 1, 1024}, {7, 1, 1024},
+    {5, 1, 1024}, {6, 1, 1024}, {7, 1, 1024}, {8, 1, RESOURCE_COUNT},
 };
 
 // Núcleo del loader: valida el blob completo (header→directorio→records) y
@@ -1234,7 +1256,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     const uint16_t fmt_major = c.u16();
     const uint16_t fmt_minor = c.u16();
     const uint32_t schema_set = c.u32();
-    if (fmt_major != 1 || fmt_minor != 0 || schema_set != 1) {
+    const bool legacy_format =
+        fmt_major == 1 && fmt_minor == 0 && schema_set == 1;
+    const bool resource_format =
+        fmt_major == 1 && fmt_minor == 1 && schema_set == 2;
+    if (!legacy_format && !resource_format) {
         fail(CatalogLoadCode::UnsupportedVersion);
     }
 
@@ -1246,7 +1272,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     }
 
     const uint32_t section_count = c.u32();
-    if (section_count != SECTION_COUNT_D1) fail(CatalogLoadCode::SchemaMismatch);
+    const uint32_t expected_section_count = legacy_format
+        ? SECTION_COUNT_LEGACY : SECTION_COUNT_RESOURCE_V1;
+    if (section_count != expected_section_count) {
+        fail(CatalogLoadCode::SchemaMismatch);
+    }
 
     const uint32_t entry_size = c.u32();
     if (entry_size != DIRECTORY_ENTRY_SIZE) fail(CatalogLoadCode::SchemaMismatch);
@@ -1257,9 +1287,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     const uint64_t file_size = c.u64();
     if (file_size != static_cast<uint64_t>(size)) fail(CatalogLoadCode::Bounds);
 
-    // ---- Directorio (7 × 24 bytes) ------------------------------------------
+    // ---- Directorio (7×24 legacy; 8×24 con recursos) -----------------------
     struct DirEntry { uint16_t kind; uint16_t version; uint32_t count; uint64_t offset; uint64_t byte_size; };
-    DirEntry dir[7];
+    DirEntry dir[SECTION_COUNT_RESOURCE_V1];
     for (uint32_t k = 0; k < section_count; ++k) {
         DirEntry e{};
         e.kind = c.u16();
@@ -1352,6 +1382,111 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     // TECH_HARD_CAP/CAP_HARD_CAP — mismo espíritu que ai-profile).
     impl->civ_ids.reserve(dir[4].count);
 
+    // Sprint 1.8B (SPEC-007 §18): la sección resource es append-only (kind=8)
+    // y aparece después de los records que la referencian. Se prelee aquí
+    // para que unit/building/tech/map resuelvan record_id→slot mientras se
+    // reconstruyen. El bucle genérico posterior la vuelve a parsear para
+    // conservar una única validación estructural/canónica de secciones.
+    if (legacy_format) {
+        impl->resource_ids = {"A", "B", "Me"};
+        impl->resource_indices = {
+            static_cast<uint8_t>(RESOURCE_INDEX_FOOD),
+            static_cast<uint8_t>(RESOURCE_INDEX_WOOD),
+            static_cast<uint8_t>(RESOURCE_INDEX_STONE),
+        };
+    } else {
+        impl->resource_ids.reserve(dir[7].count);
+        impl->resource_indices.reserve(dir[7].count);
+        bool used_indices[RESOURCE_COUNT] = {};
+        RawCursor resource_section{
+            bytes + dir[7].offset,
+            static_cast<size_t>(dir[7].byte_size),
+        };
+        std::string previous_resource_id;
+        bool have_previous_resource = false;
+        for (uint32_t r = 0; r < dir[7].count; ++r) {
+            const uint32_t payload_size = resource_section.u32();
+            if (payload_size > RECORD_PAYLOAD_CAP) {
+                fail(CatalogLoadCode::Bounds);
+            }
+            const uint8_t* payload = resource_section.take(payload_size);
+            RawCursor record_cursor{payload, payload_size};
+            uint32_t nodes = 0;
+            CveValue value = cve_parse(record_cursor, 1, nodes);
+            if (record_cursor.pos != payload_size || !value.is_obj()) {
+                fail(CatalogLoadCode::NonCanonical);
+            }
+            const CveValue* id_value = value.find("id");
+            const CveValue* index_value = value.find("index");
+            if (!id_value || !id_value->is_str()
+                    || !index_value || !index_value->is_int()
+                    || id_value->s.empty()
+                    || id_value->s.size() > 0xFFFFu) {
+                fail(CatalogLoadCode::InvalidResource);
+            }
+            if (have_previous_resource
+                    && !(previous_resource_id < id_value->s)) {
+                fail(CatalogLoadCode::NonCanonical);
+            }
+            previous_resource_id = id_value->s;
+            have_previous_resource = true;
+            if (index_value->i < 0
+                    || index_value->i >= static_cast<int64_t>(RESOURCE_COUNT)) {
+                fail(CatalogLoadCode::InvalidResource);
+            }
+            const uint8_t index = static_cast<uint8_t>(index_value->i);
+            if (used_indices[index]) fail(CatalogLoadCode::InvalidResource);
+            used_indices[index] = true;
+            impl->resource_ids.push_back(id_value->s);
+            impl->resource_indices.push_back(index);
+        }
+        if (resource_section.pos != resource_section.len) {
+            fail(CatalogLoadCode::NonCanonical);
+        }
+        // Verifica también la política determinista del productor: los tres
+        // slots migrados son fijos; el resto recibe el menor slot libre en
+        // orden bytewise de record_id. Así un blob hostil no puede reasignar
+        // silenciosamente los mismos nombres a otra economía.
+        bool expected_used[RESOURCE_COUNT] = {};
+        for (size_t pos = 0; pos < impl->resource_ids.size(); ++pos) {
+            uint8_t expected = 0;
+            bool bootstrap = true;
+            if (impl->resource_ids[pos] == "chunsa:food") {
+                expected = static_cast<uint8_t>(RESOURCE_INDEX_FOOD);
+            } else if (impl->resource_ids[pos] == "chunsa:wood") {
+                expected = static_cast<uint8_t>(RESOURCE_INDEX_WOOD);
+            } else if (impl->resource_ids[pos] == "chunsa:stone") {
+                expected = static_cast<uint8_t>(RESOURCE_INDEX_STONE);
+            } else {
+                bootstrap = false;
+            }
+            if (bootstrap) {
+                if (impl->resource_indices[pos] != expected
+                        || expected_used[expected]) {
+                    fail(CatalogLoadCode::InvalidResource);
+                }
+                expected_used[expected] = true;
+            }
+        }
+        uint32_t next_free = 0;
+        for (size_t pos = 0; pos < impl->resource_ids.size(); ++pos) {
+            const std::string& resource_id = impl->resource_ids[pos];
+            if (resource_id == "chunsa:food"
+                    || resource_id == "chunsa:wood"
+                    || resource_id == "chunsa:stone") {
+                continue;
+            }
+            while (next_free < RESOURCE_COUNT && expected_used[next_free]) {
+                ++next_free;
+            }
+            if (next_free >= RESOURCE_COUNT
+                    || impl->resource_indices[pos] != next_free) {
+                fail(CatalogLoadCode::InvalidResource);
+            }
+            expected_used[next_free] = true;
+        }
+    }
+
     bool have_package_id = false;
     // Sprint 1.6B (SPEC-004 §16): "mapa activo" = el PRIMER record map
     // (record_id ascendente) encontrado en la sección kind=6 — ver el
@@ -1433,7 +1568,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const UnitId uid = static_cast<UnitId>(impl->units.size());
                 std::string civ_raw;
-                UnitDefinitionV1 def = build_unit_definition(value, uid, civ_raw);
+                UnitDefinitionV1 def = build_unit_definition(
+                    value, uid, civ_raw,
+                    impl->resource_ids, impl->resource_indices);
                 impl->unit_ids.push_back(record_id);
                 impl->units.push_back(def);
                 impl->pending_unit_civ.push_back(std::move(civ_raw));
@@ -1445,7 +1582,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const BuildingId bid = static_cast<BuildingId>(impl->buildings.size());
                 BuildingRawRefs raw{};
-                BuildingDefinitionV1 def = build_building_definition(value, bid, raw);
+                BuildingDefinitionV1 def = build_building_definition(
+                    value, bid, raw,
+                    impl->resource_ids, impl->resource_indices);
                 impl->building_ids.push_back(record_id);
                 impl->buildings.push_back(def);
                 impl->pending_building_trains.push_back(std::move(raw.trains));
@@ -1457,7 +1596,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 if (record_id.size() > 0xFFFFu) fail(CatalogLoadCode::Bounds);
                 const TechId tid = static_cast<TechId>(impl->techs.size());
                 TechRawRefs raw{};
-                TechDefinitionV1 def = build_tech_definition(value, tid, raw);
+                TechDefinitionV1 def = build_tech_definition(
+                    value, tid, raw,
+                    impl->resource_ids, impl->resource_indices);
                 impl->tech_ids.push_back(record_id);
                 impl->techs.push_back(def);
                 impl->pending_tech_prereqs.push_back(std::move(raw.prerequisites));
@@ -1496,27 +1637,18 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                             || !amt_v || !amt_v->is_int()) {
                             fail(CatalogLoadCode::SchemaMismatch);
                         }
-                        // P3 de la auditoría Opus (Sprint 1.6B): `kind` es un
-                        // enum del schema {resource, material}. Rechazar el
-                        // catálogo ante `material` sería una bomba de
-                        // compatibilidad: los materiales son contenido LEGÍTIMO
-                        // de Fase 2 (recetas), explícitamente excluidos del
-                        // alcance de este sprint por el PLAN_MAESTRO. Semántica
-                        // v1: los spawns de material se IGNORAN (no son un
-                        // error; son datos para una feature futura que el kernel
-                        // de economía v1 —solo A/B/Me— todavía no consume).
-                        // `reserve` de arriba es cota superior, así que saltar
-                        // entradas es seguro.
-                        if (kind_v->s == "material") continue;
+                        // Compatibilidad de lectura CHDB 1.0: el schema viejo
+                        // permitía spawns de material que el kernel ignoraba.
+                        // CHDB 1.1 ya solo admite kind=resource.
+                        if (legacy_format && kind_v->s == "material") continue;
                         if (kind_v->s != "resource") fail(CatalogLoadCode::InvalidMap);
-                        // Con kind=="resource", un `id` fuera de A/B/Me SÍ es un
-                        // error de datos y rechaza el catálogo entero (misma
-                        // política que parse_resource_costs/dropoff_mask).
-                        uint8_t ridx;
-                        if (id_v->s == "A") ridx = 0u;
-                        else if (id_v->s == "B") ridx = 1u;
-                        else if (id_v->s == "Me") ridx = 2u;
-                        else fail(CatalogLoadCode::InvalidMap);
+                        uint8_t ridx = 0;
+                        if (!resolve_resource_index(
+                                impl->resource_ids, impl->resource_indices,
+                                id_v->s, ridx)
+                                || ridx >= RESOURCE_COUNT) {
+                            fail(CatalogLoadCode::InvalidMap);
+                        }
                         // Rangos estructurales del schema (map.schema.json):
                         // x/y_millitiles 0..2^31-1, amount 1..1000000.
                         if (x_v->i < 0 || x_v->i > 2147483647ll) fail(CatalogLoadCode::InvalidMap);

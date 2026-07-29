@@ -15,7 +15,7 @@ stats:
   hp: 800
 constructible: true
 resource_costs:
-  B: 80
+  chunsa:wood: 80
 build_time_ticks: 600
 trains:
   - egipto:chariot_warrior

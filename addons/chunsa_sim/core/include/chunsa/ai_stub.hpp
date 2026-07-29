@@ -679,7 +679,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         for (uint8_t r = 0; r < RESOURCE_COUNT; ++r) {
             // 1.8A reserva 3..31 pero no activa recursos nuevos. La política
             // de IA ampliada pertenece a 1.8B (CONCORDANCIA C6).
-            if (r > RESOURCE_INDEX_ME) continue;
+            if (r > RESOURCE_INDEX_STONE) continue;
             const int64_t deficit = threshold - g.player_stock[ai_player][r];
             if (deficit > 0 && deficit > best_deficit) { best_deficit = deficit; best_r = static_cast<int32_t>(r); }
         }
@@ -699,7 +699,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 int32_t donor_r = -1;
                 int32_t donor_count = 0;
                 for (uint8_t r = 0; r < RESOURCE_COUNT; ++r) {
-                    if (r > RESOURCE_INDEX_ME) continue;
+                    if (r > RESOURCE_INDEX_STONE) continue;
                     if (r == need_r) continue;
                     if (eco.resource_count[r] > 1 && eco.resource_count[r] > donor_count) {
                         donor_count = eco.resource_count[r];

@@ -7,6 +7,7 @@ never published until the reader accepts exactly the bytes produced by writer.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import hashlib
 import json
@@ -32,9 +33,21 @@ MAX_COLLECTION = 65535
 KIND_INFO = (("manifest", "manifest.yaml", 1, 1), ("unit", "units", 2, 65535),
              ("building", "buildings", 3, 65535), ("tech", "tech", 4, 65535),
              ("civ", "civilizations", 5, 1024), ("map", "maps", 6, 1024),
-             ("ai-profile", "ai_profiles", 7, 1024))
+             ("ai-profile", "ai_profiles", 7, 1024),
+             ("resource", "resources", 8, 32))
 KIND_BY_DIR = {x[1]: x for x in KIND_INFO[1:]}
-RESOURCES = {"A", "B", "P", "W", "Me", "F", "I", "El"}
+RESOURCE_COUNT = 32
+BLOB_FORMAT_MAJOR = 1
+BLOB_FORMAT_MINOR = 1
+SCHEMA_SET_VERSION = 2
+DIRECTORY_ENTRY_SIZE = 24
+HEADER_SIZE = 40
+BOOTSTRAP_RESOURCE_INDICES = {
+    "chunsa:food": 0,
+    "chunsa:wood": 1,
+    "chunsa:stone": 2,
+}
+RECORD_ID = re.compile(r"[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_]{0,63}$")
 PLAIN_INT = re.compile(r"-?(0|[1-9][0-9]*)$")
 DATE_PLAIN = re.compile(r"\d{4}-\d{2}-\d{2}$")
 FLOAT_PLAIN = re.compile(
@@ -170,7 +183,36 @@ def _date(s):
     try: _dt.date.fromisoformat(s); return True
     except (TypeError, ValueError): return False
 
-def _semantic(records, profile, errors, source_root=None):
+def _resource_index_map(resource_ids):
+    """Assign stable kernel slots without consulting file/discovery order."""
+    ordered_ids = sorted(set(resource_ids), key=_utf8_key)
+    if len(ordered_ids) > RESOURCE_COUNT:
+        raise CompileError("E_LIMIT", "resource count exceeds RESOURCE_COUNT")
+    assigned = {
+        resource_id: index
+        for resource_id, index in BOOTSTRAP_RESOURCE_INDICES.items()
+        if resource_id in ordered_ids
+    }
+    free_indices = (
+        index for index in range(RESOURCE_COUNT)
+        if index not in assigned.values()
+    )
+    for resource_id in ordered_ids:
+        if resource_id not in assigned:
+            assigned[resource_id] = next(free_indices)
+    return assigned
+
+
+def _compiled_records(records):
+    """Return writer-owned records with deterministic resource indices."""
+    compiled = copy.deepcopy(records)
+    indices = _resource_index_map(record["id"] for record in compiled["resource"])
+    for record in compiled["resource"]:
+        record["index"] = indices[record["id"]]
+    return compiled
+
+
+def _semantic(records, profile, errors, source_root=None, compiled=False):
     if len(records["manifest"]) != 1:
         _err(errors, "E_SCHEMA", "manifest", "", "", "exactly one manifest required")
         return
@@ -179,17 +221,29 @@ def _semantic(records, profile, errors, source_root=None):
     capabilities = set(manifest["declared_capabilities"])
     behaviors = set(manifest["declared_behaviors"])
     variant_groups = set(manifest["declared_variant_groups"])
-    materials = {}
-    for pos, material in enumerate(manifest["declared_materials"]):
-        mid = material["id"]
-        if mid in materials:
-            _err(errors, "E_DUPLICATE_ID", "manifest", manifest["package_id"],
-                 f"/declared_materials/{pos}/id", "duplicate material id")
+    resources = {}
+    for pos, resource in enumerate(records["resource"]):
+        resource_id = resource["id"]
+        if resource_id in resources:
+            _err(errors, "E_DUPLICATE_ID", "resource", resource_id,
+                 f"/resources/{pos}/id", "duplicate resource id")
         else:
-            materials[mid] = material
+            resources[resource_id] = resource
+        if not compiled and "index" in resource:
+            _err(errors, "E_SCHEMA", "resource", resource_id, "/index",
+                 "resource indices are compiler-owned")
+    if compiled:
+        expected_indices = _resource_index_map(resources)
+        seen_indices = set()
+        for resource_id, resource in resources.items():
+            index = resource.get("index")
+            if index != expected_indices[resource_id] or index in seen_indices:
+                _err(errors, "E_RESOURCE_INDEX", "resource", resource_id,
+                     "/index", "non-deterministic or duplicate compiled resource index")
+            seen_indices.add(index)
 
     for family, values in (("capability", capabilities), ("behavior", behaviors),
-                           ("variant group", variant_groups), ("material", set(materials))):
+                           ("variant group", variant_groups)):
         for value in values:
             if value.split(":", 1)[0] not in owned:
                 _err(errors, "E_NAMESPACE", "manifest", manifest["package_id"], "/", f"{family} namespace not owned: {value}")
@@ -240,21 +294,21 @@ def _semantic(records, profile, errors, source_root=None):
             return None
         return got[1]
 
-    for material_id in materials:
-        if material_id in ids:
-            _err(errors, "E_DUPLICATE_ID", "manifest", manifest["package_id"],
-                 "/declared_materials", f"material id collides with record: {material_id}")
-
     def declared(kind, owner, value, pool, pointer, label):
         if value not in pool:
             _err(errors, "E_REFERENCE", kind, owner, pointer, f"undeclared {label}: {value}")
 
-    def material_ref(kind, owner, item, pointer):
-        mid = item["material_id"]
-        if mid not in materials:
-            _err(errors, "E_REFERENCE", kind, owner, pointer, f"undeclared material: {mid}")
+    def resource_ref(kind, owner, resource_id, pointer):
+        if resource_id not in resources:
+            _err(errors, "E_REFERENCE", kind, owner, pointer,
+                 f"undeclared resource: {resource_id}")
             return None
-        return materials[mid]
+        return resources[resource_id]
+
+    def resource_cost_refs(kind, owner, costs, pointer):
+        for resource_id in costs:
+            resource_ref(kind, owner, resource_id,
+                         f"{pointer}/{resource_id}")
 
     civs = {ident: record for ident, (kind, record) in ids.items() if kind == "civ"}
     periods = {}
@@ -305,7 +359,7 @@ def _semantic(records, profile, errors, source_root=None):
             if pid not in union_periods:
                 _err(errors, "E_REFERENCE", kind, ident, f"/playable_period_ids/{pos}", f"period does not belong to an available civ: {pid}")
 
-    recipe_edges = {mid: set() for mid in materials}
+    recipe_edges = {resource_id: set() for resource_id in resources}
     recipe_ids = set()
     for kind, ident, record in all_records:
         if kind == "unit":
@@ -325,8 +379,8 @@ def _semantic(records, profile, errors, source_root=None):
                 _err(errors, "E_UNIT_CLASS", kind, ident, "/stats", "invalid citizen stats/tags")
             if not citizen and record["stats"]["attack"] <= 0:
                 _err(errors, "E_UNIT_CLASS", kind, ident, "/stats/attack", "combat unit requires attack")
-            for pos, item in enumerate(record.get("material_costs", [])):
-                material_ref(kind, ident, item, f"/material_costs/{pos}")
+            resource_cost_refs(kind, ident, record["resource_costs"],
+                               "/resource_costs")
 
         elif kind == "building":
             civ_id = record["civ_id"]
@@ -337,24 +391,33 @@ def _semantic(records, profile, errors, source_root=None):
                 for pos, target in enumerate(record[field]): ref(kind, ident, target, expected, f"/{field}/{pos}")
             for field in ("required_capabilities", "grants_capabilities"):
                 for pos, value in enumerate(record[field]): declared(kind, ident, value, capabilities, f"/{field}/{pos}", "capability")
-            for pos, item in enumerate(record.get("material_costs", [])):
-                material_ref(kind, ident, item, f"/material_costs/{pos}")
-            has_cost = any(value > 0 for value in record["resource_costs"].values()) or bool(record.get("material_costs"))
+            resource_cost_refs(kind, ident, record["resource_costs"],
+                               "/resource_costs")
+            for pos, resource_id in enumerate(record.get("dropoff_resources", [])):
+                resource_ref(kind, ident, resource_id,
+                             f"/dropoff_resources/{pos}")
+            has_cost = any(value > 0 for value in record["resource_costs"].values())
             if record["constructible"] != bool(record["build_time_ticks"] > 0) or record["constructible"] != has_cost:
                 _err(errors, "E_REFERENCE", kind, ident, "/constructible", "constructibility/cost/build time mismatch")
             for rpos, recipe in enumerate(record["recipes"]):
                 rid = recipe["id"]
                 if rid in recipe_ids: _err(errors, "E_DUPLICATE_ID", kind, ident, f"/recipes/{rpos}/id", "duplicate recipe id")
                 recipe_ids.add(rid)
-                output = materials.get(recipe["output_material_id"])
-                if output is None or output["kind"] != "intermediate":
-                    _err(errors, "E_REFERENCE", kind, ident, f"/recipes/{rpos}/output_material_id", "recipe output must be declared intermediate")
-                for ipos, item in enumerate(recipe["input_material_costs"]):
-                    source = material_ref(kind, ident, item, f"/recipes/{rpos}/input_material_costs/{ipos}")
-                    if item["material_id"] == recipe["output_material_id"]:
-                        _err(errors, "E_CYCLE", kind, ident, f"/recipes/{rpos}", "recipe consumes its output")
-                    if source is not None and output is not None:
-                        recipe_edges[item["material_id"]].add(recipe["output_material_id"])
+                output_id = recipe["output_resource_id"]
+                output = resource_ref(
+                    kind, ident, output_id,
+                    f"/recipes/{rpos}/output_resource_id",
+                )
+                resource_cost_refs(
+                    kind, ident, recipe["input_resource_costs"],
+                    f"/recipes/{rpos}/input_resource_costs",
+                )
+                for input_id in recipe["input_resource_costs"]:
+                    if input_id == output_id:
+                        _err(errors, "E_CYCLE", kind, ident,
+                             f"/recipes/{rpos}", "recipe consumes its output")
+                    if input_id in resources and output is not None:
+                        recipe_edges[input_id].add(output_id)
 
         elif kind == "tech":
             availability(kind, ident, record, record["available_to"], epoch=record["epoch"])
@@ -374,14 +437,10 @@ def _semantic(records, profile, errors, source_root=None):
                 declared(kind, ident, capability, capabilities, f"/grants/capabilities/{pos}", "capability")
             if "regional_variant_group" in record:
                 declared(kind, ident, record["regional_variant_group"], variant_groups, "/regional_variant_group", "variant group")
-            strategic = set()
-            for pos, item in enumerate(record.get("material_costs", [])):
-                material = material_ref(kind, ident, item, f"/material_costs/{pos}")
-                if material is not None:
-                    if material["strategic"]: strategic.add(item["material_id"])
-            if len(strategic) > 2:
-                _err(errors, "E_REFERENCE", kind, ident, "/material_costs", "more than two strategic materials")
-            if record["branch"] != "institution" and not (any(v > 0 for v in record["resource_costs"].values()) or strategic):
+            resource_cost_refs(kind, ident, record["resource_costs"],
+                               "/resource_costs")
+            if record["branch"] != "institution" and not any(
+                    value > 0 for value in record["resource_costs"].values()):
                 _err(errors, "E_REFERENCE", kind, ident, "/resource_costs", "non-institution tech requires a cost")
 
         elif kind == "civ":
@@ -435,12 +494,8 @@ def _semantic(records, profile, errors, source_root=None):
                     bad = rle_value(costs, "cost", index) == 255 or rle_value(terrain, "terrain", index) == "water"
                 if bad: _err(errors, "E_MAP_RLE", kind, ident, f"/resource_spawns/{pos}", "invalid, duplicate, or impassable spawn")
                 spawn_cells.add(cell)
-                if spawn["kind"] == "resource":
-                    if spawn["id"] not in RESOURCES: _err(errors, "E_REFERENCE", kind, ident, f"/resource_spawns/{pos}/id", "unknown resource")
-                else:
-                    material = materials.get(spawn["id"])
-                    if material is None or material["kind"] != "deposit":
-                        _err(errors, "E_REFERENCE", kind, ident, f"/resource_spawns/{pos}/id", "map material must be declared deposit")
+                resource_ref(kind, ident, spawn["id"],
+                             f"/resource_spawns/{pos}/id")
 
         elif kind == "ai-profile":
             seen_considerations = set()
@@ -479,7 +534,7 @@ def _semantic(records, profile, errors, source_root=None):
     cycle = graph_cycle({ident: set(tech["prerequisites"]) for ident, tech in techs.items()})
     if cycle is not None: _err(errors, "E_CYCLE", "tech", cycle, "/prerequisites", "prerequisite cycle")
     cycle = graph_cycle(recipe_edges)
-    if cycle is not None: _err(errors, "E_CYCLE", "building", cycle, "/recipes", "material production cycle")
+    if cycle is not None: _err(errors, "E_CYCLE", "building", cycle, "/recipes", "resource production cycle")
 
 def _normalize(value, key=None):
     if isinstance(value, dict): return {k: _normalize(value[k], k) for k in sorted(value, key=_utf8_key)}
@@ -487,12 +542,12 @@ def _normalize(value, key=None):
         # JSON Schema sets are known by their key names; sorting scalar/object CVE encodings is canonical.
         sets = {
             "owned_namespaces", "declared_capabilities", "declared_behaviors",
-            "declared_variant_groups", "declared_materials", "dependencies", "load_after",
+            "declared_variant_groups", "dependencies", "load_after",
             "tags", "playable_period_ids", "dropoff_resources", "trains", "researches",
             "required_capabilities", "grants_capabilities", "required_capability_ids",
             "available_to", "prerequisites", "required_buildings", "mutually_exclusive_with",
             "unit_ids", "building_ids", "tech_ids", "art_rule_keys", "review_roles",
-            "material_costs", "input_material_costs", "recipes", "verification_reports",
+            "recipes", "verification_reports",
             "sources", "reviewed_by", "units", "buildings", "capabilities",
         }
         vals = [_normalize(v) for v in value]
@@ -570,16 +625,20 @@ class Reader:
         raise CompileError("E_BLOB_PARSE","unknown CVE tag")
 
 def parse_blob(blob):
-    if not isinstance(blob, bytes) or len(blob) > MAX_BLOB or len(blob) < 208:
+    directory_end = HEADER_SIZE + DIRECTORY_ENTRY_SIZE * len(KIND_INFO)
+    if not isinstance(blob, bytes) or len(blob) > MAX_BLOB or len(blob) < directory_end:
         raise CompileError("E_BLOB_PARSE", "file size")
     reader = Reader(blob)
     if reader.take(8) != b"CHNSDB1\0": raise CompileError("E_BLOB_PARSE", "bad magic")
     major, minor, schema_set = reader.u16(), reader.u16(), reader.u32()
-    if (major, minor, schema_set) != (1, 0, 1): raise CompileError("E_BLOB_PARSE", "unsupported version")
+    if (major, minor, schema_set) != (
+            BLOB_FORMAT_MAJOR, BLOB_FORMAT_MINOR, SCHEMA_SET_VERSION):
+        raise CompileError("E_BLOB_PARSE", "unsupported version")
     flags, count, entry_size, reserved, file_size = (
         reader.u32(), reader.u32(), reader.u32(), reader.u32(), reader.u64())
     if flags & ~1: raise CompileError("E_BLOB_PARSE", "unknown flags")
-    if count != 7 or entry_size != 24 or reserved != 0 or file_size != len(blob):
+    if (count != len(KIND_INFO) or entry_size != DIRECTORY_ENTRY_SIZE
+            or reserved != 0 or file_size != len(blob)):
         raise CompileError("E_BLOB_PARSE", "invalid header fields")
     entries = []
     for kind_name, _, expected_kind, cap in KIND_INFO:
@@ -589,10 +648,10 @@ def parse_blob(blob):
         if kind != expected_kind or version != expected_version or record_count > cap:
             raise CompileError("E_BLOB_PARSE", f"invalid directory entry for {kind_name}")
         entries.append((kind_name, kind, record_count, offset, byte_size))
-    if reader.i != 208: raise CompileError("E_BLOB_PARSE", "directory size")
+    if reader.i != directory_end: raise CompileError("E_BLOB_PARSE", "directory size")
 
     validators = _schemas(None)
-    cursor = 208
+    cursor = directory_end
     records = {}
     for kind_name, kind, record_count, offset, byte_size in entries:
         if offset != cursor or byte_size > len(blob) - offset:
@@ -632,13 +691,19 @@ def parse_blob(blob):
     semantic_records = {kind_name: records[number]
                         for kind_name, _, number, _ in KIND_INFO}
     semantic_errors = []
-    _semantic(semantic_records, "dev" if flags & 1 else "release", semantic_errors)
+    _semantic(
+        semantic_records,
+        "dev" if flags & 1 else "release",
+        semantic_errors,
+        compiled=True,
+    )
     if semantic_errors:
         raise CompileError("E_BLOB_PARSE", "semantic validation failed: " + semantic_errors[0][4])
     return flags, records
 
 def compile_blob(records, profile):
     flags = 1 if profile == "dev" else 0
+    records = _compiled_records(records)
     sections=[]
     expected_ids = {}
     for kind,_,number,_ in KIND_INFO:
@@ -654,10 +719,23 @@ def compile_blob(records, profile):
             encoded.append(struct.pack("<I", len(item)) + item)
         payload=b"".join(encoded)
         sections.append((number,2 if number==2 else 1,len(rs),payload))
-    offset=208; directory=[]
+    offset=HEADER_SIZE + DIRECTORY_ENTRY_SIZE * len(KIND_INFO); directory=[]
     for k,v,n,p in sections: directory.append((k,v,n,offset,len(p))); offset+=len(p)
     if offset>MAX_BLOB:raise CompileError("E_LIMIT","blob cap")
-    out=[b"CHNSDB1\0",struct.pack("<HHIIIIIQ",1,0,1,flags,7,24,0,offset)]
+    out=[
+        b"CHNSDB1\0",
+        struct.pack(
+            "<HHIIIIIQ",
+            BLOB_FORMAT_MAJOR,
+            BLOB_FORMAT_MINOR,
+            SCHEMA_SET_VERSION,
+            flags,
+            len(KIND_INFO),
+            DIRECTORY_ENTRY_SIZE,
+            0,
+            offset,
+        ),
+    ]
     out += [struct.pack("<HHIQQ",*d) for d in directory]; out += [x[3] for x in sections]
     blob=b"".join(out)
     _, parsed = parse_blob(blob)
@@ -708,15 +786,22 @@ def main(argv=None):
             blob=path.read_bytes()
             if len(blob) > MAX_BLOB: raise CompileError("E_BLOB_PARSE", "file changed beyond cap")
             flags,recs=parse_blob(blob); h=hashlib.sha256(b"CHUNSA_CONTENT_V1\0"+blob).hexdigest()
-            counts={KIND_INFO[k-1][0]:len(v) for k,v in recs.items()}
-            obj={"flags":flags,"format":"1.0","content_hash":h,"records":recs,"counts":counts}
-            print(json.dumps(obj,sort_keys=True,separators=(",",":")) if a.json else f"CHDB 1.0 flags={flags} content_hash=sha256-v1:{h}\n"+" ".join(f"{k}={v}" for k,v in counts.items()))
+            counts = {
+                kind_name: len(recs[number])
+                for kind_name, _, number, _ in KIND_INFO
+            }
+            format_name = f"{BLOB_FORMAT_MAJOR}.{BLOB_FORMAT_MINOR}"
+            obj={"flags":flags,"format":format_name,"content_hash":h,"records":recs,"counts":counts}
+            print(json.dumps(obj,sort_keys=True,separators=(",",":")) if a.json else f"CHDB {format_name} flags={flags} content_hash=sha256-v1:{h}\n"+" ".join(f"{k}={v}" for k,v in counts.items()))
             return 0
         records=validate(a.source_root,a.profile)
         if records is None:return 1
         if a.cmd=="validate":return 0
         blob=compile_blob(records,a.profile); h=hashlib.sha256(b"CHUNSA_CONTENT_V1\0"+blob).hexdigest()
-        side=("{\"algorithm\":\"sha256\",\"algorithm_version\":1,\"blob_format\":\"1.0\",\"content_hash\":\""+h+"\",\"schema_set_version\":1}\n").encode()
+        side=("{\"algorithm\":\"sha256\",\"algorithm_version\":1,\"blob_format\":\""
+              + f"{BLOB_FORMAT_MAJOR}.{BLOB_FORMAT_MINOR}"
+              + "\",\"content_hash\":\""+h+"\",\"schema_set_version\":"
+              + str(SCHEMA_SET_VERSION)+"}\n").encode()
         out_path = Path(a.out).resolve()
         hash_path = Path(a.hash_out or a.out+".content.json").resolve()
         if out_path == hash_path:

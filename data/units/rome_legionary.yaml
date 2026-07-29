@@ -11,8 +11,8 @@ tags:
   - can_take_cover
   - formation_capable
 resource_costs:
-  A: 40
-  Me: 25
+  chunsa:food: 40
+  chunsa:stone: 25
 stats:
   hp: 90
   attack: 10

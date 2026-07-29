@@ -14,7 +14,8 @@ from referencing import Registry, Resource
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "data" / "schemas"
 NAMES = (
-    "common", "manifest", "unit", "building", "tech", "civ", "map", "ai-profile",
+    "common", "manifest", "unit", "building", "tech", "civ", "map",
+    "ai-profile", "resource",
 )
 
 
@@ -39,20 +40,19 @@ def availability() -> dict:
 def fixtures() -> dict:
     manifest = {
         "schema_version": 1, "package_id": "chunsa.base", "package_version": "0.4.0",
-        "package_kind": "base", "owned_namespaces": ["base", "rome"],
+        "package_kind": "base", "owned_namespaces": ["base", "rome", "chunsa"],
         "declared_capabilities": ["rome:roads"], "declared_behaviors": ["base:melee_line"],
         "declared_variant_groups": ["base:metalworking"],
-        "declared_materials": [{"id": "base:copper", "name_key": "base:material.copper", "kind": "deposit", "resource": "Me", "strategic": True}],
         "dependencies": [], "load_after": [], "provenance": provenance(),
     }
     unit = {
-        "schema_version": 2, "id": "rome:legionary", "display_name_key": "rome:unit.legionary", "description_key": "rome:unit.legionary_desc", "civ_id": "rome:module", "epoch_window": [5, 5], "class": "infantry", "tags": ["formation_capable"], "resource_costs": {"A": 10}, "stats": {"hp": 100, "attack": 10, "range_millitiles": 1000, "speed_millitile_tick": 100, "morale": 80, "build_time_ticks": 40}, **availability(), "provenance": provenance(),
+        "schema_version": 2, "id": "rome:legionary", "display_name_key": "rome:unit.legionary", "description_key": "rome:unit.legionary_desc", "civ_id": "rome:module", "epoch_window": [5, 5], "class": "infantry", "tags": ["formation_capable"], "resource_costs": {"chunsa:food": 10}, "stats": {"hp": 100, "attack": 10, "range_millitiles": 1000, "speed_millitile_tick": 100, "morale": 80, "build_time_ticks": 40}, **availability(), "provenance": provenance(),
     }
     building = {
-        "schema_version": 1, "id": "rome:forum", "civ_id": "rome:module", "display_name_key": "rome:building.forum", "description_key": "rome:building.forum_desc", "epoch_window": [5, 5], "kind": "civic", "footprint": {"width_cells": 2, "height_cells": 2, "blocks_movement": True}, "stats": {"hp": 1000}, "constructible": True, "resource_costs": {"P": 50}, "build_time_ticks": 100, "dropoff_resources": [], "trains": [], "researches": [], "required_capabilities": [], "grants_capabilities": [], "recipes": [], **availability(), "provenance": provenance(),
+        "schema_version": 1, "id": "rome:forum", "civ_id": "rome:module", "display_name_key": "rome:building.forum", "description_key": "rome:building.forum_desc", "epoch_window": [5, 5], "kind": "civic", "footprint": {"width_cells": 2, "height_cells": 2, "blocks_movement": True}, "stats": {"hp": 1000}, "constructible": True, "resource_costs": {"chunsa:food": 50}, "build_time_ticks": 100, "dropoff_resources": [], "trains": [], "researches": [], "required_capabilities": [], "grants_capabilities": [], "recipes": [], **availability(), "provenance": provenance(),
     }
     tech = {
-        "schema_version": 1, "id": "rome:roads", "display_name_key": "rome:tech.roads", "description_key": "rome:tech.roads_desc", "available_to": ["rome:module"], "epoch": 5, "branch": "C", "evidence": "H", "resource_costs": {"P": 20}, "required_capabilities": [], "research_time_ticks": 100, "prerequisites": [], "required_buildings": [], "mutually_exclusive_with": [], "grants": {"units": [], "buildings": [], "capabilities": ["rome:roads"]}, **availability(), "provenance": provenance("H"),
+        "schema_version": 1, "id": "rome:roads", "display_name_key": "rome:tech.roads", "description_key": "rome:tech.roads_desc", "available_to": ["rome:module"], "epoch": 5, "branch": "C", "evidence": "H", "resource_costs": {"chunsa:food": 20}, "required_capabilities": [], "research_time_ticks": 100, "prerequisites": [], "required_buildings": [], "mutually_exclusive_with": [], "grants": {"units": [], "buildings": [], "capabilities": ["rome:roads"]}, **availability(), "provenance": provenance("H"),
     }
     civ = {
         "schema_version": 1, "id": "rome:module", "historical_window": {"start_year": -509, "end_year": 476}, "epoch_window": [5, 5], "region_key": "rome:region", "display_name_key": "rome:module", "description_key": "rome:module_desc", "gameplay_verb": {"id": "rome:roads", "name_key": "rome:verb.roads", "description_key": "rome:verb.roads_desc"}, "playable_periods": [{"id": "rome:late_republic", "start_year": -133, "end_year": -27, "label_key": "rome:period.late_republic"}], "institutions": [], "social_tensions": [], "unit_ids": ["rome:legionary"], "building_ids": ["rome:forum"], "tech_ids": ["rome:roads"], "art_rule_keys": ["rome:art.rule"], "review_roles": ["historian"], "provenance": provenance("H"),
@@ -63,7 +63,14 @@ def fixtures() -> dict:
     ai = {
         "schema_version": 1, "id": "base:balanced_normal", "display_name_key": "base:ai.balanced", "personality": "balanced", "difficulty": "normal", "strategic_weights_bp": {"economy_focus_bp": 5000, "military_focus_bp": 5000, "tech_focus_bp": 5000, "expansion_aggressiveness_bp": 5000, "risk_tolerance_bp": 5000, "diplomacy_openness_bp": 5000}, "utility_curves": [{"consideration": "threat", "points": [{"input_bp": 0, "output_bp": 0}, {"input_bp": 10000, "output_bp": 10000}]}], "tactical_behaviors": [], "difficulty_params": {"decision_period_ticks": 20, "reaction_latency_ticks": 20, "micro_quality_bp": 5000, "build_order_variance_bp": 5000, "scouting_thoroughness_bp": 5000, "counter_reaction_delay_ticks": 20}, "performance_lod": {"min_decision_period_ticks": 20, "cache_ttl_ticks": 20}, "provenance": provenance(),
     }
-    return {"manifest": manifest, "unit": unit, "building": building, "tech": tech, "civ": civ, "map": game_map, "ai-profile": ai}
+    resource = {
+        "schema_version": 1, "id": "chunsa:food",
+        "display_name_key": "chunsa:resource.food", "provenance": provenance(),
+    }
+    return {
+        "manifest": manifest, "unit": unit, "building": building, "tech": tech,
+        "civ": civ, "map": game_map, "ai-profile": ai, "resource": resource,
+    }
 
 
 class SchemaContractTests(unittest.TestCase):
@@ -122,7 +129,7 @@ class SchemaContractTests(unittest.TestCase):
         self.assert_invalid("building", item)
         item = copy.deepcopy(fixtures()["building"]); item["resource_costs"] = {}
         self.assert_invalid("building", item)
-        item = copy.deepcopy(fixtures()["building"]); item["resource_costs"] = {"P": 0}
+        item = copy.deepcopy(fixtures()["building"]); item["resource_costs"] = {"chunsa:food": 0}
         self.assert_invalid("building", item)
 
     def test_dropoff_resources_only_required_for_dropoff(self):
@@ -132,7 +139,7 @@ class SchemaContractTests(unittest.TestCase):
         self.assert_invalid("building", item)
 
     def test_unit_requires_positive_resource_cost(self):
-        item = copy.deepcopy(fixtures()["unit"]); item["resource_costs"] = {"A": 0}
+        item = copy.deepcopy(fixtures()["unit"]); item["resource_costs"] = {"chunsa:food": 0}
         self.assert_invalid("unit", item)
 
     def test_tech_evidence_must_match_provenance(self):
@@ -140,7 +147,7 @@ class SchemaContractTests(unittest.TestCase):
         self.assert_invalid("tech", item)
 
     def test_noninstitution_tech_requires_positive_resource_cost(self):
-        item = copy.deepcopy(fixtures()["tech"]); item["resource_costs"] = {"P": 0}
+        item = copy.deepcopy(fixtures()["tech"]); item["resource_costs"] = {"chunsa:food": 0}
         self.assert_invalid("tech", item)
 
     def test_map_and_ai_bounds(self):

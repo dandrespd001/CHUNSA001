@@ -17,9 +17,9 @@ constructible: false
 resource_costs: {}
 build_time_ticks: 0
 dropoff_resources:
-  - A
-  - B
-  - Me
+  - chunsa:food
+  - chunsa:wood
+  - chunsa:stone
 trains:
   - egipto:work_crew
 researches:

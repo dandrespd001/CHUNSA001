@@ -264,12 +264,12 @@ int main() {
     const DataCatalogV1& cat = store.catalog();
     CHECK(cat.unit_count == 5);
     static constexpr uint8_t kExpectedHash[32] = {
-        0x45, 0xb6, 0x52, 0xbf, 0x34, 0x44, 0xb6, 0xa6, 0xbe, 0x21, 0x09, 0xdf, 0x4b, 0x86, 0xdc, 0x06,
-        0xaa, 0x53, 0xcb, 0x8c, 0xd3, 0xf4, 0x83, 0xb0, 0x92, 0xb0, 0x9e, 0x4b, 0xa9, 0x84, 0xa5, 0x09,
+        0x58, 0x98, 0x4b, 0x2c, 0x57, 0x56, 0xb0, 0x4c, 0x47, 0x26, 0x73, 0x01, 0x54, 0x6f, 0x7c, 0xa4,
+        0x9a, 0xcd, 0xc9, 0xa0, 0x4c, 0x7c, 0xb6, 0xf1, 0x4e, 0xe2, 0xa3, 0x4e, 0x9b, 0xab, 0x2e, 0xdf,
     };
     CHECK(std::memcmp(cat.content_hash.bytes, kExpectedHash, 32) == 0);
-    CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 0);
-    CHECK(cat.schema_set_version == 1);
+    CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 1);
+    CHECK(cat.schema_set_version == 2);
     CHECK(cat.catalog_flags == 0);  // fixture release (no UNVERIFIED/HAS_PATCHES)
     CHECK(cat.base_package_id_bytes == std::strlen("chunsa.base"));
     CHECK(std::memcmp(cat.base_package_id_utf8, "chunsa.base", cat.base_package_id_bytes) == 0);
@@ -517,7 +517,7 @@ int main() {
             const auto c = catalog_load_bytes_v1(v.data(), v.size(), CatalogLoadProfile::Development, s);
             CHECK(c == CatalogLoadCode::Ok);  // control positivo: Development SÍ admite UNVERIFIED
         }
-        { auto v = golden; v[0x14] = 8; expect_reject(v, CatalogLoadProfile::Verified, "section_count"); }
+        { auto v = golden; v[0x14] = 7; expect_reject(v, CatalogLoadProfile::Verified, "section_count"); }
         {
             auto v = golden;
             const size_t off_pos = 40 + 24 + 8;  // directory[1].offset (kind=unit)
