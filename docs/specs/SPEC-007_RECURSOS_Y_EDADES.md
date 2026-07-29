@@ -1089,3 +1089,86 @@ propio.
 24. El escenario de 200 ciudadanos, 64 depósitos y 300 fuentes construidas
     **completa un tick sin fatal** y su coste queda **registrado** (no se exige
     que cumpla presupuesto todavía: se exige medirlo).
+
+---
+
+# §18 Reconciliación con el esquema de datos existente
+
+**Hallazgo (2026-07-29):** al preparar el Sprint 1.8B descubrí que
+`data/schemas/` **ya tenía** un modelo de recursos diseñado por delante del
+kernel, y que no coincide con SPEC-007. Reconciliarlo **antes** de implementar
+evita construir sobre una ambigüedad.
+
+## §18.1 Qué había
+
+| Pieza del esquema | Qué define | Uso real en `data/` |
+|---|---|---|
+| `resource` (enum) | **8** recursos: `A, B, P, W, Me, F, I, El` | solo `A`, `B`, `Me` |
+| `resource_costs` | objeto con esas 8 claves | 3 claves |
+| `material_costs` | array abierto de `(material_id, amount)` | **ninguno** |
+| `recipes` en `building` | insumos + `output_material_id` + duración | **`recipes: []` en todos** |
+
+O sea: dos sistemas de coste en paralelo —recursos por enum fijo y materiales
+por identificador abierto— y un sistema de recetas ya declarado pero vacío.
+
+## §18.2 Las tres decisiones
+
+**1. El enum de ocho letras se elimina.** `Me` agrupa todos los metales, y la
+directriz del Director exige **cobre, estaño y hierro por separado** (§9.2).
+La abstracción es incompatible con el diseño aprobado.
+
+Los recursos pasan a identificarse por `record_id` con espacio de nombres
+(`chunsa:copper`, `chunsa:tin`), como ya hacen unidades, edificios y tecnologías.
+El índice numérico del kernel lo asigna el compilador de datos al construir el
+blob, **no el autor del YAML**: los datos nombran, el compilador numera.
+
+**2. `material_costs` se fusiona con `resource_costs`.** Dos vocabularios de
+coste en paralelo es exactamente la complejidad que el panel señaló. Y no hay
+diferencia real: el bronce se almacena y se gasta **igual** que el cobre. Que
+uno salga de una mina y otro de un horno es su **origen**, no su naturaleza.
+
+Queda un solo vector de coste sobre `RESOURCE_COUNT`. Coste de migración: cero,
+porque `material_costs` no se usa en ningún fichero.
+
+**3. `El` (electricidad) sale del enum de stock.** Contradice frontalmente §8.1:
+la energía **no se almacena**, se deriva por tick y provoca parada en seco. Un
+`El: 50` en un coste no significa nada.
+
+La dependencia energética de una receta se expresa con un campo propio
+—`requires_energy`— no con una cantidad de un recurso inexistente.
+
+## §18.3 Lo que SÍ se conserva
+
+**`recipes` en `BuildingDefinitionV1` se queda tal cual está diseñado.** Su
+forma —insumos, salida, `duration_ticks`, en el edificio que las ejecuta— es
+casi idéntica a §12.2, y lleva ahí desde el Sprint 0.4. No se reinventa: se
+completa.
+
+Cambios mínimos: `output_material_id` → `output_resource_id`, y
+`input_material_costs` desaparece al fusionarse en §18.2.
+
+**Esto adelanta trabajo del Sprint 1.9**: la mitad del contrato de recetas ya
+existía en el esquema y nadie lo sabía.
+
+## §18.4 Por qué esto era importante encontrarlo
+
+Sin esta reconciliación, el Sprint 1.8B habría añadido un tercer vocabulario de
+recursos junto a los dos que ya había. El problema no habría aparecido hasta
+el 1.9, cuando las recetas tuvieran que decidir si su salida es un «material» o
+un «recurso», con datos ya escritos en ambos.
+
+Es la clase de deuda que sale barata hoy y carísima en tres sprints.
+
+## §18.5 Criterios de aceptación (Sprint 1.8B)
+
+25. `data/schemas/common.schema.json` **no** contiene el enum de 8 letras.
+26. Un recurso se declara en `data/resources/` con `record_id` namespaced.
+27. El compilador asigna los índices numéricos de forma **determinista y
+    reproducible**: dos compilaciones del mismo YAML dan el mismo blob.
+28. Un coste referencia un recurso **por id**; un id inexistente es **error de
+    carga**, no un índice basura.
+29. `material_costs` ya no existe en ningún esquema.
+30. `El` ya no aparece como recurso almacenable en ningún sitio.
+31. Los tres recursos actuales se renombran a `chunsa:food`, `chunsa:wood` y
+    `chunsa:stone` **conservando los índices 0, 1 y 2**, para que las
+    trayectorias no cambien.
