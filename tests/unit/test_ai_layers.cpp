@@ -46,7 +46,7 @@ inline UnitDefinitionV1 make_citizen() {
     d.hp = 20; d.attack = 0; d.range_millitiles = 0;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 1;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 5; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -56,7 +56,7 @@ inline UnitDefinitionV1 make_soldier() {
     d.hp = 50; d.attack = 10; d.range_millitiles = 1000;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 2;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 10; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -64,7 +64,7 @@ inline BuildingDefinitionV1 make_center() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.hp = 500; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;  // nace completo (pre-colocado por escenario)
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 0 /*citizen*/; d.train_count = 1;
@@ -79,7 +79,7 @@ inline BuildingDefinitionV1 make_barracks() {
     BuildingDefinitionV1 d{};
     d.id = 1; d.hp = 300; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 50;  // > 0: observable "incompleto" entre PLACE y ASSIGN
-    d.cost_a = 0; d.cost_b = 20; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 20; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 1 /*soldier*/; d.train_count = 1;
@@ -193,7 +193,7 @@ static void test_layer_build_and_assign() {
     const StepResult r0 = step(*g, setup, 3);
     CHECK(r0.accepted == 3);
 
-    // Solo B: paga el cuartel (cost_b=20) pero NO el ciudadano (cost_a=5,
+    // Solo B: paga el cuartel (cost[1]=20) pero NO el ciudadano (cost[0]=5,
     // A=0) — aísla la intención "construir" de "economía" en este ciclo.
     g->player_stock[1][1] = 100;
 
@@ -266,7 +266,7 @@ static void test_layer_train() {
     const StepResult r0 = step(*g, &setup, 1);
     CHECK(r0.accepted == 1);
 
-    g->player_stock[1][0] = 100;  // A: paga el ciudadano (cost_a=5)
+    g->player_stock[1][0] = 100;  // A: paga el ciudadano (cost[0]=5)
 
     AiJobBox box{};
     run_ai_once(*g, 1, g->tick, /*ai_sequence=*/1, box);

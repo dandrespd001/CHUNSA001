@@ -85,14 +85,14 @@ inline UnitDefinitionV1 make_warrior_def() {
 inline BuildingDefinitionV1 make_filler_def() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.hp = 100; d.footprint_w = 1; d.footprint_h = 1;
-    d.build_time_ticks = 0; d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 0; d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     return d;
 }
 inline BuildingDefinitionV1 make_outpost_def() {
     BuildingDefinitionV1 d{};
     d.id = 1; d.hp = 150; d.footprint_w = 1; d.footprint_h = 1;
-    d.build_time_ticks = 2; d.cost_a = 5; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 2; d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     return d;
 }
@@ -201,7 +201,7 @@ static uint64_t run_scenario(const DataCatalogV1& cat, uint32_t ticks,
     auto g = std::make_unique<GameState>();
     gs_init(*g, make_cfg(0));
     gs_bind_catalog(*g, cat);
-    g->player_stock[0][0] = 100;  // cubre cost_a=5 del outpost
+    g->player_stock[0][0] = 100;  // cubre cost[0]=5 del outpost
 
     RawCommand batch[2];
     uint64_t last_ck = 0;

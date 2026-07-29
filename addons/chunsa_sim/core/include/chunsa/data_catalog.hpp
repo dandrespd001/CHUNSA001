@@ -12,6 +12,7 @@
 #include <new>
 
 #include "chunsa/sha256.hpp"
+#include "chunsa/resources.hpp"
 // Sprint 1.6B (SPEC-004 §16): conversión mt→raw de resource_spawns (FX_ONE_RAW)
 // y el cap kernel de depósitos por mapa (ECO_MAX_DEPOSITS) — single source of
 // truth en vez de duplicar el número mágico 32/65536 en este loader. Ninguno
@@ -124,13 +125,15 @@ struct UnitDefinitionV1 {
     int32_t morale;
     int32_t build_time_ticks;
     int32_t bonus_vs_bp[6];
-    // Sprint 1.2 (SPEC-004 §11.1): costes de entrenamiento (de resource_costs,
-    // ausente=0; solo A/B/Me — misma política que building Parte I) y
+    // Sprint 1.8A (SPEC-007 §9.3/§11): vector completo de costes (de
+    // resource_costs, ausente=0). A/B/Me conservan los índices 0/1/2 y
+    // 3..31 quedan en cero hasta que existan datos de recursos ampliados.
+    // Sprint 1.2: pop_cost
     // pop_cost (constante v1=1, NO viene de datos). §12.4: epoch_window
     // (mismo campo del schema que building; unit.schema.json NO declara
     // required_capabilities — el gate correspondiente pasa trivialmente
     // sobre el conjunto vacío, ver step.hpp/TRAIN_UNIT y RESULT del sprint).
-    int32_t cost_a, cost_b, cost_me;
+    int32_t cost[RESOURCE_COUNT];
     int32_t pop_cost;
     uint8_t epoch_min, epoch_max;  // 1..15, epoch_min <= epoch_max
     // Sprint 1.6B (SPEC-004 §15.3/§17): civ_id resuelto (unit.schema.json lo
@@ -182,8 +185,8 @@ struct BuildingDefinitionV1 {
     uint32_t build_time_ticks;     // >= 0 (enmienda del Arquitecto 2026-07-23,
                                    // SPEC-004 §4.1.2/§4.3: 0 = nace completo,
                                    // reservado a `constructible:false` de escenario)
-    int32_t  cost_a, cost_b, cost_me;  // >= 0 (deducidos al aceptar PLACE_BUILDING)
-    uint8_t  dropoff_mask;         // bit0=A bit1=B bit2=Me (de dropoff_resources)
+    int32_t  cost[RESOURCE_COUNT];  // >= 0 (deducidos al aceptar PLACE_BUILDING)
+    uint32_t dropoff_mask;          // un bit por índice de recurso
     uint8_t  constructible;        // 0/1 (schema `constructible`)
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window (mismo patrón que
     // unit); trains/researches resueltos desde los record_id del schema
@@ -215,7 +218,7 @@ struct BuildingNameIndexV1 {
 // gatean contenido vía `grants` (CapabilityId) y el epoch-up (ADR-015).
 struct TechDefinitionV1 {
     TechId id;
-    int32_t cost_a, cost_b, cost_me;
+    int32_t cost[RESOURCE_COUNT];
     uint32_t research_time_ticks;  // >= 1
     uint8_t epoch;                 // 1..15
     TechId prerequisites[TECH_PREREQ_MAX];
@@ -695,24 +698,27 @@ inline void parse_epoch_window(const CveValue& obj, uint8_t& emin, uint8_t& emax
     emax = static_cast<uint8_t>(hi.i);
 }
 
-// `resource_costs` (common.schema.json): objeto con hasta 8 claves de recurso;
-// el kernel v1 solo rastrea A/B/Me (misma política que building Parte I —
-// P/W/F/I/El se aceptan sin tipar). Ausencia de la clave ⇒ costes en 0
+// `resource_costs` (common.schema.json): objeto con hasta 8 claves de recurso.
+// Sprint 1.8A conserva A/B/Me en 0/1/2; P/W/F/I/El se aceptan sin tipar hasta
+// que 1.8B aporte el catálogo de recursos. Ausencia de la clave ⇒ costes en 0
 // (defensivo: el schema exige la clave del objeto en unit/building/tech, pero
 // el loader no impone esa completitud — ese rigor ya lo ejerce el compilador).
-inline void parse_resource_costs(const CveValue& obj, int32_t& cost_a, int32_t& cost_b,
-                                 int32_t& cost_me, CatalogLoadCode range_fail) {
-    cost_a = 0; cost_b = 0; cost_me = 0;
+inline void parse_resource_costs(const CveValue& obj,
+                                 int32_t (&cost)[RESOURCE_COUNT],
+                                 CatalogLoadCode range_fail) {
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        cost[resource] = 0;
+    }
     const CveValue* costs = obj.find("resource_costs");
     if (!costs) return;
     if (!costs->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
     for (const auto& kv : costs->obj) {
         if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
         if (kv.second.i < 0 || kv.second.i > 1000000) fail(range_fail);
-        if (kv.first == "A") cost_a = static_cast<int32_t>(kv.second.i);
-        else if (kv.first == "B") cost_b = static_cast<int32_t>(kv.second.i);
-        else if (kv.first == "Me") cost_me = static_cast<int32_t>(kv.second.i);
-        // Otros recursos (P/W/F/I/El): fuera de alcance del kernel v1.
+        if (kv.first == "A") cost[0] = static_cast<int32_t>(kv.second.i);
+        else if (kv.first == "B") cost[1] = static_cast<int32_t>(kv.second.i);
+        else if (kv.first == "Me") cost[2] = static_cast<int32_t>(kv.second.i);
+        // Otros recursos (P/W/F/I/El): se tipan en 1.8B.
     }
 }
 
@@ -820,7 +826,7 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
 
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): costes de entrenamiento, pop_cost
     // constante, epoch_window.
-    parse_resource_costs(obj, def.cost_a, def.cost_b, def.cost_me, CatalogLoadCode::InvalidUnit);
+    parse_resource_costs(obj, def.cost, CatalogLoadCode::InvalidUnit);
     def.pop_cost = 1;  // constante v1, no viene de datos
     parse_epoch_window(obj, def.epoch_min, def.epoch_max, CatalogLoadCode::InvalidUnit);
 
@@ -843,7 +849,7 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
 // ---------------------------------------------------------------------------
 
 // Mapea una string del "resource enum" (SPEC-002 common.schema.json) al bit de
-// dropoff_mask que el kernel v1 rastrea (A=bit0, B=bit1, Me=bit2). Devuelve
+// dropoff_mask que el kernel rastrea hoy (A=bit0, B=bit1, Me=bit2). Devuelve
 // `false` SOLO si la string no pertenece al enum (dato corrupto); recursos
 // fuera de A/B/Me (P/W/F/I/El) son válidos mas fuera de alcance en Parte I —
 // se reconocen (no fallan la carga) pero no marcan ningún bit (`tracked=false`).
@@ -919,22 +925,10 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     // legítimo aquí y NO es un caso especial para el loader.
     if (btv->i < 0 || btv->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
 
-    int64_t cost_a = 0, cost_b = 0, cost_me = 0;
-    if (const CveValue* costs = obj.find("resource_costs")) {
-        if (!costs->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
-        for (const auto& kv : costs->obj) {
-            if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
-            if (kv.second.i < 0 || kv.second.i > 1000000) fail(CatalogLoadCode::InvalidBuilding);
-            if (kv.first == "A") cost_a = kv.second.i;
-            else if (kv.first == "B") cost_b = kv.second.i;
-            else if (kv.first == "Me") cost_me = kv.second.i;
-            // Otros recursos del schema (P/W/F/I/El): fuera de alcance en
-            // Parte I (economía kernel v1 solo rastrea A/B/Me); se aceptan
-            // sin tipar, igual que trains/researches/recipes.
-        }
-    }
+    int32_t cost[RESOURCE_COUNT] = {};
+    parse_resource_costs(obj, cost, CatalogLoadCode::InvalidBuilding);
 
-    uint8_t dropoff_mask = 0;
+    uint32_t dropoff_mask = 0;
     if (const CveValue* dr = obj.find("dropoff_resources")) {
         if (!dr->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
         for (const auto& item : dr->arr) {
@@ -944,7 +938,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
             if (!building_resource_bit_from_string(item.s, bit, tracked)) {
                 fail(CatalogLoadCode::InvalidBuilding);
             }
-            if (tracked) dropoff_mask = static_cast<uint8_t>(dropoff_mask | (1u << bit));
+            if (tracked) dropoff_mask |= (uint32_t{1} << bit);
         }
     }
 
@@ -961,9 +955,9 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     def.footprint_w = static_cast<uint8_t>(w->i);
     def.footprint_h = static_cast<uint8_t>(h->i);
     def.build_time_ticks = static_cast<uint32_t>(btv->i);
-    def.cost_a = static_cast<int32_t>(cost_a);
-    def.cost_b = static_cast<int32_t>(cost_b);
-    def.cost_me = static_cast<int32_t>(cost_me);
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        def.cost[resource] = cost[resource];
+    }
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
 
@@ -1025,7 +1019,7 @@ inline TechDefinitionV1 build_tech_definition(const CveValue& obj, TechId id, Te
     def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     def.epoch = static_cast<uint8_t>(epoch_v->i);
     def.research_time_ticks = static_cast<uint32_t>(rtt->i);
-    parse_resource_costs(obj, def.cost_a, def.cost_b, def.cost_me, CatalogLoadCode::InvalidTech);
+    parse_resource_costs(obj, def.cost, CatalogLoadCode::InvalidTech);
 
     def.prereq_count = 0; def.grant_count = 0; def.mutex_count = 0;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) def.prerequisites[k] = INVALID_TECH_ID;

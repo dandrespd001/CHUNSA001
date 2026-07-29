@@ -85,7 +85,7 @@ inline BuildingDefinitionV1 make_hut_def() {
     d.hp = 300;
     d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 5;
-    d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0x1u;  // A
     d.constructible = 1;
     return d;
@@ -97,7 +97,7 @@ inline BuildingDefinitionV1 make_center_def() {
     d.hp = 1000;
     d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;   // nace completo (enmienda §4.1.2/§4.3)
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0x7u;    // A|B|Me
     d.constructible = 0;
     return d;
@@ -197,7 +197,7 @@ static void test_place_building_validation() {
         // Centro geométrico: anchor*T + (w*T)/2 = 10*65536 + (2*65536)/2 = 720896
         CHECK(g->pos_x[0] == 10 * 65536 + 65536);
         CHECK(g->pos_y[0] == 10 * 65536 + 65536);
-        CHECK(g->player_stock[0][0] == 90);  // 100 - cost_a(10)
+        CHECK(g->player_stock[0][0] == 90);  // 100 - cost[0](10)
         CHECK(g->cost_grid[10 * FF_AXIS + 10] == FF_WALL);
         CHECK(g->cost_grid[11 * FF_AXIS + 11] == FF_WALL);
         CHECK(g->cost_grid[9 * FF_AXIS + 10] != FF_WALL);   // fuera del footprint
@@ -322,7 +322,7 @@ static void test_place_building_validation() {
         auto g = std::make_unique<GameState>();
         gs_init(*g, make_cfg());
         gs_bind_catalog(*g, cat);
-        g->player_stock[0][0] = 5;  // cost_a=10
+        g->player_stock[0][0] = 5;  // cost[0]=10
         step(*g, nullptr, 0);  // t=0 -> t=1
         RawCommand cmd = place_building(1, 0, 1, 0, 10, 10);
         const StepResult r = step(*g, &cmd, 1);

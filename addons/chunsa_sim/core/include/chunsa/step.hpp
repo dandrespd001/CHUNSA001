@@ -143,6 +143,25 @@ inline void init_citizen_from_catalog(GameState& g, uint32_t i,
     g.citizen_task[i] = CITIZEN_TASK_GATHER;
 }
 
+// Sprint 1.8A (SPEC-007 §9.3/§11): comprobación y deducción atómicas sobre el
+// vector completo de costes. Ambos recorridos son ascendentes y no asignan.
+inline bool resource_costs_affordable(
+        const GameState& g, uint16_t emitter,
+        const int32_t (&cost)[RESOURCE_COUNT]) noexcept {
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        if (g.player_stock[emitter][resource] < cost[resource]) return false;
+    }
+    return true;
+}
+
+inline void deduct_resource_costs(
+        GameState& g, uint16_t emitter,
+        const int32_t (&cost)[RESOURCE_COUNT]) noexcept {
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        g.player_stock[emitter][resource] -= cost[resource];
+    }
+}
+
 // Validación y aplicación de UN comando debido (función pura de estado+comando).
 inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexcept {
     switch (c.type) {
@@ -375,12 +394,9 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
                 }
             }
 
-            if (!scenario_exempt) {
-                if (g.player_stock[c.emitter][0] < def.cost_a
-                    || g.player_stock[c.emitter][1] < def.cost_b
-                    || g.player_stock[c.emitter][2] < def.cost_me) {
-                    return RejectReason::ILLEGAL_STATE;
-                }
+            if (!scenario_exempt
+                && !resource_costs_affordable(g, c.emitter, def.cost)) {
+                return RejectReason::ILLEGAL_STATE;
             }
 
             const EntityHandle h = et_spawn(g.entities);
@@ -394,9 +410,7 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             // stock del jugador en negativo (endurecimiento del Arquitecto en
             // revisión; con los datos actuales —centros coste 0— es un no-op).
             if (!scenario_exempt) {
-                g.player_stock[c.emitter][0] -= def.cost_a;
-                g.player_stock[c.emitter][1] -= def.cost_b;
-                g.player_stock[c.emitter][2] -= def.cost_me;
+                deduct_resource_costs(g, c.emitter, def.cost);
             }
 
             // Posición = centro geométrico del footprint (SPEC-004 §3):
@@ -511,15 +525,11 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
                 return RejectReason::ILLEGAL_STATE;
             }
 
-            if (g.player_stock[c.emitter][0] < udef.cost_a
-                || g.player_stock[c.emitter][1] < udef.cost_b
-                || g.player_stock[c.emitter][2] < udef.cost_me) {
+            if (!resource_costs_affordable(g, c.emitter, udef.cost)) {
                 return RejectReason::ILLEGAL_STATE;
             }
 
-            g.player_stock[c.emitter][0] -= udef.cost_a;
-            g.player_stock[c.emitter][1] -= udef.cost_b;
-            g.player_stock[c.emitter][2] -= udef.cost_me;
+            deduct_resource_costs(g, c.emitter, udef.cost);
             g.prod_queue[bi][g.prod_count[bi]] = c.p.unit_id;
             ++g.prod_count[bi];
             g.pop_used[c.emitter] += pop_cost;
@@ -600,15 +610,11 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
 
             if (g.research_tech[bi] != INVALID_TECH_ID) return RejectReason::ILLEGAL_STATE;  // edificio ocupado
 
-            if (g.player_stock[c.emitter][0] < tdef.cost_a
-                || g.player_stock[c.emitter][1] < tdef.cost_b
-                || g.player_stock[c.emitter][2] < tdef.cost_me) {
+            if (!resource_costs_affordable(g, c.emitter, tdef.cost)) {
                 return RejectReason::ILLEGAL_STATE;
             }
 
-            g.player_stock[c.emitter][0] -= tdef.cost_a;
-            g.player_stock[c.emitter][1] -= tdef.cost_b;
-            g.player_stock[c.emitter][2] -= tdef.cost_me;
+            deduct_resource_costs(g, c.emitter, tdef.cost);
             g.research_tech[bi] = tid;
             g.research_progress[bi] = 0;
             return RejectReason::ACCEPTED;
@@ -1288,7 +1294,7 @@ inline uint32_t allied_auto_gather_deposit_mask(const GameState& g,
 inline bool find_building_dropoff(const GameState& g, uint8_t owner, uint8_t resource_idx,
                                   int64_t citizen_x, int64_t citizen_y,
                                   int64_t& out_x, int64_t& out_y) noexcept {
-    if (g.catalog == nullptr) return false;
+    if (g.catalog == nullptr || resource_idx >= RESOURCE_COUNT) return false;
     const EntityTable& t = g.entities;
     uint32_t best = t.capacity;
     uint64_t best_d2 = 0;
@@ -1297,7 +1303,7 @@ inline bool find_building_dropoff(const GameState& g, uint8_t owner, uint8_t res
     for (uint32_t j = 0; j < t.capacity; ++j) {
         if (!is_complete_owned_building(g, j, owner)) continue;
         const BuildingDefinitionV1& def = g.catalog->buildings[g.building_id[j]];
-        if ((def.dropoff_mask & (1u << resource_idx)) == 0u) continue; // no acepta este recurso
+        if ((def.dropoff_mask & (uint32_t{1} << resource_idx)) == 0u) continue;
 
         FatalReason local_fatal = FatalReason::NONE;  // descartado a propósito, mismo patrón que combat/aggro
         const Vec2Fx there{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};
@@ -1394,7 +1400,7 @@ inline void economy_system(GameState& g) noexcept {
         if (out.did_harvest && out.assigned_deposit < g.n_deposits) {
             g.deposits[out.assigned_deposit].remaining -= out.harvested_amount;
         }
-        if (out.did_dropoff && out.dropoff_resource_idx < 3u) {
+        if (out.did_dropoff && out.dropoff_resource_idx < RESOURCE_COUNT) {
             g.player_stock[owner_i][out.dropoff_resource_idx] += out.dropoff_amount;
         }
     }

@@ -53,7 +53,7 @@ inline UnitDefinitionV1 make_citizen(UnitId id, CivId civ) {
     d.hp = 20; d.attack = 0; d.range_millitiles = 0;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 1;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 5; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -63,7 +63,7 @@ inline UnitDefinitionV1 make_soldier(UnitId id, CivId civ) {
     d.hp = 50; d.attack = 10; d.range_millitiles = 1000;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 2;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 10; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -71,7 +71,7 @@ inline BuildingDefinitionV1 make_center(BuildingId id, CivId civ, UnitId trains)
     BuildingDefinitionV1 d{};
     d.id = id; d.civ_id = civ; d.hp = 500; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = trains; d.train_count = 1;
@@ -86,7 +86,7 @@ inline BuildingDefinitionV1 make_barracks(BuildingId id, CivId civ, UnitId train
     BuildingDefinitionV1 d{};
     d.id = id; d.civ_id = civ; d.hp = 300; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 50;
-    d.cost_a = 0; d.cost_b = 20; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 20; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = trains; d.train_count = 1;
@@ -167,7 +167,7 @@ static void test_trainer_type_respects_civ() {
     RawCommand setup = place_building(0, 1, 1, 2 /*centerB*/, 40, 40);
     const StepResult r0 = step(*g, &setup, 1);
     CHECK(r0.accepted == 1);
-    g->player_stock[1][0] = 100;  // A: paga citizenB (cost_a=5)
+    g->player_stock[1][0] = 100;  // A: paga citizenB (cost[0]=5)
 
     AiJobBox box{};
     run_ai_once(*g, 1, g->tick, /*ai_sequence=*/1, box);

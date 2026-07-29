@@ -74,7 +74,7 @@ inline UnitDefinitionV1 make_worker() {
     d.hp = 20; d.attack = 0; d.range_millitiles = 0;
     d.speed_millitile_tick = 800; d.morale = 100; d.build_time_ticks = 1;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 5; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     return d;
 }
@@ -84,7 +84,7 @@ inline UnitDefinitionV1 make_warrior() {
     d.hp = 50; d.attack = 10; d.range_millitiles = 1000;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 2;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 10; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 1; d.epoch_max = 3;
     return d;
 }
@@ -94,7 +94,7 @@ inline UnitDefinitionV1 make_elite() {
     d.hp = 80; d.attack = 20; d.range_millitiles = 1000;
     d.speed_millitile_tick = 400; d.morale = 100; d.build_time_ticks = 2;
     for (int k = 0; k < 6; ++k) d.bonus_vs_bp[k] = 0;
-    d.cost_a = 20; d.cost_b = 0; d.cost_me = 0; d.pop_cost = 1;
+    d.cost[0] = 20; d.cost[1] = 0; d.cost[2] = 0; d.pop_cost = 1;
     d.epoch_min = 5; d.epoch_max = 15;
     return d;
 }
@@ -103,7 +103,7 @@ inline BuildingDefinitionV1 make_barracks() {
     BuildingDefinitionV1 d{};
     d.id = 0; d.hp = 300; d.footprint_w = 2; d.footprint_h = 2;
     d.build_time_ticks = 0;  // nace completo (mismo patrón "center" de test_buildings.cpp)
-    d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 1; d.trains[1] = 2; d.train_count = 2;
@@ -119,7 +119,7 @@ inline BuildingDefinitionV1 make_barracks() {
 inline BuildingDefinitionV1 make_second_barracks() {
     BuildingDefinitionV1 d{};
     d.id = 1; d.hp = 300; d.footprint_w = 2; d.footprint_h = 2;
-    d.build_time_ticks = 0; d.cost_a = 0; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 0; d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
@@ -133,7 +133,7 @@ inline BuildingDefinitionV1 make_second_barracks() {
 inline BuildingDefinitionV1 make_future_hall() {
     BuildingDefinitionV1 d{};
     d.id = 2; d.hp = 400; d.footprint_w = 2; d.footprint_h = 2;
-    d.build_time_ticks = 5; d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 5; d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     d.epoch_min = 5; d.epoch_max = 15;  // gating de época en PLACE_BUILDING
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
@@ -147,7 +147,7 @@ inline BuildingDefinitionV1 make_future_hall() {
 inline BuildingDefinitionV1 make_guild_hall() {
     BuildingDefinitionV1 d{};
     d.id = 3; d.hp = 400; d.footprint_w = 2; d.footprint_h = 2;
-    d.build_time_ticks = 5; d.cost_a = 5; d.cost_b = 0; d.cost_me = 0;
+    d.build_time_ticks = 5; d.cost[0] = 5; d.cost[1] = 0; d.cost[2] = 0;
     d.dropoff_mask = 0; d.constructible = 1;
     d.epoch_min = 1; d.epoch_max = 15;
     for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
@@ -162,7 +162,7 @@ inline BuildingDefinitionV1 make_guild_hall() {
 
 inline TechDefinitionV1 make_tech_a() {
     TechDefinitionV1 d{};
-    d.id = 0; d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.id = 0; d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.research_time_ticks = 3; d.epoch = 1;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) d.prerequisites[k] = INVALID_TECH_ID;
     d.prereq_count = 0;
@@ -174,7 +174,7 @@ inline TechDefinitionV1 make_tech_a() {
 }
 inline TechDefinitionV1 make_tech_b() {
     TechDefinitionV1 d{};
-    d.id = 1; d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.id = 1; d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.research_time_ticks = 3; d.epoch = 1;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) d.prerequisites[k] = INVALID_TECH_ID;
     d.prerequisites[0] = 0; d.prereq_count = 1;  // requiere tech_a
@@ -186,7 +186,7 @@ inline TechDefinitionV1 make_tech_b() {
 }
 inline TechDefinitionV1 make_tech_c() {
     TechDefinitionV1 d{};
-    d.id = 2; d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.id = 2; d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.research_time_ticks = 3; d.epoch = 1;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) d.prerequisites[k] = INVALID_TECH_ID;
     d.prereq_count = 0;
@@ -198,7 +198,7 @@ inline TechDefinitionV1 make_tech_c() {
 }
 inline TechDefinitionV1 make_tech_high_epoch() {
     TechDefinitionV1 d{};
-    d.id = 3; d.cost_a = 10; d.cost_b = 0; d.cost_me = 0;
+    d.id = 3; d.cost[0] = 10; d.cost[1] = 0; d.cost[2] = 0;
     d.research_time_ticks = 3; d.epoch = 5;
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) d.prerequisites[k] = INVALID_TECH_ID;
     d.prereq_count = 0;
@@ -333,7 +333,7 @@ static void test_train_unit_validation() {
         CHECK(g->prod_count[0] == 1u);
         CHECK(g->prod_queue[0][0] == 1u);
         CHECK(g->pop_used[0] == 1);
-        CHECK(g->player_stock[0][0] == 100000 - 10);  // cost_a del warrior
+        CHECK(g->player_stock[0][0] == 100000 - 10);  // cost[0] del warrior
     }
 
     // 1b) INVALID_ENTITY: handle inválido.
@@ -497,7 +497,7 @@ static void test_train_unit_validation() {
         gs_init(*g, make_cfg());
         gs_bind_catalog(*g, cat);
         gs_init_epoch_from_catalog(*g);
-        g->player_stock[0][0] = 2;  // cost_a del warrior = 10
+        g->player_stock[0][0] = 2;  // cost[0] del warrior = 10
         RawCommand place = place_building(0, 0, 1, 0, 10, 10);
         step(*g, &place, 1);
         EntityHandle bld{0, g->entities.generation[0]};
@@ -628,7 +628,7 @@ static void test_research_validation() {
         const StepResult r = step(*g, &cmd, 1);
         CHECK(r.accepted == 1);
         CHECK(g->research_tech[0] == 0u);
-        CHECK(g->player_stock[0][0] == 100000 - 10);  // cost_a de tech_a
+        CHECK(g->player_stock[0][0] == 100000 - 10);  // cost[0] de tech_a
         for (int k = 0; k < 5; ++k) step(*g, nullptr, 0);  // research_time_ticks=3
         CHECK(g->research_tech[0] == INVALID_TECH_ID);  // completado
         CHECK((g->player_techs[0][0] & 1ull) != 0u);      // bit tech_a

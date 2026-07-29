@@ -648,7 +648,10 @@ int main() {
             CHECK(d.footprint_w == 3 && d.footprint_h == 3);
             CHECK(d.build_time_ticks == 0);   // nace completo (progress 0 >= T 0)
             CHECK(d.constructible == 0);
-            CHECK(d.cost_a == 0 && d.cost_b == 0 && d.cost_me == 0);
+            CHECK(d.cost[0] == 0 && d.cost[1] == 0 && d.cost[2] == 0);
+            for (uint32_t resource = 3u; resource < RESOURCE_COUNT; ++resource) {
+                CHECK(d.cost[resource] == 0);
+            }
             CHECK(d.dropoff_mask == 0x7u);    // A|B|Me
         }
         if (shena != INVALID_BUILDING_ID) {
@@ -657,7 +660,10 @@ int main() {
             CHECK(d.footprint_w == 2 && d.footprint_h == 2);
             CHECK(d.build_time_ticks == 500);
             CHECK(d.constructible == 1);
-            CHECK(d.cost_a == 0 && d.cost_b == 60 && d.cost_me == 0);
+            CHECK(d.cost[0] == 0 && d.cost[1] == 60 && d.cost[2] == 0);
+            for (uint32_t resource = 3u; resource < RESOURCE_COUNT; ++resource) {
+                CHECK(d.cost[resource] == 0);
+            }
             CHECK(d.dropoff_mask == 0x1u);    // A
         }
 
@@ -680,7 +686,10 @@ int main() {
                     CHECK(d.footprint_w == 3 && d.footprint_h == 2);
                     CHECK(d.build_time_ticks == 30);
                     CHECK(d.constructible == 1);
-                    CHECK(d.cost_a == 100 && d.cost_b == 0 && d.cost_me == 20);
+                    CHECK(d.cost[0] == 100 && d.cost[1] == 0 && d.cost[2] == 20);
+                    for (uint32_t resource = 3u; resource < RESOURCE_COUNT; ++resource) {
+                        CHECK(d.cost[resource] == 0);
+                    }
                     CHECK(d.dropoff_mask == 0x1u);  // solo A
                 }
             }

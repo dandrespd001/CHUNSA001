@@ -260,9 +260,9 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         w.i64(g.dropoff_x[e]);
         w.i64(g.dropoff_y[e]);
-        w.i64(g.player_stock[e][0]);
-        w.i64(g.player_stock[e][1]);
-        w.i64(g.player_stock[e][2]);
+        for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+            w.i64(g.player_stock[e][resource]);
+        }
     }
     for (uint32_t i = 0; i < cap_e; ++i) w.u8 (static_cast<uint8_t>(g.eco_state[i]));
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.eco_assigned_deposit[i]);
@@ -498,25 +498,26 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.unit_id[i] = r.u32();
     if (r.fail) return false;
 
-    // (k) Economía (Sprint 0.3): mismo orden que gs_serialize. Validación:
-    // resource_idx/eco_carry_resource < 3, eco_state <= 2 (RETURN), assigned_deposit
-    // < ECO_MAX_DEPOSITS o == ECO_NO_DEPOSIT.
+    // (k) Economía (Sprint 0.3/1.8A): mismo orden que gs_serialize.
+    // Validación: resource_idx/eco_carry_resource < RESOURCE_COUNT,
+    // eco_state <= 2 (RETURN), assigned_deposit < ECO_MAX_DEPOSITS o
+    // == ECO_NO_DEPOSIT.
     g.n_deposits = r.u32();
     if (r.fail || g.n_deposits > ECO_MAX_DEPOSITS) return false;
     for (uint32_t i = 0; i < ECO_MAX_DEPOSITS; ++i) {
         g.deposits[i].x_raw = r.i64();
         g.deposits[i].y_raw = r.i64();
         const uint8_t ridx = r.u8();
-        if (ridx > 2u) return false;
+        if (ridx >= RESOURCE_COUNT) return false;
         g.deposits[i].resource_idx = ridx;
         g.deposits[i].remaining = r.i32();
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         g.dropoff_x[e] = r.i64();
         g.dropoff_y[e] = r.i64();
-        g.player_stock[e][0] = r.i64();
-        g.player_stock[e][1] = r.i64();
-        g.player_stock[e][2] = r.i64();
+        for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+            g.player_stock[e][resource] = r.i64();
+        }
     }
     if (r.fail) return false;
     for (uint32_t i = 0; i < cap_e; ++i) {
@@ -532,7 +533,7 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.eco_carry[i] = r.i32();
     for (uint32_t i = 0; i < cap_e; ++i) {
         const uint8_t cr = r.u8();
-        if (cr > 2u) return false;
+        if (cr >= RESOURCE_COUNT) return false;
         g.eco_carry_resource[i] = cr;
     }
     if (r.fail) return false;
