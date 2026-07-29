@@ -997,3 +997,95 @@ kernel en ejecución.
 
 La prueba 20 es la que justifica todo este apartado. Si falla, no hemos
 generalizado nada: hemos escrito el mismo caso especial dos veces.
+
+---
+
+# §17 Selección de objetivo económico: coste y optimización
+
+## §17.1 El problema que crean §15 y §16
+
+Antes, un ciudadano buscaba entre `deposits[]`, acotado a 32. Ahora busca entre
+depósitos del mapa **y** fuentes construidas propias, y estas últimas **no
+tienen tope duro**: son entidades, y el jugador puede llenar el mapa de granjas
+y plantaciones.
+
+Coste ingenuo, por tick:
+
+```
+O(ciudadanos × (depósitos + fuentes propias))
+```
+
+Con 200 ciudadanos, 64 depósitos y 300 granjas son **72 800 comprobaciones de
+distancia por tick**, y crece con lo que el jugador construya. Es el único
+bucle del kernel sin cota superior conocida.
+
+## §17.2 La solución ya está inventada en este mismo proyecto
+
+En el Sprint 1.7, la zona aliada se resolvió **precalculando una máscara por
+jugador una vez por tick** en lugar de recomputarla por ciudadano. SOL lo hizo
+sin que el contrato se lo pidiera y fue la decisión correcta.
+
+**Se generaliza ese patrón**, que ya es doctrina en SPEC-008 §4.2: lo que se
+consulta por entidad pero solo cambia por tick, se calcula una vez.
+
+Al inicio de la fase económica, por jugador:
+
+```cpp
+// Objetivos elegibles del jugador p, recalculados una vez por tick.
+struct EcoTarget { uint8_t kind; uint32_t index; int64_t x_raw, y_raw; };
+EcoTarget eco_targets[MAX_EMITTERS][ECO_MAX_TARGETS];
+uint32_t  n_eco_targets[MAX_EMITTERS];
+```
+
+Se construye recorriendo **una vez** los depósitos en zona aliada con extraíble
+> 0 y las fuentes construidas propias con almacén > 0. Cada ciudadano recorre
+después esa lista, ya filtrada.
+
+Coste resultante:
+
+```
+O(edificios × depósitos)  +  O(fuentes)     [una vez por tick]
++ O(ciudadanos × elegibles)                  [selección]
+```
+
+Los elegibles son muchos menos que el total, porque la zona aliada ya descartó
+lo lejano y el almacén vacío descartó lo inútil.
+
+## §17.3 Cota dura sobre la lista
+
+`ECO_MAX_TARGETS` acota la lista por jugador. Al llenarse, se **conservan los
+más cercanos al centro de la zona aliada** y se descarta el resto.
+
+Este descarte es **determinista y documentado**, no silencioso: mismo criterio
+de SPEC-008 §3.3. Un ciudadano no dejará de trabajar por ello — si hay más
+objetivos elegibles que el tope, sobran objetivos.
+
+**Por qué una cota y no una lista dinámica**: `Step()` no asigna memoria
+(regla del proyecto). Un array fijo por jugador es la única forma compatible.
+
+## §17.4 Qué NO se hace todavía
+
+**No se usa el hash espacial**, aunque existe (`sh_rebuild`). Sería la
+optimización siguiente si la medición la exige, pero:
+
+1. SPEC-008 §1 prohíbe optimizar sin medición previa.
+2. Consultar el hash espacial introduce un orden de recorrido que hay que
+   **fijar explícitamente** para no romper el determinismo, y eso es riesgo a
+   cambio de una ganancia todavía no demostrada.
+
+**Se mide en el Sprint 1.12** con el escenario de SPEC-008 §2.1 ampliado a 300
+fuentes construidas. Si el presupuesto de 0,3 ms del sistema económico se
+supera, entonces —y solo entonces— se aborda el hash espacial con contrato
+propio.
+
+## §17.5 Criterios de aceptación
+
+21. La lista de objetivos se recalcula **una vez por tick**, no una por
+    ciudadano. Comprobable instrumentando el contador de construcciones.
+22. Con la lista llena (`ECO_MAX_TARGETS`), el descarte es **determinista**:
+    dos corridas idénticas producen el mismo checksum.
+23. Un ciudadano nunca queda ocioso por el descarte mientras exista al menos un
+    objetivo elegible en la lista.
+24. El escenario de 200 ciudadanos, 64 depósitos y 300 fuentes construidas
+    **completa un tick sin fatal** y su coste queda **registrado** (no se exige
+    que cumpla presupuesto todavía: se exige medirlo).

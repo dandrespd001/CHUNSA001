@@ -26,6 +26,9 @@ implementando tres recursos.
 | C6 | SPEC-004 §19 (~473) | La IA cuenta «stock A/B/Me» | Recorre `RESOURCE_COUNT`; prioriza por déficit relativo | 1.8B |
 | C7 | SPEC-005 §5 (~80) | Observación de IA incluye «stock A/B/Me» | Vector completo; la observación crece | 1.8B |
 | C8 | SPEC-004 §16–§18 | Economía con tres índices de recurso | `RESOURCE_COUNT` índices | 1.8A |
+| C9 | SPEC-004 §16–§18, §23 | `eco_assigned_deposit` como índice único en `deposits[]` | `eco_target_kind` + `eco_target_index`: un ciudadano puede ir a depósito **o** a fuente construida (SPEC-007 §15.3) | 1.12 |
+| C10 | SPEC-004 §23 | La zona aliada considera solo `deposits[]` | Considera también las fuentes construidas propias (SPEC-007 §15.4) | 1.12 |
+| C11 | SPEC-004 §16 | `EcoDeposit.remaining` | `reserve_total` + `extracted` (SPEC-007 §14.1) | 1.11 |
 
 ## §2 Huecos (SPEC-007 introduce algo que ninguna spec vigente cubre)
 
@@ -34,10 +37,13 @@ implementando tres recursos.
 | H1 | **Energía streaming** (§8.1): no es índice de stock, se deriva por tick, parada en seco | SPEC-004, sección nueva de sistemas | 1.10 |
 | H2 | **Upkeep** (§10): unidades consumen comida, industria consume energía | SPEC-004, sección nueva | 1.10 |
 | H3 | **Recetas y edificio de conversión** (§3.2) | SPEC-004, junto a producción §11 | 1.9 |
-| H4 | **Reserva y recuperación** (§4): `reserve_total` + `extracted` + `recovery_pct` | SPEC-004 §16, reemplaza `remaining` | 1.11 |
-| H5 | **Granjas** (§5): depósito regenerativo ligado a edificio | SPEC-004 §16 | 1.12 |
-| H6 | **HUD por familias** (§9.4): 6 grupos, no 26 contadores | **SPEC-006 no tiene NINGUNA sección de recursos hoy** | 1.8B |
-| H7 | **La IA debe entender valor residual** de una mina casi agotada, y priorizar por déficit entre 26 recursos | SPEC-005 | 1.11 |
+| H4 | **Reserva y recuperación**: `reserve_total` + `extracted` + `recovery_pct` | **SPEC-007 §14** ✅ escrita | 1.11 |
+| H5 | **Fuentes construidas**: granjas y plantaciones forestales, fuera de `deposits[]` | **SPEC-007 §15–§16** ✅ escritas | 1.12 |
+| H6 | **HUD por familias**: 6 grupos, no 26 contadores | **SPEC-006 Parte III** ✅ escrita | 1.8B |
+| H7 | **IA con economía extendida**: déficit relativo, recetas, energía, valor residual | **SPEC-005 Parte II** ✅ escrita | 1.8B–1.11 |
+| H8 | **Órdenes de combate**: `ATTACK`, `ATTACK_MOVE`, proyectiles | **SPEC-004 Parte V §24** ✅ escrita | 1.13 |
+| H9 | **Coste de la selección económica** sin cota superior con fuentes construidas | **SPEC-007 §17** ✅ escrita | 1.12 (medición) |
+| H10 | **Presupuestos y límites** de rendimiento, fiabilidad y escala | **SPEC-008** ✅ escrita | 1.8A en adelante |
 
 ## §3 Falsos conflictos (parecen contradicción y no lo son)
 
@@ -56,6 +62,27 @@ El panel lo confirmó como práctica estándar de mapas competitivos.
 **Zona aliada (SPEC-004 §23)** sigue vigente y se refuerza: el panel encontró
 que Rise of Nations restringe la construcción al territorio propio por la misma
 razón.
+
+## §3-bis Estado de la documentación (2026-07-29)
+
+Todos los huecos identificados el 2026-07-28 **están ya especificados**. No
+queda ningún sistema aprobado sin contrato escrito:
+
+| Documento | Cubre |
+|---|---|
+| SPEC-007 §1–§11 | Modelo de recursos, edades, upkeep, secuenciación |
+| SPEC-007 §12 | Recetas y `CRAFT` |
+| SPEC-007 §13 | Energía streaming y upkeep |
+| SPEC-007 §14 | Reserva y recuperación |
+| SPEC-007 §15–§16 | Fuentes construidas: granjas y reforestación |
+| SPEC-007 §17 | Coste y optimización de la selección económica |
+| SPEC-004 Parte V §24 | Órdenes de combate (cierre mecánico Fase 1) |
+| SPEC-005 Parte II | IA con economía extendida |
+| SPEC-006 Parte III | HUD de recursos por familias |
+| SPEC-008 | Rendimiento, fiabilidad, escalabilidad |
+
+**Total de criterios de aceptación en formato TDD: 90.** Cada uno es una prueba
+que debe poder fallar.
 
 ## §4 Orden de aplicación
 

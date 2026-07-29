@@ -193,3 +193,75 @@ fallo de diseño de la IA, no del kernel).
   = combate v2 (candidato Fase 2, directriz del Director en memoria). La diplomacia
   (`diplomacy_openness_bp`) se ignora en v1 (1v1). El objetivo es el **gate**: una partida que
   termina, es ganable y es bit-exacta reproducible.
+
+---
+
+# PARTE II — La IA y la economía extendida (Sprints 1.8B–1.12)
+
+**Hueco H7 de `CONCORDANCIA_SPEC-007.md`.** La IA observa hoy «stock A/B/Me»
+(§5) y decide con tres recursos cableados. Con 32 deja de servir.
+
+## §12 Observación
+
+El vector de observación recorre `RESOURCE_COUNT`, no tres. Sigue siendo
+**ascendente por índice** y sin entropía, como exige la regla de oro de §0.
+
+## §13 Prioridad por déficit relativo, no absoluto
+
+Con tres recursos bastaba comparar contra un umbral. Con 26 activos, la IA
+necesita saber **qué le falta para lo que quiere hacer**.
+
+```
+deficit(r) = coste_pendiente(r) - player_stock[p][r]
+```
+
+`coste_pendiente` = suma de lo que cuestan las acciones que la IA tiene
+planeadas. Se reasignan ciudadanos al recurso de **mayor déficit**; empate por
+índice más bajo, como todo desempate del kernel.
+
+**Por qué relativo**: un stock de 50 de oro es abundancia si no vas a gastar
+oro, y miseria si vas a subir de época. El umbral absoluto no distingue esos
+dos casos y la IA acabaría acumulando lo que no necesita.
+
+## §14 Recetas (tras 1.9)
+
+Si falta un recurso **producido**, la IA debe encolar la receta **y** asegurar
+sus insumos. El déficit se **propaga hacia atrás** un solo nivel — que es todo
+lo que hay, porque las cadenas son de profundidad 1 (SPEC-007 §12.1).
+
+Esa restricción de diseño paga aquí: con cadenas profundas, la IA necesitaría
+un planificador. Con profundidad 1, le basta una suma.
+
+## §15 Energía (tras 1.10)
+
+La IA debe **construir generación antes de que el déficit pare sus fábricas**.
+Regla: si `producción - consumo` cae por debajo del consumo de **un** edificio
+más, construir generación antes que otra fábrica.
+
+Es margen, no reacción: reaccionar cuando ya está en déficit significa tener las
+fábricas paradas mientras construye.
+
+## §16 Valor residual de un yacimiento (tras 1.11)
+
+`[I] [Qwen]` lo señaló en el panel y tenía razón: una IA ingenua ve un depósito
+«agotado» y lo descarta, sin entender que una tecnología de extracción lo
+reabre.
+
+La IA debe evaluar `extraíble(p, d)` **con su propio `recovery_pct`**, no con el
+del rival ni con un valor global. Y al valorar una tecnología de extracción,
+contar la reserva que **desbloquearía** en los depósitos de su zona.
+
+Sin esto, la IA nunca investigaría extracción: no vería para qué sirve.
+
+## §17 Criterios de aceptación
+
+1. La observación cubre `RESOURCE_COUNT` recursos, no tres.
+2. La IA reasigna ciudadanos al recurso de mayor déficit **relativo**.
+3. Con un producido en déficit, encola la receta y asegura los insumos.
+4. Construye generación **antes** de entrar en déficit de energía.
+5. Valora un depósito agotado según **su propio** `recovery_pct`.
+6. Investiga una tecnología de extracción cuando desbloquea reserva útil en su
+   zona.
+7. La regla de oro de §0 se conserva: `ai_execute` sigue siendo función pura de
+   `(g, source_tick, runtime_before)`, sin reloj ni entropía.
+8. Dos corridas del mismo escenario producen el **mismo checksum**.

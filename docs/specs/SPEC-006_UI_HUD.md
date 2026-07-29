@@ -225,3 +225,74 @@ posición, tipo, vida o actividad de un enemigo oculto.
 4. La prueba exacta por entidad evita fugas causadas por la granularidad visual.
 5. El resultado determinista del skirmish no cambia y el core permanece intacto.
 6. Build `-Werror`, suite completa, golden y headless verdes, con evidencia de los tres estados.
+
+---
+
+# PARTE III — Recursos en el HUD (Sprint 1.8B)
+
+**Hueco H6 de `CONCORDANCIA_SPEC-007.md`**: esta spec no tenía ninguna sección
+sobre recursos. Con `RESOURCE_COUNT = 32` deja de ser aceptable.
+
+## §12 El problema
+
+`[V] [Anno 1800]` necesitó **tres regiones** de mapa para sostener 30+ recursos
+sin ahogar la interfaz. Nosotros llegaremos a **26 activos en la edad 15**
+(SPEC-007 §9.4) en una sola región.
+
+Veintiséis contadores en fila son ilegibles. El jugador no lee números: lee
+**si le falta algo**.
+
+## §13 Agrupación por familias
+
+Seis grupos, no veintiséis contadores:
+
+| Familia | Contiene |
+|---|---|
+| Subsistencia | comida |
+| Construcción | madera, piedra, arcilla |
+| Metales base | cobre, estaño, oro, mena de hierro, plomo |
+| Metalurgia | bronce, hierro forjado, carbón vegetal, coque, acero, aluminio |
+| Química | salitre, azufre, pólvora, derivados del petróleo |
+| Energía | carbón, petróleo, uranio · **electricidad (flujo, no stock)** |
+
+`data/resources/` declara la familia de cada recurso (SPEC-007 §9.2). **El HUD
+no cablea la lista**: la lee del catálogo, igual que hace con unidades y
+edificios.
+
+## §14 Reglas de presentación
+
+1. **Solo se muestran los recursos de la edad actual del jugador.** En la edad 3
+   no aparece el uranio. La interfaz crece con la partida.
+2. **Una familia colapsada muestra su recurso más escaso**, no la suma: sumar
+   comida y piedra no significa nada.
+3. **Expandible**: al abrir una familia se ven sus recursos individuales.
+4. **La electricidad no lleva contador acumulado** sino **producción frente a
+   consumo**, porque no es un stock (SPEC-007 §8.1). En déficit, indicador de
+   alerta: es la señal de que las fábricas están paradas.
+5. **El upkeep se muestra junto a la comida**: consumo por tick frente a
+   producción. Es el número que decide si el ejército aguanta.
+
+## §15 Feedback de carencia
+
+Cuando un comando se rechaza por stock, el mensaje debe nombrar **el recurso
+concreto y la cantidad**, como ya hace el adaptador desde el Sprint 1.7A:
+
+```text
+Faltan 200 B          ← formato actual, con nombre técnico
+Faltan 200 de piedra  ← formato objetivo tras 1.8B
+```
+
+`[V]` Verificado en la sesión del Director del 2026-07-28: el mensaje
+descriptivo fue lo que permitió entender por qué no se podía subir de época.
+**Es la funcionalidad de HUD con mejor relación valor/coste de todo el
+proyecto** y debe conservarse al ampliar a 32 recursos.
+
+## §16 Criterios de aceptación
+
+1. El HUD lee familias del catálogo; añadir un recurso **por datos** aparece sin
+   tocar código.
+2. En la edad 3 no se muestran recursos de edades posteriores.
+3. Una familia colapsada muestra su recurso **más escaso**.
+4. La electricidad se muestra como producción/consumo, **nunca** como acumulado.
+5. Un rechazo por stock nombra el recurso y la cantidad que falta.
+6. Con 26 recursos activos, el HUD **no desborda** la pantalla a 1920×1080.
