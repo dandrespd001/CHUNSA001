@@ -341,47 +341,58 @@ Es históricamente cierto y resuelve la directriz sin reglas artificiales.
 
 ## §9.2 Catálogo completo
 
-**Recolectados (17)** — salen de un depósito del mapa:
+**Tabla autoritativa.** Incorpora las correcciones de §19. Si algo contradice
+esta tabla en otra sección, manda ésta.
 
-| # | Recurso | Aparece | Nota |
-|---|---|---|---|
-| 1 | comida | 1 | fuentes naturales del mapa (bayas, fruta, caza) **finitas**; la granja (§15) es la fuente construida y regenerativa |
-| 2 | madera | 1 | bosques del mapa **finitos**; plantación forestal (§16) desde la edad 7 |
+**Recolectados (20)** — salen de un depósito del mapa:
+
+| # | Recurso | Edad | Nota |
+|---:|---|---:|---|
+| 1 | comida | 1 | fuentes naturales **finitas** (bayas, fruta, caza); la granja (§15) es la fuente construida y regenerativa |
+| 2 | madera | 1 | bosques **finitos**; plantación forestal (§16) desde la edad 7 |
 | 3 | piedra | 1 | |
-| 4 | arcilla | 2 | cerámica, ladrillo |
+| 4 | arcilla | 2 | cerámica, ladrillo, refractario de horno |
 | 5 | cobre | 3 | nativo primero, mena después |
 | 6 | oro | 3 | |
-| 7 | estaño | 4 | escaso: es el cuello de botella del bronce |
-| 8 | mena de hierro | 5 | |
-| 9 | plomo | **3** | fundido desde el 7º milenio a.C. (§19.1) · proyectiles → baterías |
-| 10 | salitre | 8 | pólvora |
-| 11 | azufre | 8 | pólvora → ácido sulfúrico |
-| 12 | carbón | 11 | energético |
-| 13 | petróleo | 13 | energético |
-| 14 | bauxita | 14 | *(faltaba en el recuento original, §8.2)* |
-| 15 | uranio | 14 | energético |
-| 16 | silicio | 15 | de arena |
-| 17 | tierras raras | 15 | |
+| 7 | plomo | 3 | fundido desde el 7º milenio a.C. · proyectiles → baterías |
+| 8 | **sal** | 3 | conservación de alimentos; sostiene el ejército en campaña (§10) |
+| 9 | estaño | 4 | escaso: es el cuello de botella del bronce |
+| 10 | mena de hierro | 5 | |
+| 11 | **caliza** | 5 | **fundente**: sin ella la reducción de mena de hierro es falsa |
+| 12 | salitre | 8 | pólvora · también fertilizante |
+| 13 | azufre | 8 | pólvora → ácido sulfúrico |
+| 14 | carbón | 11 | energético |
+| 15 | **nitrógeno fijado** | 12 | Haber-Bosch (1913) · fertilizantes y explosivos modernos |
+| 16 | petróleo | 13 | energético |
+| 17 | bauxita | 14 | insumo del aluminio |
+| 18 | uranio | 14 | energético |
+| 19 | silicio | 15 | de arena |
+| 20 | tierras raras | 15 | un solo recurso por el criterio de §19.4 |
 
 **Producidos (8)** — salen de un edificio con receta, no del mapa:
 
 | # | Producido | Receta | Edad |
-|---|---|---|---|
-| 18 | carbón vegetal | madera | 5 |
-| 19 | bronce | cobre + estaño | 4 |
-| 20 | hierro forjado | mena de hierro + carbón vegetal | 5 |
-| 21 | pólvora | salitre + azufre + carbón vegetal | 8 |
-| 22 | coque | carbón | **9** |
-| 23 | acero | hierro forjado + coque | 12 |
-| 24 | aluminio | bauxita + electricidad | **12** |
-| 25 | derivados del petróleo | petróleo | 13 |
+|---:|---|---|---:|
+| 21 | bronce | cobre + estaño | 4 |
+| 22 | carbón vegetal | madera | 5 |
+| 23 | hierro forjado | mena de hierro + carbón vegetal + **caliza** | 5 |
+| 24 | pólvora | salitre + azufre + carbón vegetal | 8 |
+| 25 | coque | carbón | 9 |
+| 26 | acero | hierro forjado + coque | 12 |
+| 27 | aluminio | bauxita + **electricidad** | 12 |
+| 28 | derivados del petróleo | petróleo | 13 |
 
-**Streaming (1)** — no ocupa índice de stock (§8.1): **electricidad**, desde la
-edad 12.
+**Streaming (1)** — **no** ocupa índice de stock (§8.1): **electricidad**,
+desde la edad 12. No se almacena: se deriva por tick y su falta **para en seco**
+las recetas dependientes.
 
-Corrección al carbón vegetal: aparece en la **edad 5**, no en la 7. La
-reducción de mena de hierro lo exige desde el primer día del hierro; el coque
-solo lo sustituye en la 11.
+**Total almacenado: 28** de `RESOURCE_COUNT = 32`. Quedan 4 slots libres, que
+es el margen que §9.3 reservó deliberadamente.
+
+**El carbón vegetal aparece en la edad 5**, no en la 7: la reducción de mena de
+hierro lo exige desde el primer día del hierro. Y el coque **no lo sustituye**
+(§19.3): lo desplaza del alto horno hacia 1850, pero el carbón vegetal sigue en
+las fraguas pequeñas. Coexisten.
 
 ## §9.3 `RESOURCE_COUNT = 32`
 
