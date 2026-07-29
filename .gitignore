@@ -12,3 +12,6 @@ compile_commands.json
 *.curp
 fuzz.sav
 third_party_build/
+
+# Estado de herramientas de agentes (worktrees, cache). No es del proyecto.
+.claude/
