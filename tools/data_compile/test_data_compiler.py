@@ -479,6 +479,9 @@ class ResourceReconciliationTests(unittest.TestCase):
             "schema_version": 1,
             "id": resource_id,
             "display_name_key": f"chunsa:resource.{slug}",
+            "family": "subsistence",
+            "appearance_epoch": 1,
+            "nature": "collected",
             "provenance": schema_fixtures.provenance(),
         }
 
@@ -699,6 +702,41 @@ class ResourceReconciliationTests(unittest.TestCase):
             rc, _, stderr = self.invoke(["validate", str(root)])
             self.assertEqual(1, rc)
             self.assertIn("ERROR E_DUPLICATE_ID resource chunsa:food", stderr)
+
+    def test_unknown_resource_family_is_coded_load_error(self):
+        td, root = self.make_root()
+        with td:
+            resource_path = root / "resources" / "food.yaml"
+            resource = yaml.safe_load(resource_path.read_text(encoding="utf-8"))
+            resource["family"] = "invalid_family"
+            resource_path.write_text(
+                yaml.safe_dump(resource, sort_keys=False),
+                encoding="utf-8",
+            )
+            rc, _, stderr = self.invoke(["validate", str(root)])
+            self.assertEqual(1, rc)
+            self.assertIn("ERROR E_SCHEMA resource chunsa:food /family", stderr)
+
+    def test_resource_appearance_epoch_out_of_range_is_coded_load_error(self):
+        for invalid_epoch in (0, 16):
+            with self.subTest(appearance_epoch=invalid_epoch):
+                td, root = self.make_root()
+                with td:
+                    resource_path = root / "resources" / "food.yaml"
+                    resource = yaml.safe_load(
+                        resource_path.read_text(encoding="utf-8")
+                    )
+                    resource["appearance_epoch"] = invalid_epoch
+                    resource_path.write_text(
+                        yaml.safe_dump(resource, sort_keys=False),
+                        encoding="utf-8",
+                    )
+                    rc, _, stderr = self.invoke(["validate", str(root)])
+                    self.assertEqual(1, rc)
+                    self.assertIn(
+                        "ERROR E_SCHEMA resource chunsa:food /appearance_epoch",
+                        stderr,
+                    )
 
 
 if __name__ == "__main__": unittest.main()

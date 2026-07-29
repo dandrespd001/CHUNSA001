@@ -150,6 +150,45 @@ struct UnitNameIndexV1 {
     UnitId id;
 };
 
+// Sprint 1.8C (SPEC-007 §9.2 / SPEC-006 §13): tabla tipada de recursos.
+// ResourceId == posición del record en resources[] (orden bytewise por
+// record_id, como UnitId/BuildingId/TechId); `ResourceDefinitionV1::index`
+// es el slot de stock independiente que asigna el compilador.
+using ResourceId = uint32_t;
+inline constexpr ResourceId INVALID_RESOURCE_ID = 0xFFFFFFFFu;
+
+enum class ResourceFamilyV1 : uint8_t {
+    Invalid = 0,
+    Subsistence,
+    Construction,
+    BaseMetals,
+    Metallurgy,
+    Chemistry,
+    Energy,
+    HighTech,
+};
+
+enum class ResourceNatureV1 : uint8_t {
+    Invalid = 0,
+    Collected,
+    Produced,
+};
+
+struct ResourceDefinitionV1 {
+    uint8_t index;
+    const char* display_name_key_utf8;
+    uint16_t display_name_key_bytes;
+    ResourceFamilyV1 family;
+    uint8_t appearance_epoch;
+    ResourceNatureV1 nature;
+};
+
+struct ResourceNameIndexV1 {
+    const char* record_id_utf8;
+    uint16_t record_id_bytes;
+    ResourceId id;
+};
+
 // Sprint 1.1 (SPEC-004 §2): tabla tipada de edificios, API espejo de la de
 // unidades. `id` == índice en `DataCatalogV1::buildings[]`.
 using BuildingId = uint32_t;
@@ -350,6 +389,11 @@ struct DataCatalogV1 {
     // fallback legacy fijo — SPEC-004 §16).
     uint32_t map_resource_spawn_count;
     const ResourceSpawnV1* map_resource_spawns;
+    // Sprint 1.8C: espejo de unit_count/units/unit_names para los metadatos
+    // descriptivos de los recursos. No forma parte del estado de simulación.
+    uint32_t resource_count;
+    const ResourceDefinitionV1* resources;
+    const ResourceNameIndexV1* resource_names;
 };
 
 enum class CatalogLoadProfile : uint8_t { Verified = 0, Development = 1 };
@@ -775,6 +819,83 @@ inline bool resolve_id(const std::vector<std::string>& ids, const std::string& t
     return false;
 }
 
+inline bool resource_family_from_string(
+        const std::string& value, ResourceFamilyV1& out) noexcept {
+    if (value == "subsistence") {
+        out = ResourceFamilyV1::Subsistence;
+    } else if (value == "construction") {
+        out = ResourceFamilyV1::Construction;
+    } else if (value == "base_metals") {
+        out = ResourceFamilyV1::BaseMetals;
+    } else if (value == "metallurgy") {
+        out = ResourceFamilyV1::Metallurgy;
+    } else if (value == "chemistry") {
+        out = ResourceFamilyV1::Chemistry;
+    } else if (value == "energy") {
+        out = ResourceFamilyV1::Energy;
+    } else if (value == "high_tech") {
+        out = ResourceFamilyV1::HighTech;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+inline bool resource_nature_from_string(
+        const std::string& value, ResourceNatureV1& out) noexcept {
+    if (value == "collected") {
+        out = ResourceNatureV1::Collected;
+    } else if (value == "produced") {
+        out = ResourceNatureV1::Produced;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+// Reconstruye los cuatro metadatos authored y el índice compiler-owned de un
+// recurso. La clave se devuelve aparte para que Impl sea dueño de su memoria;
+// el puntero estable de la definición se instala una vez llenado el vector.
+inline ResourceDefinitionV1 build_resource_definition(
+        const CveValue& obj, std::string& display_name_key_out) {
+    if (!obj.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+
+    const CveValue* index = obj.find("index");
+    const CveValue* display_name_key = obj.find("display_name_key");
+    const CveValue* family = obj.find("family");
+    const CveValue* appearance_epoch = obj.find("appearance_epoch");
+    const CveValue* nature = obj.find("nature");
+    if (!index || !index->is_int()
+            || !display_name_key || !display_name_key->is_str()
+            || !family || !family->is_str()
+            || !appearance_epoch || !appearance_epoch->is_int()
+            || !nature || !nature->is_str()) {
+        fail(CatalogLoadCode::SchemaMismatch);
+    }
+
+    if (index->i < 0
+            || index->i >= static_cast<int64_t>(RESOURCE_COUNT)
+            || display_name_key->s.empty()
+            || display_name_key->s.size() > 0xFFFFu
+            || appearance_epoch->i < 1
+            || appearance_epoch->i > 15) {
+        fail(CatalogLoadCode::InvalidResource);
+    }
+
+    ResourceDefinitionV1 definition{};
+    definition.index = static_cast<uint8_t>(index->i);
+    definition.display_name_key_bytes =
+        static_cast<uint16_t>(display_name_key->s.size());
+    if (!resource_family_from_string(family->s, definition.family)
+            || !resource_nature_from_string(nature->s, definition.nature)) {
+        fail(CatalogLoadCode::InvalidResource);
+    }
+    definition.appearance_epoch =
+        static_cast<uint8_t>(appearance_epoch->i);
+    display_name_key_out = display_name_key->s;
+    return definition;
+}
+
 // Reconstruye y valida un UnitDefinitionV1 desde su objeto CVE ya parseado
 // (SPEC-002 §8.1: rangos exactos del schema; ver data/schemas/unit.schema.json).
 // Sprint 1.6B (SPEC-004 §15.3): `civ_id_raw_out` recibe el record_id textual
@@ -1174,6 +1295,12 @@ struct DataCatalogStorageV1::Impl {
     // Máximo RESOURCE_COUNT; solo se usa durante carga/resolución.
     std::vector<std::string> resource_ids;
     std::vector<uint8_t> resource_indices;
+    // Sprint 1.8C: misma propiedad/estabilidad que unit_ids/units/unit_names.
+    // Las definiciones siguen el orden bytewise de resource_ids; `index`
+    // conserva el slot compiler-owned, que puede diferir de ResourceId.
+    std::vector<std::string> resource_display_name_keys;
+    std::vector<ResourceDefinitionV1> resources;
+    std::vector<ResourceNameIndexV1> resource_names;
     // Sprint 1.6B (SPEC-004 §16): resource_spawns tipados del mapa activo
     // (ver ResourceSpawnV1 y el comentario de load_impl sobre "mapa activo").
     std::vector<ResourceSpawnV1> map_resource_spawns;
@@ -1397,6 +1524,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     } else {
         impl->resource_ids.reserve(dir[7].count);
         impl->resource_indices.reserve(dir[7].count);
+        impl->resource_display_name_keys.reserve(dir[7].count);
+        impl->resources.reserve(dir[7].count);
+        impl->resource_names.reserve(dir[7].count);
         bool used_indices[RESOURCE_COUNT] = {};
         RawCursor resource_section{
             bytes + dir[7].offset,
@@ -1687,6 +1817,25 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 AiProfileV1 def = build_ai_profile_definition(value, aid);
                 impl->ai_profile_ids.push_back(record_id);
                 impl->ai_profiles.push_back(def);
+            } else if (spec.kind == 8) {
+                // Sprint 1.8C: ResourceDefinitionV1, en el mismo orden
+                // bytewise que resource_ids preleído. Se vuelve a comprobar
+                // la correspondencia para no confiar en dos pases divergentes.
+                const ResourceId resource_id =
+                    static_cast<ResourceId>(impl->resources.size());
+                if (resource_id >= impl->resource_ids.size()
+                        || record_id != impl->resource_ids[resource_id]) {
+                    fail(CatalogLoadCode::InvalidResource);
+                }
+                std::string display_name_key;
+                ResourceDefinitionV1 definition =
+                    build_resource_definition(value, display_name_key);
+                if (definition.index != impl->resource_indices[resource_id]) {
+                    fail(CatalogLoadCode::InvalidResource);
+                }
+                impl->resource_display_name_keys.push_back(
+                    std::move(display_name_key));
+                impl->resources.push_back(definition);
             }
             // civ (kind=5)/map (kind=6): Sprint 1.6B tipa civ_ids (tabla
             // nombre-índice) y resource_spawns del mapa activo (ramas de
@@ -1853,6 +2002,27 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         impl->civ_names.push_back(ni);
     }
 
+    // ---- resource_names + display_name_key estable (Sprint 1.8C) ----------
+    if (resource_format) {
+        if (impl->resources.size() != impl->resource_ids.size()
+                || impl->resources.size()
+                    != impl->resource_display_name_keys.size()) {
+            fail(CatalogLoadCode::InvalidResource);
+        }
+        for (size_t i = 0; i < impl->resources.size(); ++i) {
+            ResourceDefinitionV1& definition = impl->resources[i];
+            definition.display_name_key_utf8 =
+                impl->resource_display_name_keys[i].c_str();
+
+            ResourceNameIndexV1 name{};
+            name.record_id_utf8 = impl->resource_ids[i].c_str();
+            name.record_id_bytes =
+                static_cast<uint16_t>(impl->resource_ids[i].size());
+            name.id = static_cast<ResourceId>(i);
+            impl->resource_names.push_back(name);
+        }
+    }
+
     // ---- content hash: SHA256("CHUNSA_CONTENT_V1\0" || bytes completos) ----
     static constexpr char kHashDomain[] = "CHUNSA_CONTENT_V1";
     ContentHashV1 hash{};
@@ -1902,6 +2072,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.civ_names = impl->civ_names.data();
     cat.map_resource_spawn_count = static_cast<uint32_t>(impl->map_resource_spawns.size());
     cat.map_resource_spawns = impl->map_resource_spawns.data();
+    cat.resource_count = static_cast<uint32_t>(impl->resources.size());
+    cat.resources = impl->resources.data();
+    cat.resource_names = impl->resource_names.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier
     // `fail()` anterior nunca llega aquí y el unique_ptr libera `impl` solo.
@@ -2047,6 +2220,35 @@ inline CivId catalog_find_civ(const DataCatalogV1& cat, const char* name, size_t
         else hi = mid;
     }
     return INVALID_CIV_ID;
+}
+
+// Sprint 1.8C: espejo de catalog_find_unit para ResourceId. El ResourceId
+// devuelve la posición de la definición; su slot de stock está en `.index`.
+inline ResourceId catalog_find_resource(
+        const DataCatalogV1& cat, const char* name, size_t name_len) noexcept {
+    uint32_t lo = 0, hi = cat.resource_count;
+    while (lo < hi) {
+        const uint32_t mid = lo + (hi - lo) / 2;
+        const ResourceNameIndexV1& entry = cat.resource_names[mid];
+        const size_t bytes =
+            (entry.record_id_bytes < name_len)
+                ? entry.record_id_bytes
+                : name_len;
+        const int comparison =
+            (bytes == 0)
+                ? 0
+                : std::memcmp(entry.record_id_utf8, name, bytes);
+        if (comparison == 0 && entry.record_id_bytes == name_len) {
+            return entry.id;
+        }
+        if (comparison < 0
+                || (comparison == 0 && entry.record_id_bytes < name_len)) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return INVALID_RESOURCE_ID;
 }
 
 }  // namespace chunsa
