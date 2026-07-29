@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:nitre
+display_name_key: chunsa:resource.nitre
+family: chemistry
+appearance_epoch: 8
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Salitre (nitrato de potasio) para pólvora y fertilizantes; recolectado en mapa; SPEC-007 §9.2."
     reviewed_by:
       - architect

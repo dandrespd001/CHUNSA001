@@ -1,9 +1,9 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
-nature: collected
+id: chunsa:quicklime
+display_name_key: chunsa:resource.quicklime
+family: construction
+appearance_epoch: 8
+nature: produced
 provenance:
   status: promoted
   generator: human
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Cal viva producida de caliza en horno de cal; alternativa a la caliza cruda; añadida por §20.5 (e8)."
     reviewed_by:
       - architect

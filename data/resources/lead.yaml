@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:lead
+display_name_key: chunsa:resource.lead
+family: base_metals
+appearance_epoch: 3
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Plomo fundido desde el 7º milenio a.C.; uso temprano proyectiles, tardío baterías; edad 3 corregida por §19.1 (no edad 8 como proponía la lista original)."
     reviewed_by:
       - architect

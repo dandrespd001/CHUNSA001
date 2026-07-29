@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:gold
+display_name_key: chunsa:resource.gold
+family: base_metals
+appearance_epoch: 3
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Oro como metal precioso (moneda, prestigio, contacto electrónico); recolectado en mapa; SPEC-007 §9.2."
     reviewed_by:
       - architect

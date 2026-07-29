@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:clay
+display_name_key: chunsa:resource.clay
+family: construction
+appearance_epoch: 2
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Arcilla recolectada del mapa; cerámica, ladrillo, refractario de horno; SPEC-007 §9.2."
     reviewed_by:
       - architect

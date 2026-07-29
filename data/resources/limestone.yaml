@@ -1,8 +1,8 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
+id: chunsa:limestone
+display_name_key: chunsa:resource.limestone
+family: chemistry
+appearance_epoch: 5
 nature: collected
 provenance:
   status: promoted
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Caliza como fundente: sin ella la reducción de mena de hierro es falsa; añadida por §19.2."
     reviewed_by:
       - architect

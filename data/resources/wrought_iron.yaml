@@ -1,9 +1,9 @@
 schema_version: 1
-id: chunsa:food
-display_name_key: chunsa:resource.food
-family: subsistence
-appearance_epoch: 1
-nature: collected
+id: chunsa:wrought_iron
+display_name_key: chunsa:resource.wrought_iron
+family: metallurgy
+appearance_epoch: 5
+nature: produced
 provenance:
   status: promoted
   generator: human
@@ -17,6 +17,6 @@ provenance:
     sources: []
   balance_design:
     author: architect
-    rationale: "Recurso básico de subsistencia, índice 0 fijado por arranque (SPEC-007 §9.2 y §18.5)."
+    rationale: "Hierro forjado por reducción de mena de hierro, carbón vegetal y caliza como fundente; edad 5; SPEC-007 §9.2."
     reviewed_by:
       - architect

@@ -10,6 +10,19 @@
     "id": {"$ref": "common.schema.json#/$defs/record_id"},
     "display_name_key": {"$ref": "common.schema.json#/$defs/localization_key"},
     "index": {"type": "integer", "minimum": 0, "maximum": 31, "readOnly": true},
+    "family": {
+      "enum": [
+        "subsistence",
+        "construction",
+        "base_metals",
+        "metallurgy",
+        "chemistry",
+        "energy",
+        "high_tech"
+      ]
+    },
+    "appearance_epoch": {"$ref": "common.schema.json#/$defs/epoch"},
+    "nature": {"enum": ["collected", "produced"]},
     "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
   }
 }
