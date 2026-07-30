@@ -275,3 +275,16 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view data_compile
                      PROPERTIES LABELS "fast")
+
+# --- Guardián de artefactos compilados del demo ---
+# El .chdb y el .so de demo/ son artefactos compilados versionados. Dos veces
+# han estado obsoletos respecto a la fuente de verdad y han producido bugs
+# VISIBLES que ninguna prueba detectaba: primero un .so sin el adaptador 1.6B
+# (el Director perdió una sesión de pruebas), luego un .chdb sin la tabla de
+# recursos ("Recurso desconocido" en pantalla, HUD sin familias).
+# Esta prueba falla ruidosamente en vez de dejarlo pasar.
+add_test(NAME demo_chdb_sincronizado
+         COMMAND ${CMAKE_COMMAND} -E compare_files
+                 ${CMAKE_CURRENT_SOURCE_DIR}/demo/chunsa_base.chdb
+                 ${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb)
+set_tests_properties(demo_chdb_sincronizado PROPERTIES LABELS "fast")
