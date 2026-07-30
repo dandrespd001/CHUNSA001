@@ -245,6 +245,10 @@ private:
     void set_camera_zoom(float size, const godot::Vector2* anchor_screen = nullptr);
     void pan_camera_from_keyboard(double delta);
     void recenter_from_minimap(const godot::Vector2& screen);
+    static constexpr uint32_t LABEL_CLAIMS_MAX = 256;
+    godot::Vector2 label_claims[LABEL_CLAIMS_MAX] = {};
+    uint32_t label_claims_used = 0;
+    bool claim_label_slot(const godot::Vector2& pos);
     float ui_scale() const;
     godot::Rect2 minimap_rect() const;
     godot::Rect2 minimap_world_rect() const;

@@ -1172,9 +1172,10 @@ godot::Rect2 ChunsaSimNode::minimap_rect() const {
     const float map_side = std::clamp(
             std::min(viewport_size.x * 0.25f, viewport_size.y * 0.38f), 160.0f,
             230.0f);
-    const godot::Vector2 panel_size(map_side + 20.0f, map_side + 42.0f);
-    return godot::Rect2(godot::Vector2(viewport_size.x - panel_size.x - 16.0f,
-                                      viewport_size.y - panel_size.y - 16.0f),
+    const float k = ui_scale();
+    const godot::Vector2 panel_size(map_side + 20.0f * k, map_side + 42.0f * k);
+    return godot::Rect2(godot::Vector2(viewport_size.x - panel_size.x - 12.0f * k,
+                                      viewport_size.y - panel_size.y - 12.0f * k),
                         panel_size);
 }
 
@@ -1187,8 +1188,10 @@ godot::Rect2 ChunsaSimNode::minimap_world_rect() const {
 
 godot::Rect2 ChunsaSimNode::resource_hud_rect() const {
     const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
-    const float width = std::min(840.0f, std::max(420.0f, viewport_size.x - 28.0f));
-    float height = 54.0f;
+    const float k = ui_scale();
+    const float width = std::min(880.0f,
+                                 std::max(560.0f, viewport_size.x - 28.0f * k));
+    float height = 54.0f * k;
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     if (have_curr && catalog.resources != nullptr) {
         for (uint8_t family_code = 1u;
@@ -1881,54 +1884,40 @@ bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
         }
         return true;
     }
-    if (selected_count() == 0) return false;
+    const int32_t sel_count = selected_count();
+    if (sel_count == 0) return false;
     const godot::Rect2 panel = selection_panel_rect();
     if (!panel.has_point(screen)) return false;
-    const int32_t selected = selected_single_building_slot();
-    if (selected < 0) return true;
-    const float tab_y = panel.position.y + 114.0f;
-    if (screen.y >= tab_y && screen.y <= tab_y + 26.0f) {
-        if (screen.x >= panel.position.x + 16.0f &&
-            screen.x <= panel.position.x + 91.0f) {
-            research_mode = false;
-        } else if (screen.x >= panel.position.x + 97.0f &&
-                   screen.x <= panel.position.x + 172.0f) {
-            research_mode = true;
+
+    // SPEC-004 §29.4: con varias seleccionadas, pulsar un icono de la rejilla
+    // deja seleccionada SOLO esa unidad. La geometria es la misma que la del
+    // dibujado; si divergieran, el boton respondería donde no se ve.
+    if (sel_count > 1) {
+        const float k = ui_scale();
+        const float cell = 34.0f * k, cgap = 4.0f * k;
+        const float ox = panel.position.x + 16.0f * k;
+        const float oy = panel.position.y + 62.0f * k;
+        const uint32_t cols = static_cast<uint32_t>(
+                std::max(1.0f, (panel.size.x - 32.0f * k) / (cell + cgap)));
+        const uint32_t cap_s = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+        uint32_t drawn = 0;
+        for (uint32_t i2 = 0; i2 < cap_s; ++i2) {
+            if (!selected_slot_is_current(i2)) continue;
+            const float cx = ox + static_cast<float>(drawn % cols) * (cell + cgap);
+            const float cy = oy + static_cast<float>(drawn / cols) * (cell + cgap);
+            if (godot::Rect2(godot::Vector2(cx, cy),
+                             godot::Vector2(cell, cell)).has_point(screen)) {
+                for (uint32_t j2 = 0; j2 < 1024u; ++j2) is_selected[j2] = false;
+                is_selected[i2] = true;
+                selection_generation[i2] = snap_curr.generation[i2];
+                queue_redraw();
+                return true;
+            }
+            ++drawn;
         }
         return true;
     }
-    const chunsa::BuildingDefinitionV1& def =
-            catalog_storage.catalog().buildings[snap_curr.building_id[selected]];
-    const uint32_t count = research_mode ? def.research_count : def.train_count;
-    const float button_y = panel.position.y + 149.0f;
-    const float button_w = (panel.size.x - 50.0f) / 4.0f;
-    const float button_h = 56.0f;
-    const float gap = 6.0f;
-    if (screen.y >= button_y && screen.y <= button_y + button_h) {
-        const float rel_x = screen.x - panel.position.x - 16.0f;
-        const int32_t column = static_cast<int32_t>(std::floor(rel_x / (button_w + gap)));
-        if (column >= 0 && column < 4) {
-            const float local_x = rel_x - static_cast<float>(column) * (button_w + gap);
-            if (local_x >= 0.0f && local_x <= button_w) {
-                const uint32_t action = static_cast<uint32_t>(column);
-                if (action < count) enqueue_selected_action(action, research_mode);
-                return true;
-            }
-        }
-    }
-    if (screen.y >= button_y + button_h + gap &&
-        screen.y <= button_y + button_h * 2.0f + gap) {
-        const float rel_x = screen.x - panel.position.x - 16.0f;
-        const int32_t column = static_cast<int32_t>(std::floor(rel_x / (button_w + gap)));
-        if (column >= 0 && column < 4) {
-            const float local_x = rel_x - static_cast<float>(column) * (button_w + gap);
-            if (local_x >= 0.0f && local_x <= button_w) {
-                const uint32_t action = static_cast<uint32_t>(column + 4);
-                if (action < count) enqueue_selected_action(action, research_mode);
-                return true;
-            }
-        }
-    }
+
     return true;
 }
 
@@ -2010,8 +1999,9 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
     // izquierda y lleva ademas poblacion, aldeanos ociosos y la EDAD actual.
     // Aqui va en una tira compacta de icono+numero en vez de una frase, que es
     // lo que la hace legible de un vistazo con 30 recursos en juego.
+    const float k = ui_scale();
     float bx = panel.position.x + 16.0f;
-    const float by = panel.position.y + 22.0f;
+    const float by = panel.position.y + 22.0f * k;
     if (catalog.resources != nullptr) {
         // Por INDICE de recurso, no por orden de catalogo: asi comida, madera y
         // piedra (0, 1, 2) salen primero, que es el orden que importa. Iterando
@@ -2064,7 +2054,7 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
                         U("   Época ") + godot::String::num_int64(snap_curr.player_epoch),
                 static_cast<godot::HorizontalAlignment>(0), 294.0f, 13, text);
 
-    draw_string(font, panel.position + godot::Vector2(16, 43),
+    draw_string(font, panel.position + godot::Vector2(16.0f * k, 43.0f * k),
                 U("Pulsa una familia para ver sus recursos individuales"),
                 static_cast<godot::HorizontalAlignment>(0), -1, 11, muted);
 
@@ -3001,9 +2991,32 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
     // controles se aprenden jugando, no leyendo encima del tablero.
 }
 
+// SPEC-006 §1.8G: descolision de etiquetas del mundo. En el centro del mapa se
+// amontonaban hasta cinco textos en el mismo sitio y el resultado era
+// ilegible. La regla es simple y DETERMINISTA: quien reclama primero se queda
+// el sitio, y el orden de reclamacion es el de dibujo, que no depende de datos
+// del jugador — asi la pantalla no parpadea entre fotogramas.
+bool ChunsaSimNode::claim_label_slot(const godot::Vector2& pos) {
+    const float k = ui_scale();
+    const float min_dx = 74.0f * k;
+    const float min_dy = 13.0f * k;
+    for (uint32_t i = 0; i < label_claims_used; ++i) {
+        if (std::abs(label_claims[i].x - pos.x) < min_dx &&
+            std::abs(label_claims[i].y - pos.y) < min_dy) {
+            return false;
+        }
+    }
+    if (label_claims_used < LABEL_CLAIMS_MAX) {
+        label_claims[label_claims_used++] = pos;
+    }
+    return true;
+}
+
 void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
                                        const godot::Color& text) {
     if (cam3d == nullptr) return;
+    label_claims_used = 0;  // las reservas son POR FOTOGRAMA
+    const uint32_t cap_lbl = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     for (uint32_t i = 0; i < ORDER_MARKERS_MAX; ++i) {
@@ -3015,6 +3028,23 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
         draw_circle(p, 7.0f, marker, false, 2.0f);
         draw_line(p - godot::Vector2(10, 0), p + godot::Vector2(10, 0), marker, 2.0f);
         draw_line(p - godot::Vector2(0, 10), p + godot::Vector2(0, 10), marker, 2.0f);
+    }
+
+    // Pasada previa de RESERVA para los edificios: el nombre de lo que has
+    // construido pesa mas que el rotulo de un deposito, asi que reserva antes.
+    for (uint32_t i = 0; i < cap_lbl; ++i) {
+        if (snap_curr.alive[i] == 0u || !presentation_entity_visible(i)) continue;
+        if (snap_curr.entity_kind[i] != 1u ||
+            snap_curr.building_id[i] >= catalog.building_count) {
+            continue;
+        }
+        const chunsa::BuildingDefinitionV1& bd = catalog.buildings[snap_curr.building_id[i]];
+        const float bpx = (static_cast<float>(snap_curr.bld_anchor_tx[i]) +
+                           static_cast<float>(bd.footprint_w) * 0.5f) * 4.0f;
+        const float bpy = (static_cast<float>(snap_curr.bld_anchor_ty[i]) +
+                           static_cast<float>(bd.footprint_h) * 0.5f) * 4.0f;
+        claim_label_slot(cam3d->unproject_position(
+                godot::Vector3(bpx, -bpy, bpy + 24.0f)));
     }
 
     const uint32_t deposit_count = std::min(snap_curr.n_deposits,
@@ -3035,10 +3065,15 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
         const godot::String resource_name = resource_id != chunsa::INVALID_RESOURCE_ID
                 ? resource_display_name(resource_id)
                 : U("Recurso desconocido");
-        draw_string(font, p + godot::Vector2(11, 5),
-                    resource_name + U(" ") +
-                            godot::String::num_int64(snap_curr.dep_remaining[d]),
-                    static_cast<godot::HorizontalAlignment>(0), -1, 12, color);
+        // El circulo se dibuja siempre —el deposito debe verse— pero el
+        // rotulo solo si hay sitio libre. Un mapa con puntos de color y sin
+        // texto amontonado sigue siendo legible; al reves no.
+        if (claim_label_slot(p + godot::Vector2(11, 5))) {
+            draw_string(font, p + godot::Vector2(11, 5),
+                        resource_name + U(" ") +
+                                godot::String::num_int64(snap_curr.dep_remaining[d]),
+                        static_cast<godot::HorizontalAlignment>(0), -1, 12, color);
+        }
     }
 
     // Etiquetas de mundo: edificios visibles y unidades seleccionadas usan la
