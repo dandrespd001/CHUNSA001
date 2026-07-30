@@ -24,6 +24,13 @@ namespace chunsa {
 // build_target, misma convención que ECO_NO_DEPOSIT/INVALID_UNIT_ID.
 inline constexpr uint32_t BUILD_NO_TARGET = 0xFFFFFFFFu;
 
+// Centinela de GameState::winner, misma convención que los INVALID_* de
+// data_catalog.hpp. Existe con nombre porque el valor crudo se leyó como
+// "no ha ganado nadie" en un test de juego: `winner` es un ÍNDICE de jugador,
+// así que 0 es una victoria legítima del jugador 0 y SOLO este centinela
+// significa empate o partida en curso.
+inline constexpr uint8_t NO_WINNER = 0xFFu;
+
 // Control explícito del ciudadano (Sprint 1.7, SPEC-004 §22). El campo
 // GameState::citizen_task se mantiene como uint8_t plano para que el layout,
 // la serialización y el checksum sean inequívocos; estas constantes son sus

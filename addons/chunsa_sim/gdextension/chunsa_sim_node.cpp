@@ -1,5 +1,6 @@
 #include "chunsa_sim_node.h"
 #include "fog_view.hpp"
+#include "outcome_view.hpp"
 
 // chunsa_sim — ChunsaSimNode (Sprint 1.4, skirmish jugable: humano contra IA,
 // combate + moral + economía visibles). El kernel avanza a 20 Hz en un hilo;
@@ -61,6 +62,11 @@ constexpr uint32_t SKIRMISH_CITIZEN_COUNT = 4;
 constexpr int64_t SKIRMISH_HUMAN_TX = 20;
 constexpr int64_t SKIRMISH_AI_TX = 80;
 constexpr int64_t SKIRMISH_BASE_TY = 128;
+// El bando del jugador humano. El adaptador ya asumía el 0 en todas partes
+// (`owner[i] != 0u` ⇒ no es mío); aquí se nombra porque el resultado de la
+// partida se decide comparándolo con `winner`, y confundir ambos índices es
+// exactamente el defecto que tenía el panel de fin de partida.
+constexpr uint8_t LOCAL_PLAYER = 0u;
 const godot::Color UNIT_COLOR(0.2, 0.9, 0.9);
 const godot::Color WALL_COLOR(0.5, 0.5, 0.55);
 
@@ -486,8 +492,21 @@ void ChunsaSimNode::sim_loop() {
 
         if (gs->game_over != 0u && !game_over_reported) {
             game_over_reported = true;
+            // El entero crudo no basta: `winner=0` es una victoria del jugador
+            // 0 y se leyó como "no ganó nadie" en un test de juego. Se imprime
+            // el resultado en palabras, y el empate como el centinela y no como
+            // un índice, para que la consola diga lo mismo que el panel.
+            const chunsa::presentation::MatchOutcome outcome =
+                    chunsa::presentation::match_outcome(gs->winner, LOCAL_PLAYER);
             godot::UtilityFunctions::print(
-                    "CHUNSA game_over winner=", static_cast<int64_t>(gs->winner),
+                    "CHUNSA game_over ",
+                    chunsa::presentation::outcome_label(outcome),
+                    " winner=",
+                    gs->winner == chunsa::NO_WINNER
+                            ? godot::String("ninguno")
+                            : godot::String::num_int64(
+                                      static_cast<int64_t>(gs->winner)),
+                    " jugador_local=", static_cast<int64_t>(LOCAL_PLAYER),
                     " tick=", static_cast<int64_t>(t));
             running.store(false, std::memory_order_relaxed);
         }
@@ -698,13 +717,17 @@ void ChunsaSimNode::_draw() {
                                (viewport_size.y - panel_height) * 0.5f),
                 godot::Vector2(panel_width, panel_height));
 
-        godot::String outcome = "EMPATE";
+        // La política vive en outcome_view.hpp y SÍ tiene pruebas: aquí había
+        // dos jugadores cableados (`winner==1` ⇒ derrota, cualquier otro ⇒
+        // empate), así que con los 8 jugadores de SPEC-008 §4 un ganador de
+        // 2..7 se habría anunciado como EMPATE estando el jugador derrotado.
+        const chunsa::presentation::MatchOutcome result =
+                chunsa::presentation::match_outcome(snap_curr.winner, LOCAL_PLAYER);
+        godot::String outcome = U(chunsa::presentation::outcome_label(result));
         godot::Color outcome_color(1.0, 0.85, 0.35, 1.0);
-        if (snap_curr.winner == 0u) {
-            outcome = "VICTORIA";
+        if (result == chunsa::presentation::MatchOutcome::VICTORY) {
             outcome_color = godot::Color(0.35, 1.0, 0.55, 1.0);
-        } else if (snap_curr.winner == 1u) {
-            outcome = "DERROTA";
+        } else if (result == chunsa::presentation::MatchOutcome::DEFEAT) {
             outcome_color = godot::Color(1.0, 0.35, 0.35, 1.0);
         }
 
