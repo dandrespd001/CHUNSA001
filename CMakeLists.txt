@@ -204,6 +204,13 @@ target_include_directories(chunsa_test_outcome_view PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
 add_test(NAME outcome_view COMMAND chunsa_test_outcome_view)
 
+# --- Test Sprint 1.8H: política pura del panel de comandos ---------------------
+add_executable(chunsa_test_command_panel_view tests/unit/test_command_panel_view.cpp)
+target_link_libraries(chunsa_test_command_panel_view PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_command_panel_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
+add_test(NAME command_panel_view COMMAND chunsa_test_command_panel_view)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
@@ -290,8 +297,8 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      morale economy aggro replay_v2 data_blob
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
-                     resource_catalog fog_view outcome_view data_compile
-                     affordability_view
+                     resource_catalog fog_view outcome_view affordability_view
+                     command_panel_view data_compile
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---
