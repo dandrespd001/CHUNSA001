@@ -1,0 +1,38 @@
+keys,en,es
+chunsa:resource.aluminum,Aluminum,Aluminio
+chunsa:resource.bauxite,Bauxite,Bauxita
+chunsa:resource.bronze,Bronze,Bronce
+chunsa:resource.cement,Cement,Cemento
+chunsa:resource.charcoal,Charcoal,Carbón vegetal
+chunsa:resource.clay,Clay,Arcilla
+chunsa:resource.coal,Coal,Carbón
+chunsa:resource.coke,Coke,Coque
+chunsa:resource.copper,Copper,Cobre
+chunsa:resource.food,Food,Comida
+chunsa:resource.gold,Gold,Oro
+chunsa:resource.gunpowder,Gunpowder,Pólvora
+chunsa:resource.iron_ore,Iron ore,Mena de hierro
+chunsa:resource.lead,Lead,Plomo
+chunsa:resource.limestone,Limestone,Caliza
+chunsa:resource.nitre,Nitre,Salitre
+chunsa:resource.nitrogen_fixed,Fixed nitrogen,Nitrógeno fijado
+chunsa:resource.oil,Oil,Petróleo
+chunsa:resource.oil_products,Oil products,Derivados del petróleo
+chunsa:resource.quicklime,Quicklime,Cal viva
+chunsa:resource.rare_earths,Rare earths,Tierras raras
+chunsa:resource.salt,Salt,Sal
+chunsa:resource.silicon,Silicon,Silicio
+chunsa:resource.steel,Steel,Acero
+chunsa:resource.stone,Stone,Piedra
+chunsa:resource.sulfur,Sulfur,Azufre
+chunsa:resource.tin,Tin,Estaño
+chunsa:resource.uranium,Uranium,Uranio
+chunsa:resource.wood,Wood,Madera
+chunsa:resource.wrought_iron,Wrought iron,Hierro forjado
+chunsa:resource.family.subsistence,Subsistence,Subsistencia
+chunsa:resource.family.construction,Construction,Construcción
+chunsa:resource.family.base_metals,Base metals,Metales base
+chunsa:resource.family.metallurgy,Metallurgy,Metalurgia
+chunsa:resource.family.chemistry,Chemistry,Química
+chunsa:resource.family.energy,Energy,Energía
+chunsa:resource.family.high_tech,High tech,Alta tecnología

@@ -95,10 +95,9 @@ public:
         uint8_t eco_state[1024]; // 0=SEEK 1=HARVEST 2=RETURN
         uint32_t eco_assigned_deposit[1024];
 
-        // Sprint 1.2: estado escalar del jugador 0 para el HUD.
-        int64_t stock_a;
-        int64_t stock_b;
-        int64_t stock_me;
+        // Sprint 1.8C: stock completo del jugador 0. El índice es el slot
+        // independiente del recurso que expone el catálogo.
+        int64_t stock[chunsa::RESOURCE_COUNT];
         uint8_t player_epoch;
         uint8_t epoch_initial;
         int32_t pop_used;
@@ -212,6 +211,8 @@ private:
     bool placement_input_captured = false;
     bool rally_mode = false;
     bool research_mode = false;
+    // Índice por ResourceFamilyV1; el valor 0 (Invalid) no se usa.
+    bool resource_family_expanded[8] = {};
     uint64_t last_feedback_sequence = 0;
     uint8_t last_feedback_epoch = 0;
 
@@ -242,6 +243,7 @@ private:
     void recenter_from_minimap(const godot::Vector2& screen);
     godot::Rect2 minimap_rect() const;
     godot::Rect2 minimap_world_rect() const;
+    godot::Rect2 resource_hud_rect() const;
     godot::Rect2 epoch_button_rect() const;
     godot::Rect2 selection_panel_rect() const;
     int32_t selected_count() const;
@@ -251,12 +253,21 @@ private:
     bool selected_slot_is_current(uint32_t slot) const;
     godot::String slot_display_name(uint32_t slot) const;
     godot::String catalog_name(const char* name, uint16_t bytes) const;
+    godot::String resource_display_name(uint32_t resource_id) const;
+    godot::String resource_family_display_name(
+            chunsa::ResourceFamilyV1 family) const;
+    godot::String resource_nature_display_name(
+            chunsa::ResourceNatureV1 nature) const;
+    uint32_t resource_id_for_stock_index(uint8_t stock_index) const;
     godot::String unit_display_name(uint32_t unit_id) const;
     godot::String tech_display_name(uint32_t tech_id) const;
     godot::String unit_class_display_name(uint8_t unit_class) const;
     godot::String presentation_rejection_explanation(
             chunsa::CommandType type, uint32_t building_slot,
             uint32_t item_id) const;
+    void append_stock_details(godot::String& details,
+                              const int32_t* costs,
+                              const int64_t* stock) const;
     void remember_command_prediction(uint64_t sequence,
                                      const godot::String& detail);
     const CommandPresentationPrediction* command_prediction(
@@ -267,6 +278,9 @@ private:
     void add_order_marker(float px, float py);
     void draw_minimap(const godot::Ref<godot::Font>& font,
                       const godot::Color& text);
+    void draw_resource_hud(const godot::Ref<godot::Font>& font,
+                           const godot::Color& text,
+                           const godot::Color& muted);
     void draw_selection_panel(const godot::Ref<godot::Font>& font,
                               const godot::Color& text,
                               const godot::Color& muted);

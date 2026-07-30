@@ -7,3 +7,7 @@ run/main_scene="res://main.tscn"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[internationalization]
+locale/fallback="es"
+locale/translations=PackedStringArray("res://localization/es.es.translation")

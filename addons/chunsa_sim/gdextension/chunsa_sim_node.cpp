@@ -127,22 +127,40 @@ godot::String presentation_name_from_record(const char* record_id,
                                static_cast<int>(readable.size()));
 }
 
-const char* resource_label(uint8_t resource_idx) {
-    switch (resource_idx) {
-        case 0u: return "A";
-        case 1u: return "B";
-        case 2u: return "Me";
-        default: return "?";
+godot::Color resource_family_color(chunsa::ResourceFamilyV1 family) {
+    using chunsa::ResourceFamilyV1;
+    switch (family) {
+        case ResourceFamilyV1::Subsistence:
+            return godot::Color(0.95, 0.75, 0.2, 1.0);
+        case ResourceFamilyV1::Construction:
+            return godot::Color(0.35, 0.85, 0.95, 1.0);
+        case ResourceFamilyV1::BaseMetals:
+            return godot::Color(0.85, 0.5, 0.95, 1.0);
+        case ResourceFamilyV1::Metallurgy:
+            return godot::Color(0.95, 0.45, 0.28, 1.0);
+        case ResourceFamilyV1::Chemistry:
+            return godot::Color(0.45, 0.95, 0.55, 1.0);
+        case ResourceFamilyV1::Energy:
+            return godot::Color(1.0, 0.55, 0.18, 1.0);
+        case ResourceFamilyV1::HighTech:
+            return godot::Color(0.45, 0.65, 1.0, 1.0);
+        case ResourceFamilyV1::Invalid:
+        default:
+            return godot::Color(0.8, 0.8, 0.8, 1.0);
     }
 }
 
-godot::Color resource_color(uint8_t resource_idx) {
-    switch (resource_idx) {
-        case 0u: return godot::Color(0.95, 0.75, 0.2, 1.0);
-        case 1u: return godot::Color(0.35, 0.85, 0.95, 1.0);
-        case 2u: return godot::Color(0.85, 0.5, 0.95, 1.0);
-        default: return godot::Color(0.8, 0.8, 0.8, 1.0);
+godot::Color resource_color(const chunsa::DataCatalogV1& catalog,
+                            uint8_t stock_index) {
+    if (catalog.resources != nullptr) {
+        for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+             ++resource_id) {
+            if (catalog.resources[resource_id].index == stock_index) {
+                return resource_family_color(catalog.resources[resource_id].family);
+            }
+        }
     }
+    return resource_family_color(chunsa::ResourceFamilyV1::Invalid);
 }
 
 godot::Color fog_overlay_color(chunsa::presentation::FogLevel level) {
@@ -194,20 +212,6 @@ void append_epoch_detail(godot::String& details, uint8_t epoch_min,
     append_rejection_detail(details, detail);
 }
 
-void append_stock_details(godot::String& details, int32_t cost_a,
-                          int32_t cost_b, int32_t cost_me, int64_t stock_a,
-                          int64_t stock_b, int64_t stock_me) {
-    const int64_t costs[] = {cost_a, cost_b, cost_me};
-    const int64_t stocks[] = {stock_a, stock_b, stock_me};
-    for (uint8_t resource = 0; resource < 3u; ++resource) {
-        if (costs[resource] <= stocks[resource]) continue;
-        const int64_t missing = costs[resource] - stocks[resource];
-        append_rejection_detail(
-                details,
-                U("Faltan ") + godot::String::num_int64(missing) + " " +
-                        godot::String(resource_label(resource)));
-    }
-}
 }  // namespace
 
 void ChunsaSimNode::_bind_methods() {
@@ -451,9 +455,10 @@ void ChunsaSimNode::sim_loop() {
                 s->dep_remaining[i] = gs->deposits[i].remaining;
                 s->dep_resource_idx[i] = gs->deposits[i].resource_idx;
             }
-            s->stock_a = gs->player_stock[0][0];
-            s->stock_b = gs->player_stock[0][1];
-            s->stock_me = gs->player_stock[0][2];
+            for (uint32_t resource = 0; resource < chunsa::RESOURCE_COUNT;
+                 ++resource) {
+                s->stock[resource] = gs->player_stock[0][resource];
+            }
             s->player_epoch = gs->player_epoch[0];
             s->epoch_initial = gs->epoch_initial[0];
             s->pop_used = gs->pop_used[0];
@@ -508,7 +513,7 @@ void ChunsaSimNode::sim_loop() {
                                            " art=", n_art_alive,
                                            " citizens=", n_cit_alive,
                                            " buildings=", n_buildings_alive,
-                                           " stock_A=", gs->player_stock[0][0],
+                                           " stock0=", gs->player_stock[0][0],
                                            " ai_seq=", ai_rt.ai_sequence,
                                            " ai_last_seq=", gs->last_seq[1],
                                            " ai_x=", ai_first_x);
@@ -616,20 +621,8 @@ void ChunsaSimNode::_draw() {
     const godot::Color text(0.95, 0.98, 1.0, 1.0);
     const godot::Color muted(0.72, 0.82, 0.9, 1.0);
     draw_world_overlay(font, text);
+    draw_resource_hud(font, text, muted);
 
-    draw_rect(godot::Rect2(godot::Vector2(14, 14), godot::Vector2(720, 144)),
-              godot::Color(0.02, 0.04, 0.08, 0.9));
-
-    godot::String resources = godot::String("CHUNSA  A ") +
-            godot::String::num_int64(snap_curr.stock_a) + "  B " +
-            godot::String::num_int64(snap_curr.stock_b) + "  Me " +
-            godot::String::num_int64(snap_curr.stock_me) + U("    Época ") +
-            godot::String::num_int64(snap_curr.player_epoch) + U("    Población ") +
-            godot::String::num_int64(snap_curr.pop_used) + "/200";
-    draw_string(font, godot::Vector2(28, 42), resources,
-                 static_cast<godot::HorizontalAlignment>(0), -1, 18, text);
-
-    uint32_t citizens_by_resource[3] = {};
     uint32_t constructing = 0;
     uint32_t idle = 0;
     const uint32_t economy_cap = snap_curr.capacity < 1024u
@@ -644,32 +637,24 @@ void ChunsaSimNode::_draw() {
             ++constructing;
             continue;
         }
-        uint8_t resource_idx = 3u;
         const uint32_t deposit = snap_curr.eco_assigned_deposit[i];
-        if (deposit != chunsa::ECO_NO_DEPOSIT &&
-            deposit < snap_curr.n_deposits &&
-            snap_curr.dep_resource_idx[deposit] < 3u) {
-            resource_idx = snap_curr.dep_resource_idx[deposit];
-        } else if (snap_curr.eco_carry[i] > 0 &&
-                   snap_curr.eco_carry_resource[i] < 3u) {
-            resource_idx = snap_curr.eco_carry_resource[i];
+        if (deposit == chunsa::ECO_NO_DEPOSIT && snap_curr.eco_carry[i] == 0) {
+            ++idle;
         }
-        if (resource_idx < 3u) ++citizens_by_resource[resource_idx];
-        else ++idle;
     }
-    const godot::String citizen_line = U("Aldeanos — A:") +
-            godot::String::num_int64(citizens_by_resource[0]) + "  B:" +
-            godot::String::num_int64(citizens_by_resource[1]) + "  Me:" +
-            godot::String::num_int64(citizens_by_resource[2]) + "  constr:" +
-            godot::String::num_int64(constructing) + "  ocioso:" +
+    const godot::Rect2 epoch_rect = epoch_button_rect();
+    const godot::String citizen_line = U("Aldeanos · construyendo ") +
+            godot::String::num_int64(constructing) + U(" · ociosos ") +
             godot::String::num_int64(idle);
-    draw_string(font, godot::Vector2(28, 120), citizen_line,
-                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
+    draw_string(font, godot::Vector2(28, epoch_rect.position.y + 48.0f),
+                citizen_line, static_cast<godot::HorizontalAlignment>(0), -1,
+                13, muted);
 
-    godot::String controls =
-            U("1..9 grupos | WASD/flechas: cámara | rueda: zoom | MMB: pan");
-    draw_string(font, godot::Vector2(28, 68), controls,
-                 static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
+    const godot::String controls =
+            U("1..9 grupos · WASD/flechas: cámara · rueda: zoom · MMB: pan");
+    draw_string(font, godot::Vector2(28, epoch_rect.position.y + 66.0f),
+                controls, static_cast<godot::HorizontalAlignment>(0), -1, 13,
+                muted);
 
     if (snap_curr.last_receipt_sequence != UINT64_MAX &&
         snap_curr.last_receipt_sequence >= 1000000ull) {
@@ -689,7 +674,7 @@ void ChunsaSimNode::_draw() {
                         U("civilización, prerrequisitos o estado del edificio");
             }
         }
-        draw_string(font, godot::Vector2(28, 94), feedback,
+        draw_string(font, godot::Vector2(28, epoch_rect.position.y + 84.0f), feedback,
                      static_cast<godot::HorizontalAlignment>(0), -1, 14,
                      snap_curr.last_receipt_result ==
                                      static_cast<uint16_t>(chunsa::RejectReason::ACCEPTED)
@@ -697,7 +682,6 @@ void ChunsaSimNode::_draw() {
                              : godot::Color(1.0, 0.65, 0.35, 1.0));
     }
 
-    const godot::Rect2 epoch_rect = epoch_button_rect();
     draw_rect(epoch_rect, godot::Color(0.12, 0.3, 0.5, 0.95));
     draw_string(font, epoch_rect.position + godot::Vector2(12, 21), U("E: SUBIR ÉPOCA"),
                 static_cast<godot::HorizontalAlignment>(0), -1, 14, text);
@@ -1083,11 +1067,45 @@ godot::Rect2 ChunsaSimNode::minimap_world_rect() const {
                         godot::Vector2(side, side));
 }
 
+godot::Rect2 ChunsaSimNode::resource_hud_rect() const {
+    const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
+    const float width = std::min(840.0f, std::max(420.0f, viewport_size.x - 28.0f));
+    float height = 54.0f;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (have_curr && catalog.resources != nullptr) {
+        for (uint8_t family_code = 1u;
+             family_code <= static_cast<uint8_t>(chunsa::ResourceFamilyV1::HighTech);
+             ++family_code) {
+            const auto family = static_cast<chunsa::ResourceFamilyV1>(family_code);
+            uint32_t count = 0;
+            for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+                 ++resource_id) {
+                const chunsa::ResourceDefinitionV1& def =
+                        catalog.resources[resource_id];
+                if (def.family == family &&
+                    def.appearance_epoch <= snap_curr.player_epoch) {
+                    ++count;
+                }
+            }
+            if (count == 0u) continue;
+            height += 26.0f;
+            if (resource_family_expanded[family_code]) {
+                height += 19.0f * static_cast<float>(count);
+            }
+        }
+    }
+    return godot::Rect2(godot::Vector2(14.0f, 14.0f),
+                        godot::Vector2(width, height));
+}
+
 godot::Rect2 ChunsaSimNode::epoch_button_rect() const {
     const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
     const float width = 165.0f;
     const float x = std::max(28.0f, std::min(550.0f, viewport_size.x - width - 16.0f));
-    return godot::Rect2(godot::Vector2(x, 48.0f), godot::Vector2(width, 30.0f));
+    const godot::Rect2 resources = resource_hud_rect();
+    return godot::Rect2(godot::Vector2(
+                                x, resources.position.y + resources.size.y + 8.0f),
+                        godot::Vector2(width, 30.0f));
 }
 
 godot::Rect2 ChunsaSimNode::selection_panel_rect() const {
@@ -1241,6 +1259,76 @@ godot::String ChunsaSimNode::catalog_name(const char* name, uint16_t bytes) cons
     return presentation_name_from_record(name, bytes);
 }
 
+godot::String ChunsaSimNode::resource_display_name(uint32_t resource_id) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (resource_id >= catalog.resource_count || catalog.resources == nullptr) {
+        return U("Recurso desconocido");
+    }
+    const chunsa::ResourceDefinitionV1& definition = catalog.resources[resource_id];
+    if (catalog.resource_names == nullptr) return U("Recurso desconocido");
+    const chunsa::ResourceNameIndexV1& name = catalog.resource_names[resource_id];
+    const godot::String fallback = [&]() {
+        const char* record_id = name.record_id_utf8;
+        const size_t bytes = name.record_id_bytes;
+        size_t start = 0;
+        for (size_t i = 0; i < bytes; ++i) {
+            if (record_id[i] == ':') start = i + 1u;
+        }
+        if (start >= bytes) return U("Recurso desconocido");
+        return godot::String::utf8(record_id + start,
+                                   static_cast<int>(bytes - start));
+    }();
+    if (definition.display_name_key_utf8 == nullptr ||
+        definition.display_name_key_bytes == 0u) {
+        return fallback;
+    }
+    const godot::String key = godot::String::utf8(
+            definition.display_name_key_utf8,
+            static_cast<int>(definition.display_name_key_bytes));
+    const godot::String translated = tr(godot::StringName(key));
+    return translated.is_empty() || translated == key ? fallback : translated;
+}
+
+godot::String ChunsaSimNode::resource_family_display_name(
+        chunsa::ResourceFamilyV1 family) const {
+    const char* suffix = nullptr;
+    using chunsa::ResourceFamilyV1;
+    switch (family) {
+        case ResourceFamilyV1::Subsistence: suffix = "subsistence"; break;
+        case ResourceFamilyV1::Construction: suffix = "construction"; break;
+        case ResourceFamilyV1::BaseMetals: suffix = "base_metals"; break;
+        case ResourceFamilyV1::Metallurgy: suffix = "metallurgy"; break;
+        case ResourceFamilyV1::Chemistry: suffix = "chemistry"; break;
+        case ResourceFamilyV1::Energy: suffix = "energy"; break;
+        case ResourceFamilyV1::HighTech: suffix = "high_tech"; break;
+        case ResourceFamilyV1::Invalid:
+        default: return U("Familia desconocida");
+    }
+    const godot::String key = U("chunsa:resource.family.") + U(suffix);
+    const godot::String translated = tr(godot::StringName(key));
+    return translated.is_empty() || translated == key ? U(suffix) : translated;
+}
+
+godot::String ChunsaSimNode::resource_nature_display_name(
+        chunsa::ResourceNatureV1 nature) const {
+    switch (nature) {
+        case chunsa::ResourceNatureV1::Collected: return U("recolectado");
+        case chunsa::ResourceNatureV1::Produced: return U("producido");
+        case chunsa::ResourceNatureV1::Invalid:
+        default: return U("sin naturaleza");
+    }
+}
+
+uint32_t ChunsaSimNode::resource_id_for_stock_index(uint8_t stock_index) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (catalog.resources == nullptr) return chunsa::INVALID_RESOURCE_ID;
+    for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+         ++resource_id) {
+        if (catalog.resources[resource_id].index == stock_index) return resource_id;
+    }
+    return chunsa::INVALID_RESOURCE_ID;
+}
+
 godot::String ChunsaSimNode::unit_display_name(uint32_t unit_id) const {
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     if (unit_id < catalog.unit_count && catalog.unit_names != nullptr) {
@@ -1286,6 +1374,29 @@ godot::String ChunsaSimNode::slot_display_name(uint32_t slot) const {
         return unit_display_name(snap_curr.unit_id[slot]);
     }
     return unit_class_display_name(snap_curr.unit_class[slot]);
+}
+
+void ChunsaSimNode::append_stock_details(godot::String& details,
+                                         const int32_t* costs,
+                                         const int64_t* stock) const {
+    if (costs == nullptr || stock == nullptr) return;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    if (catalog.resources == nullptr) return;
+    for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+         ++resource_id) {
+        const chunsa::ResourceDefinitionV1& definition =
+                catalog.resources[resource_id];
+        if (definition.index >= chunsa::RESOURCE_COUNT ||
+            costs[definition.index] <= stock[definition.index]) {
+            continue;
+        }
+        const int64_t missing = static_cast<int64_t>(costs[definition.index]) -
+                stock[definition.index];
+        append_rejection_detail(
+                details,
+                U("Faltan ") + godot::String::num_int64(missing) + U(" de ") +
+                        resource_display_name(resource_id));
+    }
 }
 
 godot::String ChunsaSimNode::presentation_rejection_explanation(
@@ -1341,9 +1452,7 @@ godot::String ChunsaSimNode::presentation_rejection_explanation(
                                             U("Falta capacidad requerida"));
                 }
             }
-            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
-                                 snap_curr.stock_a, snap_curr.stock_b,
-                                 snap_curr.stock_me);
+            append_stock_details(details, def.cost, snap_curr.stock);
             return details;
         }
 
@@ -1371,9 +1480,7 @@ godot::String ChunsaSimNode::presentation_rejection_explanation(
                 static_cast<int32_t>(chunsa::POP_CAP_V1)) {
                 append_rejection_detail(details, U("Población llena"));
             }
-            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
-                                 snap_curr.stock_a, snap_curr.stock_b,
-                                 snap_curr.stock_me);
+            append_stock_details(details, def.cost, snap_curr.stock);
             return details;
         }
 
@@ -1417,9 +1524,7 @@ godot::String ChunsaSimNode::presentation_rejection_explanation(
                                     tech_display_name(def.mutually_exclusive_with[k]));
                 }
             }
-            append_stock_details(details, def.cost_a, def.cost_b, def.cost_me,
-                                 snap_curr.stock_a, snap_curr.stock_b,
-                                 snap_curr.stock_me);
+            append_stock_details(details, def.cost, snap_curr.stock);
             return details;
         }
 
@@ -1451,10 +1556,11 @@ godot::String ChunsaSimNode::presentation_rejection_explanation(
                         details,
                         U("Aún no se alcanza el tiempo mínimo para subir de época"));
             }
-            append_stock_details(details, chunsa::EPOCH_COST_A,
-                                 chunsa::EPOCH_COST_B, chunsa::EPOCH_COST_ME,
-                                 snap_curr.stock_a, snap_curr.stock_b,
-                                 snap_curr.stock_me);
+            int32_t epoch_cost[chunsa::RESOURCE_COUNT] = {};
+            epoch_cost[chunsa::RESOURCE_INDEX_FOOD] = chunsa::EPOCH_COST_A;
+            epoch_cost[chunsa::RESOURCE_INDEX_WOOD] = chunsa::EPOCH_COST_B;
+            epoch_cost[chunsa::RESOURCE_INDEX_STONE] = chunsa::EPOCH_COST_ME;
+            append_stock_details(details, epoch_cost, snap_curr.stock);
             return details;
         }
 
@@ -1509,6 +1615,43 @@ bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
     if (minimap_rect().has_point(screen)) {
         recenter_from_minimap(screen);
         minimap_dragging = true;
+        return true;
+    }
+    const godot::Rect2 resources_panel = resource_hud_rect();
+    if (resources_panel.has_point(screen)) {
+        const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+        float y = resources_panel.position.y + 54.0f;
+        if (catalog.resources != nullptr) {
+            for (uint8_t family_code = 1u;
+                 family_code <= static_cast<uint8_t>(chunsa::ResourceFamilyV1::HighTech);
+                 ++family_code) {
+                const auto family = static_cast<chunsa::ResourceFamilyV1>(family_code);
+                uint32_t count = 0;
+                for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+                     ++resource_id) {
+                    const chunsa::ResourceDefinitionV1& definition =
+                            catalog.resources[resource_id];
+                    if (definition.family == family &&
+                        definition.appearance_epoch <= snap_curr.player_epoch) {
+                        ++count;
+                    }
+                }
+                if (count == 0u) continue;
+                const godot::Rect2 family_row(
+                        godot::Vector2(resources_panel.position.x + 8.0f, y),
+                        godot::Vector2(resources_panel.size.x - 16.0f, 24.0f));
+                if (family_row.has_point(screen)) {
+                    resource_family_expanded[family_code] =
+                            !resource_family_expanded[family_code];
+                    queue_redraw();
+                    return true;
+                }
+                y += 26.0f;
+                if (resource_family_expanded[family_code]) {
+                    y += 19.0f * static_cast<float>(count);
+                }
+            }
+        }
         return true;
     }
     if (epoch_button_rect().has_point(screen)) {
@@ -1633,6 +1776,90 @@ void ChunsaSimNode::add_order_marker(float px, float py) {
     order_marker_ttl[target] = 1.0f;
 }
 
+void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
+                                      const godot::Color& text,
+                                      const godot::Color& muted) {
+    const godot::Rect2 panel = resource_hud_rect();
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
+    draw_string(font, panel.position + godot::Vector2(14, 24),
+                U("CHUNSA · RECURSOS") + U(" · Época ") +
+                        godot::String::num_int64(snap_curr.player_epoch) +
+                        U(" · Población ") +
+                        godot::String::num_int64(snap_curr.pop_used) + U("/200"),
+                static_cast<godot::HorizontalAlignment>(0), -1, 17, text);
+    draw_string(font, panel.position + godot::Vector2(14, 43),
+                U("Pulsa una familia para ver sus recursos individuales"),
+                static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
+
+    if (catalog.resources == nullptr) return;
+    float y = panel.position.y + 54.0f;
+    for (uint8_t family_code = 1u;
+         family_code <= static_cast<uint8_t>(chunsa::ResourceFamilyV1::HighTech);
+         ++family_code) {
+        const auto family = static_cast<chunsa::ResourceFamilyV1>(family_code);
+        uint32_t resource_count = 0;
+        uint32_t scarcest_id = chunsa::INVALID_RESOURCE_ID;
+        int64_t scarcest_stock = 0;
+        for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+             ++resource_id) {
+            const chunsa::ResourceDefinitionV1& definition =
+                    catalog.resources[resource_id];
+            if (definition.family != family ||
+                definition.appearance_epoch > snap_curr.player_epoch ||
+                definition.index >= chunsa::RESOURCE_COUNT) {
+                continue;
+            }
+            ++resource_count;
+            const int64_t current_stock = snap_curr.stock[definition.index];
+            if (scarcest_id == chunsa::INVALID_RESOURCE_ID ||
+                current_stock < scarcest_stock) {
+                scarcest_id = resource_id;
+                scarcest_stock = current_stock;
+            }
+        }
+        if (resource_count == 0u) continue;
+
+        const godot::Color family_color = resource_family_color(family);
+        draw_rect(godot::Rect2(godot::Vector2(panel.position.x + 8.0f, y),
+                               godot::Vector2(panel.size.x - 16.0f, 24.0f)),
+                  godot::Color(0.06, 0.1, 0.16, 1.0));
+        draw_rect(godot::Rect2(godot::Vector2(panel.position.x + 8.0f, y),
+                               godot::Vector2(4.0f, 24.0f)), family_color);
+        const godot::String collapsed_summary =
+                resource_family_expanded[family_code] ? U("[-] ") : U("[+] ");
+        const godot::String family_line = collapsed_summary +
+                resource_family_display_name(family) + U(" (" ) +
+                godot::String::num_int64(resource_count) + U(") · más escaso: ") +
+                resource_display_name(scarcest_id) + U(" ") +
+                godot::String::num_int64(scarcest_stock);
+        draw_string(font, godot::Vector2(panel.position.x + 18.0f, y + 17.0f),
+                    family_line, static_cast<godot::HorizontalAlignment>(0),
+                    panel.size.x - 30.0f, 14, family_color);
+        y += 26.0f;
+
+        if (!resource_family_expanded[family_code]) continue;
+        for (uint32_t resource_id = 0; resource_id < catalog.resource_count;
+             ++resource_id) {
+            const chunsa::ResourceDefinitionV1& definition =
+                    catalog.resources[resource_id];
+            if (definition.family != family ||
+                definition.appearance_epoch > snap_curr.player_epoch ||
+                definition.index >= chunsa::RESOURCE_COUNT) {
+                continue;
+            }
+            const godot::String resource_line = U("    ") +
+                    resource_display_name(resource_id) + U(" · ") +
+                    resource_nature_display_name(definition.nature) + U(": ") +
+                    godot::String::num_int64(snap_curr.stock[definition.index]);
+            draw_string(font, godot::Vector2(panel.position.x + 18.0f, y + 14.0f),
+                        resource_line, static_cast<godot::HorizontalAlignment>(0),
+                        panel.size.x - 30.0f, 12, muted);
+            y += 19.0f;
+        }
+    }
+}
+
 void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
                                  const godot::Color& text) {
     const godot::Rect2 panel = minimap_rect();
@@ -1682,6 +1909,7 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
         }
     }
 
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     const uint32_t deposit_count = std::min(snap_curr.n_deposits,
                                             chunsa::ECO_MAX_DEPOSITS);
     for (uint32_t d = 0; d < deposit_count; ++d) {
@@ -1693,11 +1921,10 @@ void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
                 static_cast<float>(snap_curr.dep_x_raw[d]) / 65536.0f * 4.0f * scale,
                 static_cast<float>(snap_curr.dep_y_raw[d]) / 65536.0f * 4.0f * scale);
         draw_circle(p, std::max(1.5f, 2.5f * scale),
-                    resource_color(snap_curr.dep_resource_idx[d]));
+                    resource_color(catalog, snap_curr.dep_resource_idx[d]));
     }
 
     const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
-    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     for (uint32_t i = 0; i < cap; ++i) {
         if (snap_curr.alive[i] == 0u) continue;
         if (!presentation_entity_visible(i)) continue;
@@ -1835,8 +2062,12 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                         deposit < snap_curr.n_deposits
                 ? godot::String::num_int64(static_cast<int64_t>(deposit))
                 : "ninguno";
-        const godot::String carry_resource = resource_label(
+        const uint32_t carry_resource_id = resource_id_for_stock_index(
                 snap_curr.eco_carry_resource[citizen]);
+        const godot::String carry_resource =
+                carry_resource_id != chunsa::INVALID_RESOURCE_ID
+                ? resource_display_name(carry_resource_id)
+                : U("Recurso desconocido");
         const godot::String economy = U("Estado ") + godot::String(state) +
                 U(" · depósito ") + deposit_text + U(" · carga ") +
                 godot::String::num_int64(snap_curr.eco_carry[citizen]) + "/" +
@@ -1944,27 +2175,15 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
         const float py = static_cast<float>(snap_curr.dep_y_raw[d]) / 65536.0f * 4.0f;
         const godot::Vector2 p = cam3d->unproject_position(
                 godot::Vector3(px, -py, py + 14.0f));
-        const godot::Color color = resource_color(snap_curr.dep_resource_idx[d]);
-        switch (snap_curr.dep_resource_idx[d]) {
-            case 0u:
-                draw_circle(p, 8.0f, color);
-                break;
-            case 1u:
-                draw_rect(godot::Rect2(p - godot::Vector2(7, 7),
-                                       godot::Vector2(14, 14)), color, false, 3.0f);
-                break;
-            case 2u:
-                draw_line(p + godot::Vector2(0, -9), p + godot::Vector2(9, 0), color, 3.0f);
-                draw_line(p + godot::Vector2(9, 0), p + godot::Vector2(0, 9), color, 3.0f);
-                draw_line(p + godot::Vector2(0, 9), p + godot::Vector2(-9, 0), color, 3.0f);
-                draw_line(p + godot::Vector2(-9, 0), p + godot::Vector2(0, -9), color, 3.0f);
-                break;
-            default:
-                draw_circle(p, 8.0f, color, false, 2.0f);
-                break;
-        }
+        const godot::Color color = resource_color(catalog, snap_curr.dep_resource_idx[d]);
+        draw_circle(p, 8.0f, color);
+        const uint32_t resource_id =
+                resource_id_for_stock_index(snap_curr.dep_resource_idx[d]);
+        const godot::String resource_name = resource_id != chunsa::INVALID_RESOURCE_ID
+                ? resource_display_name(resource_id)
+                : U("Recurso desconocido");
         draw_string(font, p + godot::Vector2(11, 5),
-                    godot::String(resource_label(snap_curr.dep_resource_idx[d])) + " " +
+                    resource_name + U(" ") +
                             godot::String::num_int64(snap_curr.dep_remaining[d]),
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, color);
     }
