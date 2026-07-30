@@ -333,7 +333,7 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(out.read_bytes(), golden.read_bytes())
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
             self.assertIn(
-                "records unit=5 building=6 tech=4 civ=2 map=1 "
+                "records unit=5 building=8 tech=4 civ=2 map=1 "
                 "ai-profile=1 resource=30",
                 stdout,
             )

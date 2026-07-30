@@ -1,0 +1,58 @@
+schema_version: 1
+id: rome:foundry
+civ_id: rome:republic_imperial
+display_name_key: rome:building.foundry
+description_key: rome:building.foundry.description
+epoch_window:
+  - 5
+  - 5
+kind: economic
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 700
+constructible: true
+resource_costs:
+  chunsa:wood: 60
+  chunsa:stone: 40
+build_time_ticks: 500
+dropoff_resources: []
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes:
+  - id: rome:bronze_smelting
+    input_resource_costs:
+      chunsa:copper: 3
+      chunsa:tin: 1
+    output_resource_id: chunsa:bronze
+    output_amount: 2
+    duration_ticks: 240
+playable_period_ids:
+  - rome:republican_expansion
+  - rome:high_empire
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9-recetas
+  generated_on: "2026-07-30"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_BRONCE.md
+    sources:
+      - citation: "Wikipedia, Bronze"
+        locator: "Bronze is an alloy consisting primarily of copper, commonly with about 12-12.5% tin added"
+        url: "https://en.wikipedia.org/wiki/Bronze"
+        accessed_on: "2026-07-30"
+  balance_design:
+    author: architect
+    rationale: "La proporcion 3 cobre : 1 estano refleja el ~12,5% de estano historico de forma jugable y entera. Salida 2 y 240 ticks son balance del slice, no historia."
+    reviewed_by:
+      - architect

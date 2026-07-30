@@ -100,7 +100,7 @@ namespace chunsa {
 // estado con 3..31 en cero usa CHUNSA_STATE_V9; no hay rutas condicionales por
 // contenido. La trayectoria sigue intacta y todos los baselines cambian solo
 // por este nuevo dominio.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 9;
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 10;  // Sprint 1.9: +craft_recipe/craft_progress
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -254,6 +254,10 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.epoch_initial[e]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_tech[i]);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_progress[i]);
+    // Sprint 1.9 (SPEC-007 §12.5): la fabricacion entra en el dominio del
+    // checksum, AL FINAL como todo lo anadido despues (append-only).
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.craft_recipe[i]);
+    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.craft_progress[i]);
     // Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7): AL FINAL, tras todo lo
     // v5. Escalares del partido (no por-slot): un único u8/u8/u16.
     h.u8(g.game_over);

@@ -35,6 +35,10 @@ enum class CommandType : uint16_t {
     // propio; p.x_raw/p.y_raw = punto raw del depósito objetivo (mismo patrón
     // de reutilización de campos que MOVE_TO/SET_RALLY).
     GATHER = 13,
+    // Sprint 1.9 (SPEC-007 §12.4): fabricar. p.handle = edificio propio
+    // COMPLETO cuya lista `recipes` contiene la receta; p.unit_id = RecipeId
+    // (mismo patrón de reutilización de campo que RESEARCH_TECH con TechId).
+    CRAFT = 14,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

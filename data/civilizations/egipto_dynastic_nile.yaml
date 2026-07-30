@@ -40,6 +40,7 @@ building_ids:
   - egipto:settlement_center
   - egipto:shena_granary
   - egipto:chariotry_stable
+  - egipto:foundry
 tech_ids:
   - egipto:composite_bow_program
   - egipto:corvee_logistics

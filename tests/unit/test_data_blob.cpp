@@ -263,13 +263,15 @@ int main() {
 
     const DataCatalogV1& cat = store.catalog();
     CHECK(cat.unit_count == 5);
+    // Sprint 1.9: el blob gana dos fundiciones con la receta del bronce y un
+    // par espejado de estaño en el mapa.
     // Sprint 1.8D: el blob lleva los depósitos de las épocas 1-4 y los costes
     // reales, así que el hash de contenido cambia por diseño. El valor sale de
     // data/compiled/chunsa_base.chdb.content.json, que es la declaración del
     // compilador y ha coincidido con este golden en todos los sprints previos.
     static constexpr uint8_t kExpectedHash[32] = {
-        0xed, 0x20, 0xaf, 0x73, 0xaa, 0xd3, 0x9d, 0xd8, 0xb9, 0xaf, 0xf5, 0xca, 0x04, 0x57, 0xdf, 0x4b,
-        0x5f, 0x2e, 0x87, 0x13, 0xde, 0x86, 0xba, 0x75, 0xb6, 0x3c, 0xe1, 0xf2, 0xcf, 0xdb, 0x6b, 0xf6,
+        0x2b, 0x90, 0xa7, 0xe2, 0x85, 0x60, 0x33, 0x7d, 0xdb, 0x5b, 0x7f, 0x27, 0x8a, 0x25, 0xa8, 0x67,
+        0x43, 0xe0, 0x29, 0x4f, 0xb2, 0x7c, 0x4d, 0x4c, 0x69, 0xe9, 0x29, 0xc9, 0xe9, 0x9d, 0xda, 0x14,
     };
     CHECK(std::memcmp(cat.content_hash.bytes, kExpectedHash, 32) == 0);
     CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 1);
@@ -631,7 +633,7 @@ int main() {
         // Sprint 1.2 añade los cuarteles: el conteo crece con los datos (>= 4,
         // exacto 6 desde mm/datos-tech-1.2); los checks por record_id de abajo
         // son los que fijan el contrato, no el conteo.
-        CHECK(cat.building_count == 6);
+        CHECK(cat.building_count == 8);
 
         auto find = [&](const char* name) {
             return catalog_find_building(cat, name, std::strlen(name));

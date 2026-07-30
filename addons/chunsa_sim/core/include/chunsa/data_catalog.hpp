@@ -202,6 +202,27 @@ inline constexpr BuildingId INVALID_BUILDING_ID = 0xFFFFFFFFu;
 // real que excediera estos caps se rechaza (catálogo entero), no se trunca.
 using TechId = uint32_t;
 inline constexpr TechId INVALID_TECH_ID = 0xFFFFFFFFu;
+
+// Sprint 1.9 (SPEC-007 §12). DESVIACION DEL SPEC, deliberada y documentada:
+// §12.2 pedia una SECCION NUEVA del blob (kind=9) para las recetas. No hace
+// falta: `building.schema.json` YA declara `recipes` con todos los campos
+// (id, input_resource_costs, output_resource_id, output_amount,
+// duration_ticks), asi que la receta viaja dentro del record del edificio y el
+// compilador de datos NO se toca. El RecipeId global se asigna al cargar,
+// recorriendo edificios en orden de id y sus recetas en orden de aparicion:
+// determinista y estable, que es lo que el comando CRAFT necesita.
+using RecipeId = uint32_t;
+inline constexpr RecipeId INVALID_RECIPE_ID = 0xFFFFFFFFu;
+inline constexpr uint32_t RECIPES_PER_BUILDING_MAX = 8;
+
+struct RecipeV1 {
+    RecipeId id;
+    BuildingId building_id;
+    int32_t input[RESOURCE_COUNT];
+    uint8_t output_index;      // indice de recurso de salida
+    int32_t output_amount;     // >= 1
+    uint32_t duration_ticks;   // >= 1
+};
 using CapabilityId = uint32_t;
 inline constexpr CapabilityId INVALID_CAPABILITY_ID = 0xFFFFFFFFu;
 
@@ -243,7 +264,11 @@ struct BuildingDefinitionV1 {
     // lo declara `required`), misma disciplina de referencia diferida que
     // trains/researches/required_capabilities — ver load_impl.
     CivId civ_id;
-    // resto de campos del schema (recipes/grants_capabilities/...) NO tipados
+    // Sprint 1.9 (SPEC-007 §12): recetas que ejecuta este edificio, como
+    // RecipeId hacia la tabla plana del catalogo.
+    RecipeId recipes[RECIPES_PER_BUILDING_MAX];
+    uint8_t  recipe_count;
+    // resto de campos del schema (grants_capabilities/...) NO tipados
 };
 
 struct BuildingNameIndexV1 {
@@ -378,6 +403,9 @@ struct DataCatalogV1 {
     uint32_t ai_profile_count;
     const AiProfileV1* ai_profiles;
     const AiProfileNameIndexV1* ai_profile_names;
+    // Sprint 1.9 (SPEC-007 §12): tabla plana de recetas, indexada por RecipeId.
+    uint32_t recipe_count;
+    const RecipeV1* recipes;
     // Sprint 1.6B (SPEC-004 §15.3): tabla de civilizaciones (kind=civ),
     // espejo mínimo de unit_count/units/unit_names (sin `civs`: no hay
     // definición propia reconstruida, ver CivNameIndexV1).
@@ -763,6 +791,34 @@ inline bool resolve_resource_index(
 // tabla id→slot viene del índice asignado por el compilador en kind=8; para
 // CHDB 1.0 legados, load_impl instala la tabla histórica A/B/Me. Ausencia de
 // la clave ⇒ costes en 0 (defensivo: los schemas la exigen donde corresponde).
+// Sprint 1.9: variante con NOMBRE de campo, para `input_resource_costs` de las
+// recetas. La logica es identica; extraerla evita una segunda copia que pueda
+// divergir en las validaciones de rango.
+inline void parse_named_resource_costs(const CveValue& obj,
+                                       const char* key,
+                                       int32_t (&cost)[RESOURCE_COUNT],
+                                       CatalogLoadCode range_fail,
+                                       const std::vector<std::string>& resource_ids,
+                                       const std::vector<uint8_t>& resource_indices) {
+    for (uint32_t resource = 0; resource < RESOURCE_COUNT; ++resource) {
+        cost[resource] = 0;
+    }
+    const CveValue* costs = obj.find(key);
+    if (!costs) return;
+    if (!costs->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    for (const auto& kv : costs->obj) {
+        if (!kv.second.is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (kv.second.i < 0 || kv.second.i > 1000000) fail(range_fail);
+        uint8_t resource_index = 0;
+        if (!resolve_resource_index(
+                resource_ids, resource_indices, kv.first, resource_index)
+                || resource_index >= RESOURCE_COUNT) {
+            fail(range_fail);
+        }
+        cost[resource_index] = static_cast<int32_t>(kv.second.i);
+    }
+}
+
 inline void parse_resource_costs(const CveValue& obj,
                                  int32_t (&cost)[RESOURCE_COUNT],
                                  CatalogLoadCode range_fail,
@@ -1001,6 +1057,9 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
 // manifest). `load_impl` resuelve LAS TRES en un único paso posterior, tras
 // haber parseado TODAS las secciones, por uniformidad (ver su comentario).
 struct BuildingRawRefs {
+    // Sprint 1.9: recetas ya resueltas salvo el RecipeId global, que asigna
+    // load_impl al recorrer los edificios en orden.
+    std::vector<RecipeV1> recipes;
     std::vector<std::string> trains;
     std::vector<std::string> researches;
     std::vector<std::string> required_capabilities;
@@ -1072,6 +1131,41 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
                 fail(CatalogLoadCode::InvalidBuilding);
             }
             dropoff_mask |= (uint32_t{1} << bit);
+        }
+    }
+
+    // Sprint 1.9 (SPEC-007 §12.2). Las recetas viajan DENTRO del record del
+    // edificio (building.schema.json ya las declara), asi que no hace falta una
+    // seccion nueva del blob. Los record_id de recurso se resuelven aqui mismo:
+    // una referencia no resoluble tumba el catalogo entero, igual que el resto.
+    if (const CveValue* rec = obj.find("recipes")) {
+        if (!rec->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+        if (rec->arr.size() > RECIPES_PER_BUILDING_MAX) fail(CatalogLoadCode::InvalidBuilding);
+        for (const auto& item : rec->arr) {
+            if (!item.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+            RecipeV1 r{};
+            r.id = INVALID_RECIPE_ID;
+            r.building_id = id;
+            parse_named_resource_costs(item, "input_resource_costs", r.input,
+                                       CatalogLoadCode::InvalidBuilding,
+                                       resource_ids, resource_indices);
+            const CveValue* out = item.find("output_resource_id");
+            if (!out || !out->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+            uint8_t out_idx = 0;
+            if (!resolve_resource_index(resource_ids, resource_indices, out->s, out_idx) ||
+                out_idx >= RESOURCE_COUNT) {
+                fail(CatalogLoadCode::InvalidBuilding);
+            }
+            r.output_index = out_idx;
+            const CveValue* amt = item.find("output_amount");
+            if (!amt || !amt->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+            if (amt->i < 1 || amt->i > 1000000) fail(CatalogLoadCode::InvalidBuilding);
+            r.output_amount = static_cast<int32_t>(amt->i);
+            const CveValue* dur = item.find("duration_ticks");
+            if (!dur || !dur->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+            if (dur->i < 1 || dur->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
+            r.duration_ticks = static_cast<uint32_t>(dur->i);
+            raw_out.recipes.push_back(r);
         }
     }
 
@@ -1271,6 +1365,9 @@ struct DataCatalogStorageV1::Impl {
     // Sprint 1.1 (SPEC-004 §2): espejo de unit_ids/units/unit_names.
     std::vector<std::string> building_ids;
     std::vector<BuildingDefinitionV1> buildings;
+    // Sprint 1.9 (SPEC-007 §12): tabla plana de recetas. El RecipeId es la
+    // posicion en este vector, asignada al recorrer edificios en orden.
+    std::vector<RecipeV1> recipes;
     std::vector<BuildingNameIndexV1> building_names;
     // Sprint 1.2 (SPEC-004 §12.1): espejo de unit_ids/units/unit_names, y
     // tabla de capacidades (manifest.declared_capabilities).
@@ -1715,6 +1812,15 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                 BuildingDefinitionV1 def = build_building_definition(
                     value, bid, raw,
                     impl->resource_ids, impl->resource_indices);
+                for (uint32_t rk = 0; rk < RECIPES_PER_BUILDING_MAX; ++rk) {
+                    def.recipes[rk] = INVALID_RECIPE_ID;
+                }
+                def.recipe_count = 0;
+                for (RecipeV1& rdef_new : raw.recipes) {
+                    rdef_new.id = static_cast<RecipeId>(impl->recipes.size());
+                    def.recipes[def.recipe_count++] = rdef_new.id;
+                    impl->recipes.push_back(rdef_new);
+                }
                 impl->building_ids.push_back(record_id);
                 impl->buildings.push_back(def);
                 impl->pending_building_trains.push_back(std::move(raw.trains));
@@ -2074,6 +2180,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     cat.map_resource_spawns = impl->map_resource_spawns.data();
     cat.resource_count = static_cast<uint32_t>(impl->resources.size());
     cat.resources = impl->resources.data();
+    // Sprint 1.9 (SPEC-007 §12): tabla plana de recetas.
+    cat.recipe_count = static_cast<uint32_t>(impl->recipes.size());
+    cat.recipes = impl->recipes.data();
     cat.resource_names = impl->resource_names.data();
 
     // Único punto de éxito: transfiere la propiedad al caller. Cualquier

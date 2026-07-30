@@ -40,6 +40,7 @@ building_ids:
   - rome:forum_center
   - rome:horreum
   - rome:castra_barracks
+  - rome:foundry
 tech_ids:
   - rome:marching_drill
   - rome:road_engineering

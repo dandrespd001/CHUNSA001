@@ -175,6 +175,10 @@ struct GameState {
     uint8_t  epoch_initial[MAX_EMITTERS];      // época inicial (fija tras el init, ver arriba)
     uint32_t research_tech[ENTITY_HARD_CAP];   // INVALID_TECH_ID = ocioso
     uint32_t research_progress[ENTITY_HARD_CAP];
+    // Sprint 1.9 (SPEC-007 §12.3): mismo patrón que research_tech/progress —
+    // no se inventa una estructura nueva donde ya hay una que funciona.
+    uint32_t craft_recipe[ENTITY_HARD_CAP];    // INVALID_RECIPE_ID = ocioso
+    uint32_t craft_progress[ENTITY_HARD_CAP];
 
     // Identidad de civilización por jugador (Sprint 1.6B, SPEC-004 §17).
     // ESTADO: serializado + checksummeado. ESCALAR DEL PARTIDO por jugador
@@ -266,6 +270,10 @@ inline void zero_components(GameState& g, uint32_t i) noexcept {
     for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
     g.prod_count[i] = 0;
     g.prod_progress[i] = 0;
+    // Sprint 1.9 (SPEC-007 §12.3): al reciclar un slot, la fabricacion se
+    // limpia como el resto de componentes por-entidad.
+    g.craft_recipe[i] = INVALID_RECIPE_ID;
+    g.craft_progress[i] = 0;
     g.rally_x[i] = 0;
     g.rally_y[i] = 0;
     g.rally_set[i] = 0;
@@ -357,6 +365,7 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     for (uint32_t i = 0; i < g.entities.capacity; ++i) {
         for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
         g.research_tech[i] = INVALID_TECH_ID;
+        g.craft_recipe[i] = INVALID_RECIPE_ID;
     }
     // Sprint 1.4 (SPEC-005 §6): game_over/participants_mask ya quedan en 0
     // por el memset de arriba (correcto: "en curso"/"nadie ha participado

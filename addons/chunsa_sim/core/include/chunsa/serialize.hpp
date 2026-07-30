@@ -300,6 +300,9 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) w.u8(g.epoch_initial[e]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_tech[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.research_progress[i]);
+    // Sprint 1.9 (SPEC-007 §12.5): append-only al final del bloque por-entidad.
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.craft_recipe[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.craft_progress[i]);
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): AL FINAL
     // del stream, tras todo lo v10 (precedente D7: append-only, sin
@@ -588,6 +591,8 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     if (r.fail) return false;
     for (uint32_t i = 0; i < cap_e; ++i) g.research_tech[i] = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.research_progress[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.craft_recipe[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.craft_progress[i] = r.u32();
     if (r.fail) return false;
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): mismo

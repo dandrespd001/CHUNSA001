@@ -667,6 +667,57 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.player_epoch[c.emitter] = cur_epoch + 1u;
             return RejectReason::ACCEPTED;
         }
+        case CommandType::CRAFT: {
+            // SPEC-007 §12.4. EL ORDEN DE ESTOS OCHO PASOS ES CONTRACTUAL: la
+            // prueba 8 de §12.6 comprueba que un comando que viola varias
+            // reglas devuelve el codigo de la PRIMERA. Cambiarlo de sitio
+            // cambia el mensaje que ve el jugador.
+            // 1) handle vivo
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t bi = c.p.handle.index;
+            // 2) propio
+            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+            // 3) es edificio
+            if (g.entity_kind[bi] != 1u) return RejectReason::ILLEGAL_STATE;
+            if (g.catalog == nullptr || g.building_id[bi] >= g.catalog->building_count) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+            const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[bi]];
+            // 4) completo
+            if (g.build_progress[bi] < bdef.build_time_ticks) return RejectReason::ILLEGAL_STATE;
+            // 5) la receta esta en la lista de ESE edificio
+            if (c.p.unit_id >= g.catalog->recipe_count) return RejectReason::ILLEGAL_STATE;
+            const RecipeId rid = c.p.unit_id;
+            bool in_recipes = false;
+            for (uint8_t k = 0; k < bdef.recipe_count; ++k) {
+                if (bdef.recipes[k] == rid) { in_recipes = true; break; }
+            }
+            if (!in_recipes) return RejectReason::ILLEGAL_STATE;
+            const RecipeV1& rdef = g.catalog->recipes[rid];
+            // 6) epoca alcanzada. La receta no lleva epoca propia: la hereda
+            //    del edificio que la ejecuta, que ya tiene su ventana. Un
+            //    campo duplicado seria una segunda verdad que mantener.
+            if (bdef.epoch_min > g.player_epoch[c.emitter]) return RejectReason::ILLEGAL_STATE;
+            // 7) edificio ocioso de produccion
+            if (g.craft_recipe[bi] != INVALID_RECIPE_ID) return RejectReason::ILLEGAL_STATE;
+            // 8) el stock cubre TODOS los inputs
+            for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) {
+                if (rdef.input[r] <= 0) continue;
+                if (g.player_stock[c.emitter][r] < rdef.input[r]) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
+            }
+            // Deduccion POR ADELANTADO y de golpe (§12.4). Si se dedujera al
+            // terminar, el jugador podria encolar lo que no puede pagar y el
+            // sistema tendria que decidir que hacer al final; asi esa clase
+            // entera de casos no existe.
+            for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) {
+                if (rdef.input[r] > 0) g.player_stock[c.emitter][r] -= rdef.input[r];
+            }
+            g.craft_recipe[bi] = rid;
+            g.craft_progress[bi] = 0;
+            return RejectReason::ACCEPTED;
+        }
         case CommandType::GATHER: {
             // SPEC-004 §18: p.handle = ciudadano propio; p.x_raw/p.y_raw =
             // punto raw del depósito objetivo. Orden de validación es
@@ -1508,6 +1559,29 @@ inline void construction_system(GameState& g) noexcept {
 // Sistema de producción (Sprint 1.2, SPEC-004 §11.4). Fase propia, después de
 // construction_system y antes del destroy batch, iteración ascendente por
 // índice sobre edificios vivos COMPLETOS con cola no vacía.
+// SPEC-007 §12.4: fabricacion. Misma fase que production_system y mismo
+// recorrido ascendente por slot. Al completar se acredita la salida y el
+// edificio vuelve a ocioso. Si el edificio muere a mitad, el slot se recicla
+// (zero_components deja craft_recipe en INVALID) y NO se acredita nada ni se
+// devuelven los inputs: fabricar es un riesgo, no un deposito a plazo.
+inline void craft_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.craft_recipe[i] == INVALID_RECIPE_ID) continue;
+        if (g.catalog == nullptr || g.craft_recipe[i] >= g.catalog->recipe_count) continue;
+        const RecipeV1& rdef = g.catalog->recipes[g.craft_recipe[i]];
+        ++g.craft_progress[i];
+        if (g.craft_progress[i] < rdef.duration_ticks) continue;
+        if (rdef.output_index < RESOURCE_COUNT) {
+            g.player_stock[g.owner[i]][rdef.output_index] += rdef.output_amount;
+        }
+        g.craft_recipe[i] = INVALID_RECIPE_ID;
+        g.craft_progress[i] = 0;
+    }
+}
+
 inline void production_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
@@ -1770,6 +1844,7 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // (5e) Producción + investigación (Sprint 1.2, SPEC-004 §11.4/§12.3):
         // después de construction_system, antes del destroy batch.
         detail::production_system(g);
+        detail::craft_system(g);
         detail::research_system(g);
 
         // (6) DESTROY: ordenar ASC por índice (inserción; batch pequeño) y reciclar.

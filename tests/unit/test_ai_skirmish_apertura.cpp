@@ -4,7 +4,7 @@
 //
 // El escenario de apertura (chunsa/skirmish_apertura.hpp: egipto
 // humano-scripted vs rome IA real, AMBOS con centro + 3 aldeanos y CERO
-// ejército/edificios militares inyectados, catálogo REAL + 12 depósitos
+// ejército/edificios militares inyectados, catálogo REAL + 14 depósitos
 // reales del mapa vía gs_init_economy_from_catalog) debe:
 //   - Correr hasta game_over==1 con winner == 1 en < 36000 ticks, con la
 //     IA recorriendo sola recolectar -> construir -> entrenar -> atacar.
@@ -55,7 +55,7 @@ MatchConfig01A apertura_cfg(uint64_t seed) {
 }
 
 // GameState heap-allocado, enlazado al catálogo REAL, civ/época por jugador
-// Y los 12 depósitos reales del mapa (gs_init_economy_from_catalog — EL
+// Y los 14 depósitos reales del mapa (gs_init_economy_from_catalog — EL
 // PUNTO del sprint, SPEC-004 §16/§20: nadie la llamaba desde un escenario
 // hasta este). Listo para drive_skirmish_apertura().
 std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
@@ -71,7 +71,7 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     // Pre-flight duro del escenario: un estado con otro número de depósitos
     // no es una apertura válida y no debe producir ruido derivado en el resto
     // de asertos.
-    if (g->n_deposits != 12u) return nullptr;
+    if (g->n_deposits != 14u) return nullptr;
     return g;
 }
 
@@ -89,7 +89,7 @@ static bool test_apertura_preflight() {
     auto g = make_apertura_state(store.catalog(), setup, 20260724ull);
     CHECK(g != nullptr);
     if (g == nullptr) {
-        std::printf("apertura pre-flight: se esperaban 12 depósitos reales\n");
+        std::printf("apertura pre-flight: se esperaban 14 depósitos reales\n");
         return false;
     }
     return true;

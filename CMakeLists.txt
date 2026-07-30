@@ -211,6 +211,21 @@ target_include_directories(chunsa_test_command_panel_view PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
 add_test(NAME command_panel_view COMMAND chunsa_test_command_panel_view)
 
+# --- Test Sprint 1.9: recetas y CRAFT (SPEC-007 §12.6) -------------------------
+add_executable(chunsa_test_craft tests/unit/test_craft.cpp)
+target_link_libraries(chunsa_test_craft PRIVATE chunsa_sim_core)
+add_test(NAME craft COMMAND chunsa_test_craft)
+
+# --- Guardián Sprint 1.9: época inicial por civilización ----------------------
+# Un dato nuevo con epoch_min bajo mueve en silencio la época de arranque de su
+# civilización y puede apagar la partida entera. Con 4-6 civs planificadas esto
+# solo puede empeorar, asi que el acoplamiento se hace ruidoso.
+add_executable(chunsa_test_civ_start_epoch tests/unit/test_civ_start_epoch.cpp)
+target_link_libraries(chunsa_test_civ_start_epoch PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_civ_start_epoch PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME civ_start_epoch COMMAND chunsa_test_civ_start_epoch)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
@@ -298,7 +313,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view affordability_view
-                     command_panel_view data_compile
+                     command_panel_view craft civ_start_epoch data_compile
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---
