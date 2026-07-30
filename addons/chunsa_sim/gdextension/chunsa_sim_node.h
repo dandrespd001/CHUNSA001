@@ -241,6 +241,7 @@ private:
     void set_camera_zoom(float size, const godot::Vector2* anchor_screen = nullptr);
     void pan_camera_from_keyboard(double delta);
     void recenter_from_minimap(const godot::Vector2& screen);
+    float ui_scale() const;
     godot::Rect2 minimap_rect() const;
     godot::Rect2 minimap_world_rect() const;
     godot::Rect2 resource_hud_rect() const;

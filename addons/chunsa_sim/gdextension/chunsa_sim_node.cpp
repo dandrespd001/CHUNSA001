@@ -242,9 +242,6 @@ void ChunsaSimNode::_ready() {
     const godot::String env_shot = os_ptr->get_environment("CHUNSA_SHOT");
     if (!env_shot.is_empty()) {
         shot_prefix = env_shot.utf8().get_data();
-        // La evidencia solicitada por el sprint debe mostrar el catálogo de
-        // costes abierto en el frame capturado, sin cambiar la simulación.
-        placement_mode = true;
     }
     godot::UtilityFunctions::print("CHUNSA render=prod(c/3d+interp) units=",
                                    demo_units);
@@ -550,11 +547,6 @@ void ChunsaSimNode::sim_loop() {
 
 void ChunsaSimNode::_process(double delta) {
     ++frame_count;
-    if (!shot_prefix.empty() && frame_count >= 590u) {
-        // Mantener abierto el panel durante la ventana de evidencia incluso
-        // si una entrada de ratón externa cerró el modo de colocación.
-        placement_mode = true;
-    }
     pan_camera_from_keyboard(delta);
     if (ring != nullptr) {
         auto h = ring->acquire_latest();
@@ -814,12 +806,12 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
                 if (k < n && slots[k].id != UINT32_MAX) {
                     activate_command_slot(slots[k]);
                     queue_redraw();
+                    return;
                 }
-                return;
+                break;  // sin hueco ahi: que la tecla siga su camino
             }
         }
-        if (code == godot::KEY_ESCAPE &&
-            (placement_mode || rally_mode || research_mode)) {
+        if (code == godot::KEY_ESCAPE) {
             placement_mode = false;
             placement_input_captured = false;
             rally_mode = false;
@@ -993,6 +985,18 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     }
 
     if (button == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
+        // Salir del modo construccion con el clic derecho, como en cualquier
+        // RTS. El Director se quedo atrapado en el modo porque al mover las
+        // teclas quite el aviso de consola y el texto que decia como salir:
+        // una sola via de escape, y ademas invisible, no es una via de escape.
+        if (placement_mode) {
+            placement_mode = false;
+            placement_input_captured = false;
+            godot::UtilityFunctions::print("CHUNSA construir: cancelado");
+            queue_redraw();
+            return;
+        }
+
         // AoE2: clic DERECHO en el minimapa manda a las unidades ahi; el
         // izquierdo solo mueve la camara. Verificado en la investigacion.
         if (minimap_rect().has_point(mb->get_position())) {
@@ -1156,6 +1160,15 @@ void ChunsaSimNode::pan_camera_from_keyboard(double delta) {
                       camera_center_py + y * PAN_SPEED * static_cast<float>(delta));
 }
 
+// Factor de escala de TODA la interfaz (peticion del Director: nada estatico).
+// 1.0 a 1920x1080 y proporcional al lado mas restrictivo, acotado para que en
+// pantallas pequenas siga siendo pulsable y en grandes no se vuelva gigante.
+float ChunsaSimNode::ui_scale() const {
+    const godot::Vector2 vp = get_viewport()->get_visible_rect().size;
+    if (vp.x <= 0.0f || vp.y <= 0.0f) return 1.0f;
+    return std::clamp(std::min(vp.x / 1920.0f, vp.y / 1080.0f), 0.62f, 1.75f);
+}
+
 godot::Rect2 ChunsaSimNode::minimap_rect() const {
     const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
     const float map_side = std::clamp(
@@ -1254,11 +1267,19 @@ godot::Rect2 ChunsaSimNode::epoch_button_rect() const {
 
 godot::Rect2 ChunsaSimNode::selection_panel_rect() const {
     const godot::Vector2 viewport_size = get_viewport()->get_visible_rect().size;
-    const float width = std::min(780.0f, std::max(340.0f, viewport_size.x - 28.0f));
-    const float height = 340.0f;
-    return godot::Rect2(godot::Vector2(14.0f,
-                                      std::max(128.0f, viewport_size.y - height - 16.0f)),
-                        godot::Vector2(width, height));
+    const float k = ui_scale();
+    // Franja inferior unica: comandos a la izquierda, informacion en medio,
+    // minimapa a la derecha. Antes este panel se solapaba con la barra y en
+    // pantallas estrechas ocupaba media pantalla de juego.
+    const godot::Rect2 bar = command_bar_rect();
+    const godot::Rect2 mini = minimap_rect();
+    const float x = bar.position.x + bar.size.x + 12.0f * k;
+    const float right = mini.position.x - 12.0f * k;
+    const float height = std::min(340.0f * k, viewport_size.y * 0.42f);
+    const float width = std::max(240.0f * k, right - x);
+    return godot::Rect2(
+            godot::Vector2(x, viewport_size.y - height - 12.0f * k),
+            godot::Vector2(width, height));
 }
 
 int32_t ChunsaSimNode::selected_count() const {
@@ -1802,12 +1823,13 @@ bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
         if (bar.has_point(screen)) {
             PanelSlot slots[PANEL_SLOTS];
             const uint32_t count = collect_command_slots(slots, PANEL_SLOTS);
-            const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+            const float k = ui_scale();
+            const float btn = 56.0f * k, gap = 4.0f * k, pad = 10.0f * k;
             for (uint32_t i = 0; i < count && i < PANEL_SLOTS; ++i) {
                 if (slots[i].id == UINT32_MAX) continue;
                 const float bx = bar.position.x + pad +
                         static_cast<float>(i % PANEL_COLS) * (btn + gap);
-                const float by = bar.position.y + pad + 18.0f +
+                const float by = bar.position.y + pad + 18.0f * k +
                         static_cast<float>(i / PANEL_COLS) * (btn + gap);
                 if (godot::Rect2(godot::Vector2(bx, by),
                                  godot::Vector2(btn, btn)).has_point(screen)) {
@@ -2210,15 +2232,17 @@ uint32_t ChunsaSimNode::selected_citizen_count() const {
 
 godot::Rect2 ChunsaSimNode::command_bar_rect() const {
     const godot::Vector2 vp = get_viewport()->get_visible_rect().size;
-    const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+    const float k = ui_scale();
+    const float btn = 56.0f * k, gap = 4.0f * k, pad = 10.0f * k;
     const float w = static_cast<float>(PANEL_COLS) * btn +
             static_cast<float>(PANEL_COLS - 1u) * gap + pad * 2.0f;
     const float h = static_cast<float>(PANEL_ROWS) * btn +
-            static_cast<float>(PANEL_ROWS - 1u) * gap + pad * 2.0f + 18.0f;
-    const godot::Rect2 mini = minimap_rect();
-    float x = mini.position.x - w - 12.0f;
-    if (x < 12.0f) x = 12.0f;
-    return godot::Rect2(godot::Vector2(x, vp.y - h - 12.0f), godot::Vector2(w, h));
+            static_cast<float>(PANEL_ROWS - 1u) * gap + pad * 2.0f + 18.0f * k;
+    // Abajo a la IZQUIERDA, que es donde la pone AoE2 (fuente oficial). Antes
+    // quedaba pegada al minimapa y en pantallas estrechas caia en mitad de la
+    // pantalla, tapando el terreno donde se juega.
+    return godot::Rect2(godot::Vector2(12.0f * k, vp.y - h - 12.0f * k),
+                        godot::Vector2(w, h));
 }
 
 // Qué botones hay AHORA depende de la selección, como en AoE2: aldeanos →
@@ -2587,13 +2611,14 @@ void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
         return;
     }
 
-    const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+    const float k = ui_scale();
+    const float btn = 56.0f * k, gap = 4.0f * k, pad = 10.0f * k;
     int32_t hovered = -1;
     for (uint32_t i = 0; i < count && i < PANEL_SLOTS; ++i) {
         if (slots[i].id == UINT32_MAX) continue;  // hueco de relleno
         const float bx = bar.position.x + pad +
                 static_cast<float>(i % PANEL_COLS) * (btn + gap);
-        const float by = bar.position.y + pad + 18.0f +
+        const float by = bar.position.y + pad + 18.0f * k +
                 static_cast<float>(i / PANEL_COLS) * (btn + gap);
         const godot::Rect2 cell(godot::Vector2(bx, by), godot::Vector2(btn, btn));
 
@@ -2753,9 +2778,10 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                                          const godot::Color& muted) {
     const int32_t count = selected_count();
     if (count == 0) return;
+    const float k = ui_scale();
     const godot::Rect2 panel = selection_panel_rect();
     draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
-    draw_string(font, panel.position + godot::Vector2(16, 24),
+    draw_string(font, panel.position + godot::Vector2(16.0f * k, 24.0f * k),
                 U("SELECCIÓN · ") + godot::String::num_int64(count),
                 static_cast<godot::HorizontalAlignment>(0), -1, 17, text);
 
@@ -2785,7 +2811,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                     unit_class_display_name(
                             snap_curr.unit_class[static_cast<uint32_t>(first)]) + ")";
         }
-        draw_string(font, panel.position + godot::Vector2(16, 49),
+        draw_string(font, panel.position + godot::Vector2(16.0f * k, 49.0f * k),
                     single_name + U("  · owner ") +
                             godot::String::num_int64(snap_curr.owner[first]),
                     static_cast<godot::HorizontalAlignment>(0), -1, 15, muted);
@@ -2796,20 +2822,20 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
         if (class_counts[3] > 0u) summary += "  ciudadanos " + godot::String::num_int64(class_counts[3]);
         if (class_counts[0] > 0u) summary += U("  infantería ") + godot::String::num_int64(class_counts[0]);
         if (building_count > 0u) summary += "  edificios " + godot::String::num_int64(building_count);
-        draw_string(font, panel.position + godot::Vector2(16, 49), summary,
+        draw_string(font, panel.position + godot::Vector2(16.0f * k, 49.0f * k), summary,
                     static_cast<godot::HorizontalAlignment>(0), -1, 14, muted);
     }
 
     const float hp_ratio = max_hp_sum > 0
             ? std::clamp(static_cast<float>(hp_sum) / static_cast<float>(max_hp_sum), 0.0f, 1.0f)
             : 0.0f;
-    const godot::Rect2 hp_bar(panel.position + godot::Vector2(16, 61),
+    const godot::Rect2 hp_bar(panel.position + godot::Vector2(16.0f * k, 61.0f * k),
                               godot::Vector2(panel.size.x - 32.0f, 12.0f));
     draw_rect(hp_bar, godot::Color(0.18, 0.12, 0.15, 1.0));
     draw_rect(godot::Rect2(hp_bar.position,
                            godot::Vector2(hp_bar.size.x * hp_ratio, hp_bar.size.y)),
               godot::Color(0.25, 0.85, 0.35, 1.0));
-    draw_string(font, panel.position + godot::Vector2(16, 87),
+    draw_string(font, panel.position + godot::Vector2(16.0f * k, 87.0f * k),
                 "HP " + godot::String::num_int64(hp_sum) + "/" +
                         godot::String::num_int64(max_hp_sum),
                 static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
@@ -2821,7 +2847,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 U(" · ALC ") + godot::String::num_int64(snap_curr.range_mt[unit]) +
                 U(" mili-tiles · VEL ") +
                 godot::String::num_int64(snap_curr.speed_mtpt[unit]) + " mt/tick";
-        draw_string(font, panel.position + godot::Vector2(16, 106), stats,
+        draw_string(font, panel.position + godot::Vector2(16.0f * k, 106.0f * k), stats,
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
     }
 
@@ -2849,7 +2875,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 godot::String::num_int64(snap_curr.eco_carry[citizen]) + "/" +
                 godot::String::num_int64(chunsa::ECO_CARRY_CAP) + " " +
                 carry_resource;
-        draw_string(font, panel.position + godot::Vector2(16, 106), economy,
+        draw_string(font, panel.position + godot::Vector2(16.0f * k, 106.0f * k), economy,
                     static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
     }
 
@@ -2876,7 +2902,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
             if (constructors == 0u) {
                 construction += U(" · SIN CONSTRUCTOR: no avanza");
             }
-            draw_string(font, panel.position + godot::Vector2(260, 87),
+            draw_string(font, panel.position + godot::Vector2(260.0f * k, 87.0f * k),
                         construction.left(78),
                         static_cast<godot::HorizontalAlignment>(0), -1, 12,
                         constructors == 0u
@@ -2900,7 +2926,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                 if (has_train) queue += U("  ·  ");
                 queue += tech_display_name(snap_curr.research_tech[selected_building]);
             }
-            draw_string(font, panel.position + godot::Vector2(16, 279), queue.left(96),
+            draw_string(font, panel.position + godot::Vector2(16.0f * k, 279.0f * k), queue.left(96),
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
         }
     } else {
