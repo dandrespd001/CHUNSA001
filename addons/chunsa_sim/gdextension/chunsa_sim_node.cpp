@@ -695,7 +695,7 @@ void ChunsaSimNode::_draw() {
                 13, muted);
 
     const godot::String controls =
-        U("1..9 grupos · WASD/flechas: cámara · rueda: zoom · MMB: pan");
+        U("1..9 grupos · flechas: cámara · rueda: zoom · MMB: pan · clic dcho. en minimapa: mover");
     draw_string(font, godot::Vector2(28, epoch_rect.position.y + 104.0f),
                 controls, static_cast<godot::HorizontalAlignment>(0), -1, 13,
                 muted);
@@ -726,31 +726,10 @@ void ChunsaSimNode::_draw() {
                              : godot::Color(1.0, 0.65, 0.35, 1.0));
     }
 
-    draw_rect(epoch_rect, godot::Color(0.12, 0.3, 0.5, 0.95));
-    int32_t epoch_cost[chunsa::RESOURCE_COUNT] = {};
-    epoch_cost[chunsa::RESOURCE_INDEX_FOOD] = chunsa::EPOCH_COST_A;
-    epoch_cost[chunsa::RESOURCE_INDEX_WOOD] = chunsa::EPOCH_COST_B;
-    epoch_cost[chunsa::RESOURCE_INDEX_STONE] = chunsa::EPOCH_COST_ME;
-    const chunsa::presentation::AffordabilityResult epoch_affordability =
-            chunsa::presentation::assess_affordability(
-                    epoch_cost, snap_curr.stock, chunsa::RESOURCE_COUNT);
-    const godot::String epoch_detail = presentation_rejection_explanation(
-            chunsa::CommandType::EPOCH_UP, UINT32_MAX, 0u);
-    const godot::String epoch_status = !epoch_affordability.affordable
-            ? missing_summary(epoch_cost)
-            : (!epoch_detail.is_empty() ? epoch_detail : U("Asequible"));
-    draw_string(font, epoch_rect.position + godot::Vector2(12, 20),
-                U("E: SUBIR ÉPOCA"), static_cast<godot::HorizontalAlignment>(0),
-                -1, 14, text);
-    draw_string(font, epoch_rect.position + godot::Vector2(12, 40),
-                cost_summary(epoch_cost), static_cast<godot::HorizontalAlignment>(0),
-                epoch_rect.size.x - 24.0f, 12, muted);
-    draw_string(font, epoch_rect.position + godot::Vector2(12, 59),
-                epoch_status, static_cast<godot::HorizontalAlignment>(0),
-                epoch_rect.size.x - 24.0f, 11,
-                epoch_affordability.affordable
-                        ? godot::Color(0.45, 1.0, 0.55, 1.0)
-                        : godot::Color(1.0, 0.45, 0.35, 1.0));
+    // El panel suelto de SUBIR EPOCA se ha ido: anunciaba la tecla E, que ya no
+    // existe (E es un hueco de la rejilla), y tenia el coste fijo en pantalla,
+    // que es justo lo que el Director pidio quitar. Subir de epoca es ahora un
+    // boton mas del centro urbano, con su tooltip, como en AoE2.
 
     draw_selection_panel(font, text, muted);
     // La barra de comandos se dibuja DESPUES del panel de seleccion: su tooltip
@@ -819,13 +798,25 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             }
             return;
         }
-        if (code == godot::KEY_B) {
-            placement_mode = !placement_mode;
-            placement_input_captured = false;
-            godot::UtilityFunctions::print(
-                placement_mode ? "CHUNSA construir: ghost activo"
-                               : "CHUNSA construir: ghost cancelado");
-            return;
+        // SPEC-006 Parte V: las teclas de la rejilla actuan sobre la POSICION,
+        // no sobre el nombre. Es lo que hace que la memoria muscular sobreviva
+        // a que cambie el contenido del panel.
+        {
+            static const godot::Key kGrid[15] = {
+                godot::KEY_Q, godot::KEY_W, godot::KEY_E, godot::KEY_R, godot::KEY_T,
+                godot::KEY_A, godot::KEY_S, godot::KEY_D, godot::KEY_F, godot::KEY_G,
+                godot::KEY_Z, godot::KEY_X, godot::KEY_C, godot::KEY_V, godot::KEY_B,
+            };
+            for (uint32_t k = 0; k < PANEL_SLOTS; ++k) {
+                if (code != kGrid[k]) continue;
+                PanelSlot slots[PANEL_SLOTS];
+                const uint32_t n = collect_command_slots(slots, PANEL_SLOTS);
+                if (k < n && slots[k].id != UINT32_MAX) {
+                    activate_command_slot(slots[k]);
+                    queue_redraw();
+                }
+                return;
+            }
         }
         if (code == godot::KEY_ESCAPE &&
             (placement_mode || rally_mode || research_mode)) {
@@ -834,28 +825,6 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             rally_mode = false;
             research_mode = false;
             godot::UtilityFunctions::print(U("CHUNSA acción contextual cancelada"));
-            return;
-        }
-        if (code == godot::KEY_N && placement_mode) {
-            cycle_buildable_building();
-            return;
-        }
-        if (code == godot::KEY_T) {
-            research_mode = !research_mode;
-            godot::UtilityFunctions::print(
-                    research_mode ? "CHUNSA panel TECH activo"
-                                   : "CHUNSA panel TRAIN activo");
-            return;
-        }
-        if (code == godot::KEY_R) {
-            rally_mode = !rally_mode;
-            godot::UtilityFunctions::print(
-                    rally_mode ? "CHUNSA rally: selecciona un punto con clic"
-                                : "CHUNSA rally cancelado");
-            return;
-        }
-        if (code == godot::KEY_E) {
-            enqueue_epoch_up();
             return;
         }
     }
@@ -1024,6 +993,37 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
     }
 
     if (button == godot::MouseButton::MOUSE_BUTTON_RIGHT && mb->is_pressed()) {
+        // AoE2: clic DERECHO en el minimapa manda a las unidades ahi; el
+        // izquierdo solo mueve la camara. Verificado en la investigacion.
+        if (minimap_rect().has_point(mb->get_position())) {
+            const godot::Rect2 world_rect = minimap_world_rect();
+            if (world_rect.has_point(mb->get_position())) {
+                const float nx = std::clamp(
+                        (mb->get_position().x - world_rect.position.x) / world_rect.size.x,
+                        0.0f, 1.0f);
+                const float ny = std::clamp(
+                        (mb->get_position().y - world_rect.position.y) / world_rect.size.y,
+                        0.0f, 1.0f);
+                issue_move_orders(
+                        static_cast<int64_t>((nx * MAP_PX / 4.0f) * 65536.0f),
+                        static_cast<int64_t>((ny * MAP_PX / 4.0f) * 65536.0f));
+            }
+            return;
+        }
+
+        // AoE2: con un edificio seleccionado, el clic derecho fija su punto de
+        // reunion. Asi R deja de ser un modo y queda libre para la rejilla.
+        {
+            const int32_t sel_b = selected_single_building_slot();
+            if (sel_b >= 0) {
+                int64_t rtx = 0, rty = 0;
+                if (screen_to_tile(mb->get_position(), rtx, rty)) {
+                    enqueue_rally(rtx, rty);
+                    return;
+                }
+            }
+        }
+
         int64_t tile_x = 0;
         int64_t tile_y = 0;
         if (screen_to_tile(mb->get_position(), tile_x, tile_y) &&
@@ -1065,6 +1065,33 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         }
         if (issued) add_order_marker(world_px, world_py);
     }
+}
+
+// Emite MOVE_TO a toda la seleccion propia. Extraido para que el clic derecho
+// en el mundo y el clic derecho en el MINIMAPA (AoE2) recorran el mismo camino:
+// tener dos copias de esto era la forma segura de que divergieran.
+uint32_t ChunsaSimNode::issue_move_orders(int64_t x_raw, int64_t y_raw) {
+    if (!have_curr) return 0u;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    uint32_t issued = 0;
+    std::lock_guard<std::mutex> lock(input_mutex);
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i)) continue;
+        if (snap_curr.owner[i] != 0u) continue;
+        if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] > 3u) continue;
+        chunsa::RawCommand c;
+        std::memset(&c, 0, sizeof(c));
+        c.target_tick = 0;
+        c.emitter = 0;
+        c.type = chunsa::CommandType::MOVE_TO;
+        c.sequence = next_player_sequence++;
+        c.p.handle = chunsa::EntityHandle{i, snap_curr.generation[i]};
+        c.p.x_raw = x_raw;
+        c.p.y_raw = y_raw;
+        pending_player_commands.push_back(c);
+        ++issued;
+    }
+    return issued;
 }
 
 bool ChunsaSimNode::screen_to_map(const godot::Vector2& screen, float& px,
@@ -1744,14 +1771,13 @@ ChunsaSimNode::command_prediction(uint64_t sequence) const {
 }
 
 void ChunsaSimNode::update_pan_key(godot::Key code, bool pressed) {
+    // SPEC-006 Parte V: la camara va SOLO con flechas, como en AoE2. WASD eran
+    // cuatro teclas de la rejilla de comandos ocupadas por el paneo, y la
+    // memoria muscular de la rejilla vale mas que el atajo de camara.
     switch (code) {
-        case godot::KEY_W:
         case godot::KEY_UP: pan_up = pressed; break;
-        case godot::KEY_S:
         case godot::KEY_DOWN: pan_down = pressed; break;
-        case godot::KEY_A:
         case godot::KEY_LEFT: pan_left = pressed; break;
-        case godot::KEY_D:
         case godot::KEY_RIGHT: pan_right = pressed; break;
         default: break;
     }
@@ -1833,10 +1859,6 @@ bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
                 }
             }
         }
-        return true;
-    }
-    if (epoch_button_rect().has_point(screen)) {
-        enqueue_epoch_up();
         return true;
     }
     if (selected_count() == 0) return false;
@@ -1963,15 +1985,57 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
     const godot::Rect2 panel = resource_hud_rect();
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
     draw_rect(panel, godot::Color(0.02, 0.04, 0.08, 0.94));
-    draw_string(font, panel.position + godot::Vector2(14, 24),
-                U("CHUNSA · RECURSOS") + U(" · Época ") +
-                        godot::String::num_int64(snap_curr.player_epoch) +
-                        U(" · Población ") +
-                        godot::String::num_int64(snap_curr.pop_used) + U("/200"),
-                static_cast<godot::HorizontalAlignment>(0), -1, 17, text);
-    draw_string(font, panel.position + godot::Vector2(14, 43),
+
+    // AoE2 (fuente oficial, learn-to-play): la barra de recursos va arriba a la
+    // izquierda y lleva ademas poblacion, aldeanos ociosos y la EDAD actual.
+    // Aqui va en una tira compacta de icono+numero en vez de una frase, que es
+    // lo que la hace legible de un vistazo con 30 recursos en juego.
+    float bx = panel.position.x + 16.0f;
+    const float by = panel.position.y + 22.0f;
+    if (catalog.resources != nullptr) {
+        // Por INDICE de recurso, no por orden de catalogo: asi comida, madera y
+        // piedra (0, 1, 2) salen primero, que es el orden que importa. Iterando
+        // por id alfabetico se cortaban justo los tres que se usan.
+        //
+        // Desviacion consciente de AoE2: alli el icono va SOLO, porque con
+        // cuatro recursos se aprenden. Con treinta, dos letras chocan —Cobre y
+        // Comida son "Co"— asi que el nombre corto se queda hasta que haya arte.
+        for (uint32_t idx = 0; idx < chunsa::RESOURCE_COUNT; ++idx) {
+            const uint32_t rid = resource_id_for_stock_index(static_cast<uint8_t>(idx));
+            if (rid == chunsa::INVALID_RESOURCE_ID) continue;
+            if (catalog.resources[rid].appearance_epoch > snap_curr.player_epoch) continue;
+            if (bx + 96.0f > panel.position.x + panel.size.x - 226.0f) break;
+            draw_resource_icon(font, godot::Vector2(bx + 8.0f, by - 5.0f), 8.0f, rid);
+            draw_string(font, godot::Vector2(bx + 20.0f, by),
+                        godot::String::num_int64(snap_curr.stock[idx]) + " " +
+                                resource_display_name(rid).substr(0, 3),
+                        static_cast<godot::HorizontalAlignment>(0), 74.0f, 13, text);
+            bx += 96.0f;
+        }
+    }
+
+    // Poblacion, ociosos y edad a la derecha de la tira, como el bloque de la
+    // derecha de la barra de AoE2.
+    uint32_t idle = 0;
+    const uint32_t cap_i = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    for (uint32_t i = 0; i < cap_i; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;
+        if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) continue;
+        if (snap_curr.eco_state[i] == 0u &&
+            snap_curr.build_target[i] == chunsa::BUILD_NO_TARGET) {
+            ++idle;
+        }
+    }
+    draw_string(font,
+                godot::Vector2(panel.position.x + panel.size.x - 212.0f, by),
+                U("Pobl. ") + godot::String::num_int64(snap_curr.pop_used) + U("/200") +
+                        U("   Ociosos ") + godot::String::num_int64(idle) +
+                        U("   Época ") + godot::String::num_int64(snap_curr.player_epoch),
+                static_cast<godot::HorizontalAlignment>(0), 206.0f, 13, text);
+
+    draw_string(font, panel.position + godot::Vector2(16, 43),
                 U("Pulsa una familia para ver sus recursos individuales"),
-                static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
+                static_cast<godot::HorizontalAlignment>(0), -1, 11, muted);
 
     if (catalog.resources == nullptr) return;
     float y = panel.position.y + 54.0f;
@@ -2194,6 +2258,15 @@ uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) cons
     for (uint32_t k = 0; k < def.research_count && n < max; ++k) {
         out[n++] = PanelSlot{PanelKind::Research, def.researches[k]};
     }
+    // AoE2 pone el avance de edad en el panel del centro urbano. El nuestro es
+    // el edificio que entrena aldeanos, asi que se deduce en vez de cablearlo.
+    bool is_town_center = false;
+    for (uint32_t k = 0; k < def.train_count; ++k) {
+        if (def.trains[k] == uid_citizen) is_town_center = true;
+    }
+    if (is_town_center && n < max) {
+        out[n++] = PanelSlot{PanelKind::EpochUp, 0u};
+    }
     return n;
 }
 
@@ -2206,8 +2279,15 @@ const int32_t* ChunsaSimNode::slot_costs(const PanelSlot& slot) const {
             return slot.id < catalog.unit_count ? catalog.units[slot.id].cost : nullptr;
         case PanelKind::Research:
             return slot.id < catalog.tech_count ? catalog.techs[slot.id].cost : nullptr;
-        default: return nullptr;
+        case PanelKind::EpochUp: {
+            std::memset(epoch_cost_cache, 0, sizeof(epoch_cost_cache));
+            epoch_cost_cache[chunsa::RESOURCE_INDEX_FOOD] = chunsa::EPOCH_COST_A;
+            epoch_cost_cache[chunsa::RESOURCE_INDEX_WOOD] = chunsa::EPOCH_COST_B;
+            epoch_cost_cache[chunsa::RESOURCE_INDEX_STONE] = chunsa::EPOCH_COST_ME;
+            return epoch_cost_cache;
+        }
     }
+    return nullptr;
 }
 
 godot::String ChunsaSimNode::slot_title(const PanelSlot& slot) const {
@@ -2219,7 +2299,7 @@ godot::String ChunsaSimNode::slot_title(const PanelSlot& slot) const {
                                 catalog.building_names[slot.id].record_id_bytes);
         case PanelKind::Train:  return unit_display_name(slot.id);
         case PanelKind::Research: return tech_display_name(slot.id);
-        default: break;
+        case PanelKind::EpochUp:  return U("Subir de época");
     }
     return U("—");
 }
@@ -2236,8 +2316,9 @@ int64_t ChunsaSimNode::slot_time_ticks(const PanelSlot& slot) const {
         case PanelKind::Research:
             return slot.id < catalog.tech_count
                     ? static_cast<int64_t>(catalog.techs[slot.id].research_time_ticks) : 0;
-        default: return 0;
+        case PanelKind::EpochUp: return 0;
     }
+    return 0;
 }
 
 // El motivo que se enseña es el MISMO que daría el kernel, en su mismo orden
@@ -2324,6 +2405,10 @@ godot::String ChunsaSimNode::slot_blocker(const PanelSlot& slot) const {
 
 void ChunsaSimNode::activate_command_slot(const PanelSlot& slot) {
     if (slot.id == UINT32_MAX) return;
+    if (slot.kind == PanelKind::EpochUp) {
+        enqueue_epoch_up();
+        return;
+    }
     if (slot.kind == PanelKind::Build) {
         bid_buildable = slot.id;
         placement_mode = true;
@@ -2519,7 +2604,8 @@ void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
         godot::Color face = slots[i].kind == PanelKind::Research
                 ? godot::Color(0.30, 0.22, 0.09, 1.0)
                 : (slots[i].kind == PanelKind::Train ? godot::Color(0.10, 0.24, 0.38, 1.0)
-                                                     : godot::Color(0.12, 0.30, 0.24, 1.0));
+                   : (slots[i].kind == PanelKind::EpochUp ? godot::Color(0.14, 0.32, 0.52, 1.0)
+                                                          : godot::Color(0.12, 0.30, 0.24, 1.0)));
         if (blocked) face = godot::Color(face.r * 0.42, face.g * 0.42, face.b * 0.42, 1.0);
         draw_rect(cell, face);
 
@@ -2820,7 +2906,7 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
     } else {
         const float actions_y = single_combat_unit || single_citizen ? 126.0f : 116.0f;
         draw_string(font, panel.position + godot::Vector2(16, actions_y),
-                    U("Acciones: clic derecho mueve/recolecta · B construye · R rally"),
+                    U("Clic derecho: mover/recolectar · con edificio: punto de reunión"),
                     static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
 }
@@ -2893,20 +2979,22 @@ void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
                         ++constructors;
                     }
                 }
-                godot::String construction = U("Obra ") +
-                        godot::String::num_int64(snap_curr.build_progress[i]) +
-                        "/" + godot::String::num_int64(def.build_time_ticks) +
-                        U(" · ") + godot::String::num_int64(constructors) +
-                        U(" constructores");
-                if (constructors == 0u) {
-                    construction += U(" · SIN CONSTRUCTOR: no avanza");
-                }
-                draw_string(font, label_pos + godot::Vector2(0, 15),
-                            construction.left(44),
-                            static_cast<godot::HorizontalAlignment>(0), -1, 10,
-                            constructors == 0u
-                                    ? godot::Color(1.0, 0.45, 0.35, 1.0)
-                                    : godot::Color(1.0, 0.7, 0.25, 1.0));
+                // SPEC-006 §27: barra de progreso SOBRE la obra en vez de una
+                // linea de texto. El texto era lo que amontonaba hasta cinco
+                // etiquetas en el centro del mapa; la barra dice lo mismo en una
+                // franja de 4 px. Roja y parada si no trabaja nadie: una obra
+                // detenida sin explicacion es el origen de la sensacion de
+                // "magia" al reves — aparece y no pasa nada.
+                const float bar_w = 34.0f;
+                const float frac = static_cast<float>(snap_curr.build_progress[i]) /
+                        static_cast<float>(def.build_time_ticks);
+                const godot::Vector2 bar_pos = label_pos + godot::Vector2(0.0f, 6.0f);
+                draw_rect(godot::Rect2(bar_pos, godot::Vector2(bar_w, 4.0f)),
+                          godot::Color(0.0, 0.0, 0.0, 0.65));
+                draw_rect(godot::Rect2(bar_pos,
+                                       godot::Vector2(bar_w * std::clamp(frac, 0.0f, 1.0f), 4.0f)),
+                          constructors == 0u ? godot::Color(1.0, 0.35, 0.30, 1.0)
+                                             : godot::Color(0.45, 1.0, 0.55, 1.0));
             }
         } else if (selected_slot_is_current(i)) {
             const godot::Vector2 label_pos = cam3d->unproject_position(

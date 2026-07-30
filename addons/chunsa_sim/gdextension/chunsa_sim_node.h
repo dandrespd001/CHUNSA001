@@ -308,6 +308,8 @@ private:
     static constexpr uint32_t PANEL_SLOTS = PANEL_COLS * PANEL_ROWS;
 
     uint32_t selected_citizen_count() const;
+    uint32_t issue_move_orders(int64_t x_raw, int64_t y_raw);
+    mutable int32_t epoch_cost_cache[chunsa::RESOURCE_COUNT] = {};
     godot::Rect2 command_bar_rect() const;
     uint32_t collect_command_slots(PanelSlot* out, uint32_t max) const;
     void draw_command_bar(const godot::Ref<godot::Font>& font,
