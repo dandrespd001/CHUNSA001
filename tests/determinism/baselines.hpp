@@ -47,8 +47,16 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1107u;
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
 // remotos; winner=1 y las cuatro fases se conservan, fin 12292→9317.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=9317 intacto.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xfb9f9d45c3430ba4ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x738854e75ae38caeull;
-inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 9317u;
+// Sprint 1.8D (contenido, depósitos y costes reales): trayectorias se mueven
+// INTENCIONALMENTE — los nuevos depósitos cubren las épocas 1-4 (cobre/oro/
+// arcilla/sal en el centro, food/wood/stone en zona propia con cantidades
+// 3x) y los costes de unidades/edificios se redimensionan (≤3 recursos cada
+// uno, sin nuevos recursos en coste para no romper regresiones en el catálogo
+// golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
+// hashes y el end_tick son los medidos por el gate canónico contra el CHDB
+// recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x4a565a767939770aull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x2d4b0be72ef4d7d8ull;
+inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 9438u;
 
 }  // namespace chunsa::determinism_baselines

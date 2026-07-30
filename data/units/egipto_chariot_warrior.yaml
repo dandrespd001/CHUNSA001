@@ -10,9 +10,9 @@ class: cavalry
 tags:
   - formation_capable
 resource_costs:
-  chunsa:food: 35
-  chunsa:wood: 20
-  chunsa:stone: 15
+  chunsa:food: 40
+  chunsa:wood: 25
+  chunsa:stone: 20
 stats:
   hp: 85
   attack: 9
