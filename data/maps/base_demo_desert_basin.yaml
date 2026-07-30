@@ -11,68 +11,77 @@ cost_rle:
   - cost: 1
     run: 65536
 resource_spawns:
-  # --- Slot 0 (base en 20500, 128500) — 2 comida + 1 madera + 1 piedra, radio 8–20 tiles ---
-  - kind: resource
-    id: chunsa:food
-    x_millitiles: 28500
-    y_millitiles: 122500
-    amount: 500
+  # Sprint 1.8D — contenido, depósitos y costes reales (SPEC-007 §9.2, SPEC-004
+  # §15.1). 12 depósitos (≤ ECO_MAX_DEPOSITS=32): 8 base espejados (4 pares
+  # food/food/wood/stone, "x_der = 256000 - x_izq", misma Y, mismo amount,
+  # mismo id) + 4 neutros IMPAR sobre el eje central x=128000, y∈[124000,
+  # 132000) (hueco del muro, gs_init_cost_grid). Cubre 7 de los 9 recursos
+  # de las épocas 1-4 (falta plomo y estaño por el límite de 12). Cantidades
+  # subidas para que la apertura de la época 3-4 no agote la zona propia:
+  # base food 500→1500, base wood 500→1000, base stone 500→800. Los neutros
+  # disputados son ahora los 4 metales de la Calcolítica + sal.
+  # --- Slot 0 (centro en 20500, 128500) — base food×2 + wood + stone, radio 8–20 tiles ---
   - kind: resource
     id: chunsa:food
     x_millitiles: 12500
     y_millitiles: 122500
-    amount: 500
+    amount: 1500
+  - kind: resource
+    id: chunsa:food
+    x_millitiles: 28500
+    y_millitiles: 122500
+    amount: 1500
   - kind: resource
     id: chunsa:wood
     x_millitiles: 8500
     y_millitiles: 136500
-    amount: 500
+    amount: 1000
   - kind: resource
     id: chunsa:stone
     x_millitiles: 28500
     y_millitiles: 134500
-    amount: 500
-  # --- Slot 1 (base en 235500, 128500) — espejo x_slot1 = 256000 - x_slot0 ---
-  - kind: resource
-    id: chunsa:food
-    x_millitiles: 227500
-    y_millitiles: 122500
-    amount: 500
+    amount: 800
+  # --- Slot 1 (espejo, x_slot1 = 256000 - x_slot0) ---
   - kind: resource
     id: chunsa:food
     x_millitiles: 243500
     y_millitiles: 122500
-    amount: 500
+    amount: 1500
+  - kind: resource
+    id: chunsa:food
+    x_millitiles: 227500
+    y_millitiles: 122500
+    amount: 1500
   - kind: resource
     id: chunsa:wood
     x_millitiles: 247500
     y_millitiles: 136500
-    amount: 500
+    amount: 1000
   - kind: resource
     id: chunsa:stone
     x_millitiles: 227500
     y_millitiles: 134500
-    amount: 500
-  # --- Neutros centrales (x en 110000–146000), simétricos por parejas ---
-  - kind: resource
-    id: chunsa:food
-    x_millitiles: 114000
-    y_millitiles: 88000
     amount: 800
+  # --- Neutros IMPAR (x=128000, y∈[124000, 132000), 4 depósitos disputados) ---
   - kind: resource
-    id: chunsa:food
-    x_millitiles: 142000
-    y_millitiles: 88000
-    amount: 800
-  - kind: resource
-    id: chunsa:wood
+    id: chunsa:copper
     x_millitiles: 128000
-    y_millitiles: 126000
+    y_millitiles: 125000
+    amount: 1200
+  - kind: resource
+    id: chunsa:gold
+    x_millitiles: 128000
+    y_millitiles: 127000
+    amount: 1000
+  - kind: resource
+    id: chunsa:clay
+    x_millitiles: 128000
+    y_millitiles: 129000
     amount: 800
   - kind: resource
-    id: chunsa:stone
+    id: chunsa:salt
     x_millitiles: 128000
-    y_millitiles: 130000
+    y_millitiles: 131000
     amount: 800
 starting_positions:
   - slot: 0
@@ -96,7 +105,7 @@ provenance:
     verification_reports: []
     sources: []
   balance_design:
-    author: architect
-    rationale: "Mapa sintético de prueba para determinismo y demo; no reconstruye un lugar histórico. Sprint 1.6B (datos de apertura): 12 depósitos resource_spawns (8 de base espejados respecto a x=128000 según x_slot1 = 256000 - x_slot0, 4 neutros en la franja central 110000–146000 también espejados); muro en tile x=128 respetado (ningún depósito en x_millitiles ∈ [127500, 128500]). Composición 2 comida + 1 madera + 1 piedra por jugador; neutros 2 comida + 1 madera + 1 piedra con amount=800 como premio por disputarlos, base amount=500."
+    author: minimax
+    rationale: "Sprint 1.8D: 12 depósitos que cubren 7 de los 9 recursos de las épocas 1-4 (SPEC-007 §9.2): food, wood, stone en zona propia (8 base espejados §15.1) y cobre/oro/arcilla/sal en el centro disputados (4 IMPAR sobre x=128000, en el hueco del muro y∈[124000,132000)). Cantidades subidas (food×1500, wood×1000, stone×800, cobre×1200, oro×1000, arcilla×800, sal×800) para que la apertura no agote la zona propia. Máximo ECO_MAX_DEPOSITS (32 kernel / 64 SPEC-007 §15.5): 12 muy por debajo. Faltan plomo y estaño por restricción de slots; cabrán en un sprint posterior (1.9/1.10) cuando el subconjeto de recursos crezca."
     reviewed_by:
       - architect

@@ -15,7 +15,8 @@ stats:
   hp: 900
 constructible: true
 resource_costs:
-  chunsa:wood: 80
+  chunsa:wood: 60
+  chunsa:stone: 40
 build_time_ticks: 600
 trains:
   - rome:legionary

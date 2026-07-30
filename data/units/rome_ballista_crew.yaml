@@ -9,9 +9,9 @@ epoch_window:
 class: artillery
 tags: []
 resource_costs:
-  chunsa:food: 45
-  chunsa:wood: 25
-  chunsa:stone: 30
+  chunsa:food: 50
+  chunsa:wood: 30
+  chunsa:stone: 25
 stats:
   hp: 70
   attack: 8
