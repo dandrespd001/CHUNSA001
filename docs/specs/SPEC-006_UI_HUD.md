@@ -350,12 +350,31 @@ El kernel es realista; la interfaz no lo cuenta.
 
 ## §20 Todos los edificios construibles
 
-El adaptador debe ofrecer **todos** los `constructible: true` del catálogo de la
-civilización y época del jugador, no uno fijo.
+El adaptador debe ofrecer **todos** los `constructible: true` del catálogo que
+pasen dos filtros, no uno fijo:
 
-Con los datos actuales: establo de carros, granero *shena*, cuartel *castra* y
-*horreum*. La lista sale del catálogo; **añadir un edificio por datos debe
-aparecer en la UI sin tocar código**, igual que los recursos en la Parte III.
+1. **Civilización**: `civ_id` == la del jugador, si tiene una asignada. Hoy la
+   demo **no llama a `gs_set_player_civ`**, así que `player_civ` es
+   `INVALID_CIV_ID` y el filtro no descarta nada — el propio adaptador ya trata
+   ese caso en `append_civilization_detail`.
+2. **Época**: `epoch_window` debe contener la época actual del jugador.
+
+**Cuidado con el conteo, que yo mismo me equivoqué aquí**: los cuatro
+construibles **no coexisten nunca**. Verificado en los datos:
+
+| Edificio | Civ | `epoch_window` | Obra |
+|---|---|---|---|
+| `egipto:chariotry_stable` | egipto | **[3, 4]** | 600 |
+| `egipto:shena_granary` | egipto | **[3, 4]** | 500 |
+| `rome:castra_barracks` | rome | **[5, 5]** | 600 |
+| `rome:horreum` | rome | **[5, 5]** | 500 |
+
+En la época 3–4 de la demo salen **dos**; los romanos aparecen al llegar a la
+**época 5**. Que la lista crezca al subir de época no es un fallo: es la
+Parte III («la interfaz crece con la partida») aplicada a los edificios.
+
+La lista sale del catálogo; **añadir un edificio por datos debe aparecer en la
+UI sin tocar código**, igual que los recursos en la Parte III.
 
 ## §21 Criterios de aceptación
 
@@ -367,8 +386,10 @@ aparecer en la UI sin tocar código**, igual que los recursos en la Parte III.
 5. Colocar un edificio **asigna constructores** automáticamente.
 6. Un sitio sin constructores lo indica en pantalla.
 7. Se ve el progreso de obra y el número de constructores.
-8. La lista de edificios sale del **catálogo**: los cuatro construibles
-   aparecen.
+8. La lista de edificios sale del **catálogo**, filtrada por civilización y
+   `epoch_window`: en la época 3–4 aparecen los **dos** egipcios, y al llegar a
+   la **época 5** aparecen los dos romanos. Una lista fija de uno, o de cuatro,
+   es un fallo por igual.
 9. Marcar un quinto edificio como `constructible` en datos **aparece en la UI
    sin recompilar**.
 10. Verificado en **captura de pantalla real**, no en headless: el HUD de
