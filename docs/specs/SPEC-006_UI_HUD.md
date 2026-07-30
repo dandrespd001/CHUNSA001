@@ -296,3 +296,80 @@ proyecto** y debe conservarse al ampliar a 32 recursos.
 4. La electricidad se muestra como producción/consumo, **nunca** como acumulado.
 5. Un rechazo por stock nombra el recurso y la cantidad que falta.
 6. Con 26 recursos activos, el HUD **no desborda** la pantalla a 1920×1080.
+
+---
+
+# PARTE IV — El HUD expone lo que el kernel ya puede (Sprint 1.8E)
+
+**Origen:** sesión de juego del Director (2026-07-30). Tres carencias reportadas
+que, al investigarlas, resultaron ser **todas de interfaz**: el kernel ya
+soporta lo que falta.
+
+## §17 El diagnóstico
+
+| Reportado | Estado real del kernel | Qué falta |
+|---|---|---|
+| «No se muestra el coste hasta realizar la acción» | El catálogo tiene todos los costes | **Mostrarlos** antes de comprometerse |
+| «Los edificios aparecen por arte de magia» | `construction_system` **ya exige proximidad**: comprueba distancia y camina a la obra | **Asignar constructores** al colocar, y decirlo en pantalla |
+| «No están implementados diversos edificios» | **4 edificios son `constructible: true`** con 500–600 ticks de obra | El adaptador ofrece **solo 1** |
+
+**La conclusión importante: el kernel es más capaz de lo que la interfaz
+expone.** Ninguno de los tres necesita tocar la simulación.
+
+## §18 Costes visibles antes de comprometerse
+
+Hoy el jugador descubre el precio **solo cuando el comando se rechaza**. Es
+información que el catálogo ya tiene.
+
+1. Todo elemento accionable —edificio a colocar, tecnología a investigar,
+   subida de época, unidad a entrenar— muestra su **coste completo** antes de
+   seleccionarlo.
+2. El coste se muestra **por recurso y con nombre real**: «100 de madera,
+   50 de piedra», no «100/50/0».
+3. **Asequibilidad visible**: lo que no puedes pagar se distingue a simple
+   vista, y **cuánto te falta**. El mensaje de rechazo ya lo hace bien
+   (`Faltan 20 de Madera`); llevarlo al momento **anterior** a la decisión.
+4. Los requisitos no económicos también: «Requiere época 4» debe verse **antes**
+   de intentarlo, no después.
+
+**Criterio de diseño**: el jugador no debe aprender el juego por rechazos. Un
+rechazo es una red de seguridad, no un canal de información.
+
+## §19 Construcción: quién la hace y desde dónde
+
+El kernel es realista; la interfaz no lo cuenta.
+
+1. Al colocar un edificio, el adaptador **asigna constructores**: los
+   ciudadanos seleccionados, o si no hay selección, los ociosos más cercanos.
+2. Un sitio de obra **sin constructor asignado** se distingue visualmente y
+   dice **por qué no avanza**. Una obra parada sin explicación es el origen de
+   la sensación de «magia» al revés: aparece y no pasa nada.
+3. Se muestra **progreso** de obra y **cuántos constructores** trabajan en ella.
+4. Los constructores **caminan** hasta el sitio — ya lo hacen; hay que
+   **verlo**.
+
+## §20 Todos los edificios construibles
+
+El adaptador debe ofrecer **todos** los `constructible: true` del catálogo de la
+civilización y época del jugador, no uno fijo.
+
+Con los datos actuales: establo de carros, granero *shena*, cuartel *castra* y
+*horreum*. La lista sale del catálogo; **añadir un edificio por datos debe
+aparecer en la UI sin tocar código**, igual que los recursos en la Parte III.
+
+## §21 Criterios de aceptación
+
+1. El coste de un edificio se ve **antes** de colocarlo, por recurso y con
+   nombre real.
+2. Lo mismo para tecnología, entrenamiento y subida de época.
+3. Un elemento no asequible se distingue y muestra **cuánto falta**.
+4. Un requisito de época se ve **antes** de intentar la acción.
+5. Colocar un edificio **asigna constructores** automáticamente.
+6. Un sitio sin constructores lo indica en pantalla.
+7. Se ve el progreso de obra y el número de constructores.
+8. La lista de edificios sale del **catálogo**: los cuatro construibles
+   aparecen.
+9. Marcar un quinto edificio como `constructible` en datos **aparece en la UI
+   sin recompilar**.
+10. Verificado en **captura de pantalla real**, no en headless: el HUD de
+    costes no desborda a 1920×1080.
