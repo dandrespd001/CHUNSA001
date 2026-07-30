@@ -204,6 +204,13 @@ target_include_directories(chunsa_test_outcome_view PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
 add_test(NAME outcome_view COMMAND chunsa_test_outcome_view)
 
+# --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
+add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
+target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_affordability_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
+add_test(NAME affordability_view COMMAND chunsa_test_affordability_view)
+
 # --- Gate Sprint 0.4: schemas, compilador y golden CHDB ------------------------
 # tools/data_compile requiere PyYAML/jsonschema/referencing (chunsa_data_compiler.py,
 # no parte del juego: solo tooling de datos). El intérprete se elige por el
@@ -284,6 +291,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view data_compile
+                     affordability_view
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---
