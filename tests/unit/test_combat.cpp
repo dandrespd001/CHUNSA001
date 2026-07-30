@@ -479,7 +479,20 @@ int main() {
     }
     const uint32_t total_alive = alive0 + alive1;
 
-    CHECK(alive0 > alive1);                       // ventaja RPS de la caballería
+    // Sprint 1.18 (SPEC-004 Parte VI): AQUI YA NO HAY VENTAJA DE CLASE, y es
+    // correcto. Este escenario usa a proposito el camino de DEPURACION, con
+    // unit_id = INVALID_UNIT_ID: sus unidades no tienen definicion en el
+    // catalogo, asi que no tienen armadura ni bonos. Los contadores dejaron de
+    // ser una tabla cableada en el kernel (rps_mult_bp) y pasaron a ser DATOS
+    // —bonus_vs_bp de cada unidad—, que es justo lo que pedia el sprint.
+    //
+    // La propiedad "la caballeria vence a la artilleria" NO se ha perdido: se
+    // comprueba ahora en test_combat_damage.cpp con los numeros portados de la
+    // tabla antigua, y el desgaste real con catalogo lo ejercita la apertura.
+    // Aqui se afirma lo unico que este escenario puede afirmar: que ambos
+    // bandos se desgastan por igual cuando nadie tiene ventaja de datos.
+    const uint32_t diff = alive0 > alive1 ? alive0 - alive1 : alive1 - alive0;
+    CHECK(diff <= 2u);
     CHECK(total_alive < 2u * N_PER_SIDE);          // el combate ocurrió
 
     const uint64_t checksum1 = state_checksum_v1(*g1);

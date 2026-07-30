@@ -24,6 +24,9 @@ stats:
     pierce: 0
     impact: 0
   attack_damage_type: impact
+bonus_vs_bp:
+  cavalry: -2000
+  infantry: 3000
 playable_period_ids:
   - rome:high_empire
 availability_mode: historical

@@ -58,6 +58,17 @@ int main() {
     CHECK(compute_damage(20, 0, 3333) == 26);
     CHECK(compute_damage(20, 0, -3333) == 14);
 
+    // LOS CONTADORES PORTADOS de la tabla rps_mult_bp que este sprint retira.
+    // Eran multiplicadores cableados en el kernel; ahora son bonus_vs_bp en los
+    // datos de cada unidad, y deben seguir significando LO MISMO:
+    //   caballería vs artillería  x1.3  ->  +3000 bp
+    //   artillería vs caballería  x0.8  ->  -2000 bp
+    // Con ataque 10 y sin armadura: la caballería pega 13 y la artillería 8.
+    // Esa asimetría es la que hacía ganar a la caballería, y sigue en pie.
+    CHECK(compute_damage(10, 0, 3000) == 13);
+    CHECK(compute_damage(10, 0, -2000) == 8);
+    CHECK(compute_damage(10, 0, 3000) > compute_damage(10, 0, -2000));
+
     // Ataque cero: sigue haciendo el mínimo. Una unidad sin ataque no debería
     // atacar, pero si el sistema la deja, no se cuelga en 0.
     CHECK(compute_damage(0, 0, 0) == 1);

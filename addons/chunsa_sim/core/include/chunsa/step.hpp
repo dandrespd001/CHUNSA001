@@ -1113,13 +1113,36 @@ inline void combat_system(GameState& g) noexcept {
         }
 
         if (best != SH_EMPTY) {
-            const int32_t mult = (g.entity_kind[best] == 1u)
-                                ? rps_mult_vs_building_bp(g.unit_class[i])
-                                : (g.unit_class[best] == 3u)
-                                    ? rps_mult_vs_citizen_bp(g.unit_class[i])
-                                    : rps_mult_bp(g.unit_class[i], g.unit_class[best]);
-            const int32_t dmg = static_cast<int32_t>(
-                (static_cast<int64_t>(g.attack[i]) * mult) / 10000);
+            // SPEC-004 Parte VI. La piedra-papel-tijera deja de ser un
+            // multiplicador opaco por clase y pasa a ser DATOS LEGIBLES:
+            // armadura del que recibe y bono del que ataca. El bono sale de
+            // bonus_vs_bp, que hasta hoy se cargaba del blob y NO se usaba en
+            // ninguna parte de la simulacion — dato muerto que ahora vive.
+            int32_t armor_of_type = 0;
+            int32_t bonus_bp = 0;
+            const UnitDefinitionV1* adef = nullptr;
+            if (g.catalog != nullptr && g.unit_id[i] < g.catalog->unit_count) {
+                adef = &g.catalog->units[g.unit_id[i]];
+            }
+            if (adef != nullptr) {
+                const uint32_t dt = static_cast<uint32_t>(adef->attack_type);
+                if (g.entity_kind[best] == 1u) {
+                    if (g.catalog->buildings != nullptr &&
+                        g.building_id[best] < g.catalog->building_count &&
+                        dt < DAMAGE_TYPE_COUNT) {
+                        armor_of_type = g.catalog->buildings[g.building_id[best]].armor[dt];
+                    }
+                } else {
+                    if (g.unit_id[best] < g.catalog->unit_count && dt < DAMAGE_TYPE_COUNT) {
+                        armor_of_type = g.catalog->units[g.unit_id[best]].armor[dt];
+                    }
+                    // El bono va contra la CLASE del objetivo; los edificios no
+                    // son una clase de unidad, asi que no lo reciben.
+                    const uint32_t tc = static_cast<uint32_t>(g.unit_class[best]);
+                    if (tc < 6u) bonus_bp = adef->bonus_vs_bp[tc];
+                }
+            }
+            const int32_t dmg = compute_damage(g.attack[i], armor_of_type, bonus_bp);
             g.hp[best] -= dmg;
             if (g.hp[best] <= 0 && t.alive[best]) {
                 et_mark_dead(g.entities, best);

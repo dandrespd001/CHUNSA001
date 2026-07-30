@@ -25,6 +25,9 @@ stats:
     pierce: 0
     impact: 0
   attack_damage_type: cut
+bonus_vs_bp:
+  artillery: 3000
+  infantry: -2000
 playable_period_ids:
   - egipto:new_kingdom
 availability_mode: historical
