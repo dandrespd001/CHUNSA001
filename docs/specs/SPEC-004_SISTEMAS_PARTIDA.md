@@ -808,3 +808,139 @@ y checksum.
 13. Mutar `order_mode` o `n_projectiles` cambia el checksum.
 14. Un escenario **sin** órdenes de combate es **bit-idéntico** al anterior,
     salvo el bump.
+
+---
+
+# Parte VI — Estadísticas de unidad y combate por tipo de daño (Sprint 1.18)
+
+**Origen**: petición del Director — *«cada una debe tener salud dependiendo de
+su tipo y la unidad como tal, así como tecnologías, armadura para diversos
+tipos de armas, velocidad, daño (con la característica del arma que se usa),
+etc. similar a AoE2»*, y revisar también la reimplementación libre.
+
+## §25 Lo que hay hoy, y un hallazgo
+
+El daño actual es **un multiplicador de piedra-papel-tijera por clase**:
+
+```cpp
+dmg = attack[i] * rps_mult(clase_atacante, clase_objetivo) / 10000;
+hp[best] -= dmg;                                  // step.hpp:1064-1072
+```
+
+**No existe armadura.** Ni una. Un aldeano y un legionario reciben el mismo
+daño de la misma flecha, corregido solo por el multiplicador de clase.
+
+**Y hay dato muerto**: `UnitDefinitionV1::bonus_vs_bp[6]` se declara en el
+esquema, se valida, se compila al blob y se carga… y **no aparece ni una vez en
+`step.hpp`**. Verificado con `grep`: cero usos en la simulación. Es decir,
+llevamos sprints editando un campo que no cambia nada. Se resuelve aquí:
+o se conecta, o se borra; lo que no puede seguir es fingiendo.
+
+## §26 Los dos modelos de referencia
+
+| | AoE2 | 0 A.D. |
+|---|---|---|
+| Tipos de daño | melee / pierce | **hack / pierce / crush** |
+| Armadura | **resta plana** por tipo | **porcentaje** (nivel 1 = 10 %) |
+| Clases de armadura | sí, muchas (caballería, edificio, camello…) | por tipo de daño |
+| Suelo de daño | **mínimo 1** | **mínimo 1** |
+| Bonos | suma por clase; la armadura base **no** los frena | — |
+
+Fuentes: wiki de la serie AoE (vía búsqueda; la página directa da 402) y wiki
+de 0 A.D.
+
+### §26.1 Decisión: resta plana, y por qué
+
+**Se adopta el modelo de AoE2 (resta plana), no el porcentual de 0 A.D.**
+
+El motivo es del kernel, no de gusto: somos **enteros y deterministas, sin
+float**. Una resta es exacta y no admite ambigüedad. Un porcentaje obliga a una
+división y a **fijar para siempre una regla de redondeo** que además hay que
+respetar en cada plataforma; es justo la clase de decisión que produce
+divergencias entre máquinas y que ya nos costó trabajo cerrar con `Fixed64`.
+
+El modelo porcentual es más elegante para equilibrar, y conviene decirlo. Pero
+no compensa el riesgo.
+
+## §27 El modelo
+
+**Tres tipos de daño**, tomando la distinción de 0 A.D. porque separa el asedio
+de lo demás y nosotros vamos a tener quince edades de artillería:
+
+`CORTE` (cuerpo a cuerpo) · `PERFORACIÓN` (proyectiles) · `IMPACTO` (asedio).
+
+Cada unidad y edificio gana:
+
+```
+armor[3]        // resta plana por tipo de daño, >= 0
+attack_type     // el tipo que inflige SU arma
+```
+
+`hp`, `attack`, `speed` y `range` **ya existen** y ya vienen por unidad desde
+datos: lo que falta es la armadura y el tipo.
+
+### §27.1 Fórmula
+
+```
+base   = attack[atacante] - armor[objetivo][tipo_del_arma]
+bono   = bonus_vs_class[atacante][clase_del_objetivo]
+daño   = max(1, base + bono)
+```
+
+- **Nunca por debajo de 1**, como en ambos juegos: una unidad jamás es
+  invulnerable a otra, solo muy resistente.
+- **La armadura no frena el bono**, igual que AoE2. Es lo que hace que un
+  contador sea un contador y no una mejora marginal.
+- `bonus_vs_class` es `bonus_vs_bp` **conectado de verdad**, dejando de ser
+  basis points para ser daño plano.
+
+### §27.2 Lo que sustituye
+
+`rps_mult_bp` desaparece del cálculo. La piedra-papel-tijera deja de ser un
+multiplicador opaco por clase y pasa a ser **datos legibles**: armadura del que
+recibe y bono del que ataca. El comportamiento cambiará; es intencionado.
+
+## §28 Tecnologías que tocan estadísticas
+
+Las tecnologías ya existen pero **solo conceden capacidades**. Aquí ganan
+efectos sobre estadísticas —al estilo de la herrería de AoE2—: `+N` a un tipo
+de armadura, `+N` al ataque, para un conjunto de clases de unidad.
+
+Se aplican al **valor efectivo** en el momento del cálculo, no mutando la
+definición del catálogo: la definición es inmutable y compartida, y mutarla
+haría que la partida dependiera del orden de carga.
+
+## §29 La interfaz de la selección múltiple
+
+**Verificado en AoE2**: al seleccionar dos o más unidades, **los atributos
+dejan de mostrarse** y el panel se llena con los **iconos de las unidades
+seleccionadas**.
+
+Nuestro panel hace hoy lo contrario: agrega HP en una sola barra y pierde de
+vista quién está herido, que es justo lo que el jugador necesita saber.
+
+1. **Una unidad seleccionada** → ficha completa: HP, ataque **con su tipo de
+   daño**, las tres armaduras, velocidad y alcance.
+2. **Dos o más** → **rejilla de iconos**, uno por unidad, cada uno con su
+   **barra de vida individual**. Sin atributos agregados.
+3. La rejilla se **ordena de forma determinista** (índice de slot ascendente)
+   para que no baile entre fotogramas.
+4. **Clic en un icono** selecciona solo esa unidad.
+5. Si no caben todas, se indica **cuántas quedan fuera**; no se miente con un
+   recuento parcial.
+
+## §30 Criterios de aceptación
+
+1. La armadura reduce el daño del **tipo correspondiente** y no de los otros.
+2. El daño **nunca baja de 1**, ni con armadura muy superior al ataque.
+3. El bono contra clase **no lo frena la armadura**.
+4. `bonus_vs_bp` deja de ser dato muerto: **una prueba falla si se ignora**.
+5. Dos unidades del mismo tipo con armaduras distintas reciben daños distintos
+   de la misma fuente.
+6. Una tecnología de armadura sube la efectiva **sin mutar el catálogo**.
+7. Selección de **una** unidad: ficha completa con los tres valores de armadura.
+8. Selección de **varias**: rejilla de iconos con barra de vida por unidad, en
+   orden **determinista**.
+9. Clic en un icono de la rejilla deja seleccionada esa unidad.
+10. El escenario de la apertura sigue terminando con `winner=1` por debajo de
+    36000 ticks: las trayectorias **cambian a propósito**, el resultado no.

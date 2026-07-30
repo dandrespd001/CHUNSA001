@@ -2831,6 +2831,63 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                     static_cast<godot::HorizontalAlignment>(0), -1, 14, muted);
     }
 
+    // SPEC-004 §29: con DOS O MAS seleccionadas, AoE2 deja de mostrar atributos
+    // y llena el panel con los iconos de las unidades. Es lo correcto: la barra
+    // de vida AGREGADA escondia justo lo que hace falta saber — cual esta
+    // herida. Aqui cada icono lleva su propia barra.
+    if (count > 1) {
+        const float cell = 34.0f * k;
+        const float cgap = 4.0f * k;
+        const float ox = panel.position.x + 16.0f * k;
+        const float oy = panel.position.y + 62.0f * k;
+        const uint32_t cols = static_cast<uint32_t>(
+                std::max(1.0f, (panel.size.x - 32.0f * k) / (cell + cgap)));
+        const uint32_t rows = static_cast<uint32_t>(
+                std::max(1.0f, (panel.size.y - 74.0f * k) / (cell + cgap)));
+        const uint32_t fit = cols * rows;
+        uint32_t drawn = 0;
+        // Orden por indice de slot ascendente: determinista, para que la
+        // rejilla no baile entre fotogramas.
+        for (uint32_t i = 0; i < cap && drawn < fit; ++i) {
+            if (!selected_slot_is_current(i)) continue;
+            const float cx = ox + static_cast<float>(drawn % cols) * (cell + cgap);
+            const float cy = oy + static_cast<float>(drawn / cols) * (cell + cgap);
+            const godot::Rect2 icon(godot::Vector2(cx, cy), godot::Vector2(cell, cell));
+            const bool is_building = snap_curr.entity_kind[i] == 1u;
+            godot::Color face = is_building ? godot::Color(0.16, 0.24, 0.34, 1.0)
+                                            : godot::Color(0.12, 0.20, 0.30, 1.0);
+            draw_rect(icon, face);
+            draw_rect(icon, godot::Color(0.0, 0.0, 0.0, 0.5), false, 1.0f);
+            draw_string(font, godot::Vector2(cx + 3.0f * k, cy + cell * 0.55f),
+                        slot_display_name(i).substr(0, 2),
+                        static_cast<godot::HorizontalAlignment>(1),
+                        cell - 6.0f * k, static_cast<int32_t>(13.0f), text);
+            // Barra de vida individual: es el dato que se perdia al agregar.
+            const float ratio = snap_curr.max_hp[i] > 0
+                    ? std::clamp(static_cast<float>(snap_curr.hp[i]) /
+                                         static_cast<float>(snap_curr.max_hp[i]),
+                                 0.0f, 1.0f)
+                    : 0.0f;
+            const godot::Rect2 hb(godot::Vector2(cx + 2.0f * k, cy + cell - 6.0f * k),
+                                  godot::Vector2(cell - 4.0f * k, 3.0f * k));
+            draw_rect(hb, godot::Color(0.18, 0.12, 0.15, 1.0));
+            draw_rect(godot::Rect2(hb.position, godot::Vector2(hb.size.x * ratio, hb.size.y)),
+                      ratio > 0.5f ? godot::Color(0.25, 0.85, 0.35, 1.0)
+                                   : godot::Color(0.95, 0.65, 0.20, 1.0));
+            ++drawn;
+        }
+        if (static_cast<uint32_t>(count) > drawn) {
+            // No se miente con un recuento parcial: se dice cuantas faltan.
+            draw_string(font,
+                        godot::Vector2(ox, panel.position.y + panel.size.y - 8.0f * k),
+                        U("+") + godot::String::num_int64(count - static_cast<int32_t>(drawn)) +
+                                U(" más"),
+                        static_cast<godot::HorizontalAlignment>(0),
+                        panel.size.x - 32.0f * k, 11, muted);
+        }
+        return;
+    }
+
     const float hp_ratio = max_hp_sum > 0
             ? std::clamp(static_cast<float>(hp_sum) / static_cast<float>(max_hp_sum), 0.0f, 1.0f)
             : 0.0f;
