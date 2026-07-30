@@ -13,6 +13,7 @@
 
 #include "chunsa/sha256.hpp"
 #include "chunsa/resources.hpp"
+#include "chunsa/combat_damage.hpp"
 // Sprint 1.6B (SPEC-004 §16): conversión mt→raw de resource_spawns (FX_ONE_RAW)
 // y el cap kernel de depósitos por mapa (ECO_MAX_DEPOSITS) — single source of
 // truth en vez de duplicar el número mágico 32/65536 en este loader. Ninguno
@@ -125,6 +126,11 @@ struct UnitDefinitionV1 {
     int32_t morale;
     int32_t build_time_ticks;
     int32_t bonus_vs_bp[6];
+    // Sprint 1.18 (SPEC-004 Parte VI): armadura PLANA por tipo de dano y tipo
+    // de arma propio. Antes no existia armadura ninguna: un aldeano y un
+    // legionario recibian lo mismo de la misma flecha.
+    int32_t armor[DAMAGE_TYPE_COUNT];
+    DamageTypeV1 attack_type;
     // Sprint 1.8A (SPEC-007 §9.3/§11): vector completo de costes (de
     // resource_costs, ausente=0). A/B/Me conservan los índices 0/1/2 y
     // 3..31 quedan en cero hasta que existan datos de recursos ampliados.
@@ -268,6 +274,9 @@ struct BuildingDefinitionV1 {
     // RecipeId hacia la tabla plana del catalogo.
     RecipeId recipes[RECIPES_PER_BUILDING_MAX];
     uint8_t  recipe_count;
+    // Sprint 1.18: los edificios tambien tienen armadura por tipo (no atacan,
+    // asi que no llevan attack_type).
+    int32_t  armor[DAMAGE_TYPE_COUNT];
     // resto de campos del schema (grants_capabilities/...) NO tipados
 };
 
@@ -749,6 +758,8 @@ inline bool is_known_stats_key(const std::string& k) noexcept {
     static constexpr const char* T[] = {
         "hp", "attack", "range_millitiles", "speed_millitile_tick", "morale",
         "build_time_ticks",
+        // Sprint 1.18 (SPEC-004 Parte VI)
+        "armor", "attack_damage_type",
     };
     for (const char* t : T) if (k == t) return true;
     return false;
@@ -794,6 +805,33 @@ inline bool resolve_resource_index(
 // Sprint 1.9: variante con NOMBRE de campo, para `input_resource_costs` de las
 // recetas. La logica es identica; extraerla evita una segunda copia que pueda
 // divergir en las validaciones de rango.
+// Sprint 1.18: armadura por tipo de dano, dentro de `stats`. Los tres campos
+// son obligatorios en el esquema, asi que su ausencia es SchemaMismatch y no
+// un cero silencioso: un cero por defecto en armadura seria una unidad
+// invulnerable-por-descuido que nadie detectaria mirando los datos.
+inline void parse_armor(const CveValue& stats, int32_t (&armor)[DAMAGE_TYPE_COUNT],
+                        CatalogLoadCode range_fail) {
+    const CveValue* a = stats.find("armor");
+    if (!a || !a->is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+    static const char* const kKeys[DAMAGE_TYPE_COUNT] = {"cut", "pierce", "impact"};
+    for (uint32_t k = 0; k < DAMAGE_TYPE_COUNT; ++k) {
+        const CveValue* v = a->find(kKeys[k]);
+        if (!v || !v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (v->i < 0 || v->i > 100000) fail(range_fail);
+        armor[k] = static_cast<int32_t>(v->i);
+    }
+}
+
+inline DamageTypeV1 parse_damage_type(const CveValue& stats, CatalogLoadCode range_fail) {
+    const CveValue* v = stats.find("attack_damage_type");
+    if (!v || !v->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+    if (v->s == "cut") return DamageTypeV1::Cut;
+    if (v->s == "pierce") return DamageTypeV1::Pierce;
+    if (v->s == "impact") return DamageTypeV1::Impact;
+    fail(range_fail);
+    return DamageTypeV1::Cut;
+}
+
 inline void parse_named_resource_costs(const CveValue& obj,
                                        const char* key,
                                        int32_t (&cost)[RESOURCE_COUNT],
@@ -1020,6 +1058,8 @@ inline UnitDefinitionV1 build_unit_definition(const CveValue& obj, UnitId id,
     def.attack = static_cast<int32_t>(attack);
     def.range_millitiles = static_cast<int32_t>(range_mt);
     def.speed_millitile_tick = static_cast<int32_t>(speed);
+    parse_armor(*stats, def.armor, CatalogLoadCode::InvalidUnit);
+    def.attack_type = parse_damage_type(*stats, CatalogLoadCode::InvalidUnit);
     def.morale = static_cast<int32_t>(morale);
     def.build_time_ticks = static_cast<int32_t>(build_time);
     for (int k = 0; k < 6; ++k) def.bonus_vs_bp[k] = 0;
@@ -1098,6 +1138,8 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     const CveValue* hpv = stats->find("hp");
     if (!hpv || !hpv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
     if (hpv->i < 1 || hpv->i > 10000000) fail(CatalogLoadCode::InvalidBuilding);
+    int32_t building_armor[DAMAGE_TYPE_COUNT] = {};
+    parse_armor(*stats, building_armor, CatalogLoadCode::InvalidBuilding);
 
     const CveValue* constructible_v = obj.find("constructible");
     if (!constructible_v || !(constructible_v->tag == 0x01u || constructible_v->tag == 0x02u)) {
@@ -1176,6 +1218,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     raw_out.civ_id = civ_v->s;
 
     BuildingDefinitionV1 def{};
+    for (uint32_t k = 0; k < DAMAGE_TYPE_COUNT; ++k) def.armor[k] = building_armor[k];
     def.id = id;
     def.civ_id = INVALID_CIV_ID;  // resuelto más tarde por load_impl
     def.hp = static_cast<int32_t>(hpv->i);

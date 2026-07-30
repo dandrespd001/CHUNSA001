@@ -159,7 +159,11 @@ inline std::vector<uint8_t> build(const BuildingSpec& spec) {
         {"height_cells", cve_int(spec.height)},
         {"width_cells", cve_int(spec.width)},
     });
-    auto stats = cve_obj({ {"hp", cve_int(spec.hp)} });
+    // Sprint 1.18: `armor` es obligatorio en stats. Claves en orden canonico.
+    auto armor = cve_obj({
+        {"cut", cve_int(0)}, {"impact", cve_int(0)}, {"pierce", cve_int(0)},
+    });
+    auto stats = cve_obj({ {"armor", armor}, {"hp", cve_int(spec.hp)} });
     auto costs = cve_obj({
         {"A", cve_int(spec.cost_a)},
         {"B", cve_int(spec.cost_b)},
@@ -270,8 +274,8 @@ int main() {
     // data/compiled/chunsa_base.chdb.content.json, que es la declaración del
     // compilador y ha coincidido con este golden en todos los sprints previos.
     static constexpr uint8_t kExpectedHash[32] = {
-        0x2b, 0x90, 0xa7, 0xe2, 0x85, 0x60, 0x33, 0x7d, 0xdb, 0x5b, 0x7f, 0x27, 0x8a, 0x25, 0xa8, 0x67,
-        0x43, 0xe0, 0x29, 0x4f, 0xb2, 0x7c, 0x4d, 0x4c, 0x69, 0xe9, 0x29, 0xc9, 0xe9, 0x9d, 0xda, 0x14,
+        0x98, 0x8b, 0x9a, 0x0e, 0x1f, 0x73, 0x11, 0xed, 0x6e, 0x9f, 0x90, 0xe9, 0xdf, 0x5e, 0x31, 0x22,
+        0x54, 0x43, 0x51, 0x33, 0xe3, 0x89, 0x79, 0xb7, 0xee, 0x4f, 0x1c, 0x96, 0xa9, 0xfd, 0xad, 0xb5,
     };
     CHECK(std::memcmp(cat.content_hash.bytes, kExpectedHash, 32) == 0);
     CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 1);

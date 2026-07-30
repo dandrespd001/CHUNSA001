@@ -141,8 +141,17 @@ inline std::vector<uint8_t> unit_obj(const std::string& id, const std::string& c
                                      const std::string& cls, int64_t epoch_min, int64_t epoch_max,
                                      int64_t hp, int64_t attack, int64_t range_mt,
                                      int64_t speed, int64_t morale, int64_t build_time) {
+    // Sprint 1.18: armadura y tipo de arma son OBLIGATORIOS en stats. Las
+    // claves van en orden canonico (ascendente), como el resto del CVE.
+    auto armor = cve_obj({
+        {"cut", cve_int(0)},
+        {"impact", cve_int(0)},
+        {"pierce", cve_int(0)},
+    });
     auto stats = cve_obj({
+        {"armor", armor},
         {"attack", cve_int(attack)},
+        {"attack_damage_type", cve_str("cut")},
         {"build_time_ticks", cve_int(build_time)},
         {"hp", cve_int(hp)},
         {"morale", cve_int(morale)},

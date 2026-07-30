@@ -18,6 +18,11 @@ stats:
   speed_millitile_tick: 55
   morale: 45
   build_time_ticks: 300
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: cut
 playable_period_ids:
   - egipto:old_kingdom
   - egipto:new_kingdom

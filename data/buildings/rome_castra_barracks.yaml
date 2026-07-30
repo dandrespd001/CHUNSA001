@@ -13,6 +13,10 @@ footprint:
   blocks_movement: true
 stats:
   hp: 900
+  armor:
+    cut: 2
+    pierce: 6
+    impact: 0
 constructible: true
 resource_costs:
   chunsa:wood: 60

@@ -19,6 +19,11 @@ stats:
   speed_millitile_tick: 35
   morale: 50
   build_time_ticks: 700
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: impact
 playable_period_ids:
   - rome:high_empire
 availability_mode: historical
