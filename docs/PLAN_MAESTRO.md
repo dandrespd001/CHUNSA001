@@ -360,6 +360,22 @@ rechaza sin revisar el código.
 | **1.12** | **SPEC-007 §15** | **Fuentes construidas**: granjas (comida) y plantaciones forestales (madera, edad 7+) · fuentes naturales del mapa | Comida sostenible · las 20 pruebas de §15.6+§16.5 · **100+ granjas** sin fallo · fuente nueva **solo por datos** |
 | **1.13** | **SPEC-004 §24** | `ATTACK`, `ATTACK_MOVE`, proyectiles con viaje | **CIERRE MECÁNICO DE FASE 1** · las 14 pruebas de §24.7 · partida completa desde aldeanos hasta victoria sin comandos de debug |
 
+#### Divergencias de jugabilidad frente a AoE2 (investigación propia, 2026-07-30)
+
+`docs/research/AOE2_INTERFAZ_Y_JUGABILIDAD.md`. **Lo que ya coincide** y conviene
+no tocar: los aldeanos entregan en el **edificio de depósito más cercano**
+(`find_building_dropoff`), así que colocar bien los edificios ya es habilidad,
+igual que los campamentos madereros de AoE2; y subir de época ya exige **dos
+edificios completos de la época actual** más coste y tiempo, que es la misma
+idea que AoE2. Lo que se aleja, por impacto:
+
+| Sprint | Divergencia | Entrega | DoD |
+|---|---|---|---|
+| **1.14** | **Población fija de 200 sin casas.** En AoE2 se sube de 25 en 25 construyendo casas, y es una tarea constante que compite por madera y castiga el descuido. Es lo que más cambia el ritmo de partida | Tope de población derivado de edificios que lo otorgan, por datos (no una constante) | Quedarse sin población **bloquea entrenar** y se ve por qué · `POP_CAP_V1` deja de ser constante · escenario anterior bit-idéntico si nadie construye casas |
+| **1.15** | **Sin botón de aldeano ocioso.** En AoE2 es de las ayudas más usadas — y **nuestro HUD ya cuenta los ociosos**, solo falta saltar a ellos | Botón y tecla que seleccionan y centran en el siguiente ocioso, cíclico | Presentación pura, cero kernel · orden **determinista** (índice ascendente) para que no salte al azar |
+| **1.16** | **Sin saturación por campamento.** AoE2 satura en torno a 8 aldeanos por campamento; hoy nada desincentiva amontonarlos | Rendimiento decreciente por depósito | Amontonar deja de ser óptimo y se nota jugando |
+| **1.17** | **Sin mercado.** Con 30 recursos, quedarse sin uno es más probable que en AoE2, no menos: sin mercado es un callejón sin salida | Trueque con precio que se mueve con cada operación | Determinista y sin float · no permite generar recursos de la nada |
+
 **Delegación** (`DELEGACION_MODELOS.md`, actualizada 2026-07-28): contratos,
 revisión e integración = **Arquitecto**; kernel y sanitizers = **GPT-5.6 SOL**;
 adaptador Godot = **GPT-5.6 Luna**; datos y catálogo = **MiniMax M3**;

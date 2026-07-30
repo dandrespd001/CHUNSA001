@@ -455,13 +455,35 @@ coste se pone en **rojo**, pero el botón **no se oculta ni se desactiva** · el
 panel va **abajo a la derecha** · un edificio en obra muestra **barra de
 progreso sobre el edificio** y **número de aldeanos** en el panel de selección.
 
-**NO verificado, así que lo decido yo y lo digo**: rejilla de **5 columnas × 3
-filas** (es el canon de Age of Kings, y con nuestro contenido sobra) · teclas
-`Q W E R T / A S D F G / Z X C V B` por posición · tamaño de botón 56 px.
+**Verificado después, en `docs/research/AOE2_INTERFAZ_Y_JUGABILIDAD.md`** (lo
+investigué yo tras la segunda petición del Director):
+
+- **Barra superior**: recursos a la izquierda, **edad en el centro**, chat y
+  diplomacia a la derecha. **Nuestro HUD ya coincide** en los recursos.
+- **Barra inferior**: la barra de comandos e información, con el minimapa.
+  **Corrección de una afirmación mía**: escribí «el panel va abajo a la
+  derecha». Es inexacto — ocupa la parte **inferior**.
+- **Rejilla 3 filas × 5 columnas** con las teclas colocadas como en el teclado:
+  `Q W E R T / A S D F G / Z X C V B`. Mi 5×3 era correcto, pero lo era **por
+  suerte**: lo había puesto como decisión mía por falta de fuente.
+- **Convención de contenido**: unidades y estructuras principales en la fila de
+  arriba (Q–T); mejoras y tecnologías en las filas media y baja.
+- **Páginas de construcción**: un aldeano no ve todos los edificios de golpe.
+  `Q` abre los **económicos**, `W` los **militares**, `V` da acceso a más.
+
+**Sigue siendo decisión mía**: tamaño de botón 56 px.
+
+### §23.1 La paginación no es un adorno
+
+AoE2 la necesita con cuatro edades. Nosotros tenemos **quince**, así que vamos a
+tener muchos más edificios que ellos. **La paginación es la solución al problema
+que vamos a tener**, no una copia estética. Entra en el diseño desde el
+principio, aunque hoy con dos edificios no haga falta.
 
 ## §24 El panel
 
-1. **Uno solo**, abajo a la derecha, encima del minimapa. Rejilla 5×3.
+1. **Uno solo**, en una **barra inferior**, con el minimapa a su lado.
+   Rejilla 3×5 con las teclas por posición.
 2. **Su contenido depende de la selección**, como en AoE2:
    - Aldeanos seleccionados → **edificios construibles**.
    - Edificio productor seleccionado → **unidades que entrena** y
@@ -544,3 +566,8 @@ solo el dibujado**, y ése se verifica con captura mirada.
     **sin recompilar**.
 11. `panel_items_for` y `button_state` tienen pruebas, en **fase roja primero**.
 12. Verificado en **captura real mirada** a 1920×1080, sin mojibake.
+13. Las teclas siguen la **posición en la rejilla** (`Q W E R T / A S D F G /
+    Z X C V B`), no el nombre del elemento.
+14. **Si los elementos no caben en 15 huecos, se pagina** y la paginación se ve.
+    Con dos edificios hoy no se ejercita, pero la política debe existir y estar
+    probada: con 15 edades vamos a tener más edificios que AoE2, no menos.
