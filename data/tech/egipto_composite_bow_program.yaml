@@ -21,6 +21,11 @@ grants:
   buildings: []
   capabilities:
     - egipto:composite_bow_craft
+stat_effects:
+  - stat: attack
+    amount: 2
+    applies_to:
+      - cavalry
 playable_period_ids:
   - egipto:new_kingdom
 availability_mode: historical

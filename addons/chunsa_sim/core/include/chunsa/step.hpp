@@ -1003,6 +1003,32 @@ inline void citizen_move_system(GameState& g) noexcept {
     }
 }
 
+// SPEC-004 §28: bono de tecnologia sobre una estadistica, para el jugador dado
+// y la clase de unidad dada. Recorre las tecnologias YA INVESTIGADAS por ese
+// jugador y suma los efectos que casan.
+//
+// Se calcula aqui, sobre el valor EFECTIVO, y NUNCA se muta la definicion del
+// catalogo: es inmutable y COMPARTIDA entre jugadores, asi que mutarla le
+// aplicaria a un bando las mejoras del otro.
+//
+// Coste: O(tecnologias del catalogo) por golpe. Con 4 techs es ruido; cuando
+// haya cientos habra que precalcularlo una vez por tick por jugador, que es el
+// patron que ya usan la zona aliada y la lista de objetivos economicos.
+inline int32_t player_tech_bonus(const GameState& g, uint8_t player,
+                                 StatEffectV1 which, uint8_t unit_class) noexcept {
+    if (g.catalog == nullptr || g.catalog->techs == nullptr) return 0;
+    if (player >= MAX_EMITTERS) return 0;
+    int32_t total = 0;
+    for (uint32_t t = 0; t < g.catalog->tech_count; ++t) {
+        const uint32_t w = t / 64u, b = t % 64u;
+        if (w >= TECH_WORDS) break;
+        if (((g.player_techs[player][w] >> b) & 1u) == 0u) continue;
+        const TechDefinitionV1& td = g.catalog->techs[t];
+        total += tech_stat_bonus(td.stat_effects, td.stat_effect_count, which, unit_class);
+    }
+    return total;
+}
+
 // Multiplicador RPS en basis points (10000 = 100%), tabla congelada (doc 07_COMBATE):
 //            tgt=inf  tgt=cav  tgt=art
 // atk=inf     10000    10000    10000
@@ -1142,7 +1168,27 @@ inline void combat_system(GameState& g) noexcept {
                     if (tc < 6u) bonus_bp = adef->bonus_vs_bp[tc];
                 }
             }
-            const int32_t dmg = compute_damage(g.attack[i], armor_of_type, bonus_bp);
+            // Efectos de tecnologia sobre el valor EFECTIVO (SPEC-004 §28):
+            // el ataque lo mejora quien golpea, la armadura quien recibe.
+            int32_t eff_attack = g.attack[i];
+            if (adef != nullptr) {
+                eff_attack += player_tech_bonus(g, g.owner[i], StatEffectV1::Attack,
+                                                g.unit_class[i]);
+                if (eff_attack < 0) eff_attack = 0;
+                if (g.entity_kind[best] == 0u) {
+                    static constexpr StatEffectV1 kArmorOf[DAMAGE_TYPE_COUNT] = {
+                        StatEffectV1::ArmorCut, StatEffectV1::ArmorPierce,
+                        StatEffectV1::ArmorImpact,
+                    };
+                    const uint32_t dt2 = static_cast<uint32_t>(adef->attack_type);
+                    if (dt2 < DAMAGE_TYPE_COUNT) {
+                        armor_of_type += player_tech_bonus(g, g.owner[best], kArmorOf[dt2],
+                                                           g.unit_class[best]);
+                        if (armor_of_type < 0) armor_of_type = 0;
+                    }
+                }
+            }
+            const int32_t dmg = compute_damage(eff_attack, armor_of_type, bonus_bp);
             g.hp[best] -= dmg;
             if (g.hp[best] <= 0 && t.alive[best]) {
                 et_mark_dead(g.entities, best);

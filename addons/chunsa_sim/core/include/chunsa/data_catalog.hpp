@@ -300,6 +300,10 @@ struct TechDefinitionV1 {
     uint8_t grant_count;
     TechId mutually_exclusive_with[TECH_MUTEX_MAX];
     uint8_t mutex_count;
+    // Sprint 1.18 §28: efectos sobre estadisticas (herreria). Opcionales: una
+    // tech sin `stat_effects` sigue siendo valida y no suma nada.
+    TechEffectV1 stat_effects[TECH_EFFECTS_MAX];
+    uint8_t stat_effect_count;
     // required_buildings del schema NO se tipa aquí: el kernel gatea
     // RESEARCH_TECH por `tech ∈ BuildingDefinitionV1::researches` (relación
     // inversa, ver §11.1), no por este campo (deviación documentada en el
@@ -809,6 +813,50 @@ inline bool resolve_resource_index(
 // son obligatorios en el esquema, asi que su ausencia es SchemaMismatch y no
 // un cero silencioso: un cero por defecto en armadura seria una unidad
 // invulnerable-por-descuido que nadie detectaria mirando los datos.
+// Sprint 1.18 §28: `stat_effects` de una tecnologia. OPCIONAL: su ausencia no
+// es error (una tech puede conceder solo capacidades).
+inline void parse_stat_effects(const CveValue& obj,
+                               TechEffectV1 (&out)[TECH_EFFECTS_MAX],
+                               uint8_t& out_count,
+                               CatalogLoadCode range_fail) {
+    out_count = 0;
+    const CveValue* arr = obj.find("stat_effects");
+    if (!arr) return;
+    if (!arr->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
+    if (arr->arr.size() > TECH_EFFECTS_MAX) fail(range_fail);
+    for (const auto& item : arr->arr) {
+        if (!item.is_obj()) fail(CatalogLoadCode::SchemaMismatch);
+        TechEffectV1 e{};
+        const CveValue* st = item.find("stat");
+        if (!st || !st->is_str()) fail(CatalogLoadCode::SchemaMismatch);
+        if (st->s == "attack") e.stat = StatEffectV1::Attack;
+        else if (st->s == "armor_cut") e.stat = StatEffectV1::ArmorCut;
+        else if (st->s == "armor_pierce") e.stat = StatEffectV1::ArmorPierce;
+        else if (st->s == "armor_impact") e.stat = StatEffectV1::ArmorImpact;
+        else fail(range_fail);
+        const CveValue* am = item.find("amount");
+        if (!am || !am->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (am->i < -1000 || am->i > 1000) fail(range_fail);
+        e.amount = static_cast<int32_t>(am->i);
+        const CveValue* ap = item.find("applies_to");
+        if (!ap || !ap->is_arr() || ap->arr.empty()) fail(CatalogLoadCode::SchemaMismatch);
+        e.class_mask = 0;
+        for (const auto& c : ap->arr) {
+            if (!c.is_str()) fail(CatalogLoadCode::SchemaMismatch);
+            uint8_t idx = 0xFFu;
+            if (c.s == "infantry") idx = 0;
+            else if (c.s == "cavalry") idx = 1;
+            else if (c.s == "artillery") idx = 2;
+            else if (c.s == "citizen") idx = 3;
+            else if (c.s == "siege") idx = 4;
+            else if (c.s == "naval_light") idx = 5;
+            else fail(range_fail);
+            e.class_mask = static_cast<uint8_t>(e.class_mask | (1u << idx));
+        }
+        out[out_count++] = e;
+    }
+}
+
 inline void parse_armor(const CveValue& stats, int32_t (&armor)[DAMAGE_TYPE_COUNT],
                         CatalogLoadCode range_fail) {
     const CveValue* a = stats.find("armor");
@@ -1297,6 +1345,8 @@ inline TechDefinitionV1 build_tech_definition(
         resource_ids, resource_indices);
 
     def.prereq_count = 0; def.grant_count = 0; def.mutex_count = 0;
+    parse_stat_effects(obj, def.stat_effects, def.stat_effect_count,
+                       CatalogLoadCode::InvalidTech);
     for (uint32_t k = 0; k < TECH_PREREQ_MAX; ++k) def.prerequisites[k] = INVALID_TECH_ID;
     for (uint32_t k = 0; k < TECH_GRANT_MAX; ++k) def.grants[k] = INVALID_CAPABILITY_ID;
     for (uint32_t k = 0; k < TECH_MUTEX_MAX; ++k) def.mutually_exclusive_with[k] = INVALID_TECH_ID;

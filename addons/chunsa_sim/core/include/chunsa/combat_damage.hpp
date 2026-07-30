@@ -48,4 +48,42 @@ inline int32_t compute_damage(int32_t attack,
     return static_cast<int32_t>(total);
 }
 
+// Sprint 1.18 fase 4 (SPEC-004 §28): efectos de tecnologia sobre estadisticas,
+// al estilo de la herreria de AoE2.
+enum class StatEffectV1 : uint8_t {
+    Attack = 0,
+    ArmorCut = 1,
+    ArmorPierce = 2,
+    ArmorImpact = 3,
+};
+inline constexpr uint32_t TECH_EFFECTS_MAX = 4;
+
+struct TechEffectV1 {
+    StatEffectV1 stat;
+    int32_t      amount;      // suma PLANA al valor efectivo
+    uint8_t      class_mask;  // un bit por unit_class (0..5); 0 = a nadie
+};
+
+// Suma los efectos que coinciden EN ESTADISTICA Y EN CLASE. Se acumulan: es lo
+// que permite encadenar mejoras de herreria sin que una pise a la otra.
+//
+// Se aplica al VALOR EFECTIVO en el momento del calculo; la definicion del
+// catalogo NO se toca. Mutarla haria que la partida dependiera del orden de
+// carga y del orden en que cada jugador investiga, y el catalogo es compartido
+// entre jugadores: la mejora de uno se le aplicaria al otro.
+inline int32_t tech_stat_bonus(const TechEffectV1* effects,
+                               uint32_t count,
+                               StatEffectV1 which,
+                               uint8_t unit_class) noexcept {
+    if (effects == nullptr || unit_class >= 8u) return 0;
+    const uint8_t bit = static_cast<uint8_t>(1u << unit_class);
+    int64_t total = 0;
+    for (uint32_t k = 0; k < count; ++k) {
+        if (effects[k].stat != which) continue;
+        if ((effects[k].class_mask & bit) == 0u) continue;
+        total += effects[k].amount;
+    }
+    return static_cast<int32_t>(total);
+}
+
 }  // namespace chunsa

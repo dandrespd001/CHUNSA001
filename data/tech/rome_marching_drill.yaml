@@ -21,6 +21,15 @@ grants:
   buildings: []
   capabilities:
     - rome:legion_drill
+stat_effects:
+  - stat: armor_cut
+    amount: 1
+    applies_to:
+      - infantry
+  - stat: armor_pierce
+    amount: 1
+    applies_to:
+      - infantry
 playable_period_ids:
   - rome:republican_expansion
   - rome:high_empire
