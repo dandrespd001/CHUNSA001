@@ -394,3 +394,131 @@ UI sin tocar código**, igual que los recursos en la Parte III.
    sin recompilar**.
 10. Verificado en **captura de pantalla real**, no en headless: el HUD de
     costes no desborda a 1920×1080.
+
+---
+
+# Parte V — Panel de comandos al estilo AoE2 (Sprint 1.8H)
+
+**Origen**: corrección del Director tras ver el 1.8E — *«para ver los costos no
+quiero que sea como está, debe ser parecido a AoE2, tanto para construcciones,
+para investigaciones y entrenar unidades como funciona ahí»*.
+
+## §22 Qué falla en lo que hay
+
+El 1.8E resolvió el problema de fondo —el coste se ve antes de actuar— pero con
+la forma equivocada, y **solo para edificios**:
+
+| | Hoy | AoE2 |
+|---|---|---|
+| Forma | Lista vertical de texto, 3 renglones por elemento | Rejilla de botones con icono |
+| Cuándo se ve el coste | **Siempre**, ocupando pantalla | Al **pasar el ratón** |
+| Coste | Frase: «30 de Piedra · 60 de Madera» | **Icono + número**, uno por recurso |
+| Entrenar unidades | **No existe** | Mismo panel |
+| Investigar | **No existe** | Mismo panel |
+
+Que el coste esté permanentemente en pantalla es además lo que agrava el
+solapamiento del §1.8G: menos texto fijo, mapa más legible. Las dos cosas se
+arreglan a la vez.
+
+## §23 Lo verificado y lo que decido yo
+
+Investigación en `docs/research/UI_COSTES_AOE2.md`. **Las fuentes de AoE2
+devolvieron 402/403 casi en bloque**, así que muchos detalles quedaron
+**NO VERIFICADO** y el investigador lo declaró en vez de inventar citas.
+
+**Verificado o firme**: el coste vive en un **tooltip al pasar el ratón**, no en
+el botón · se representa como **icono de recurso + número entero** · junto al
+coste aparecen **tiempo** y **tecla rápida** · lo impagable se **atenúa** y el
+coste se pone en **rojo**, pero el botón **no se oculta ni se desactiva** · el
+panel va **abajo a la derecha** · un edificio en obra muestra **barra de
+progreso sobre el edificio** y **número de aldeanos** en el panel de selección.
+
+**NO verificado, así que lo decido yo y lo digo**: rejilla de **5 columnas × 3
+filas** (es el canon de Age of Kings, y con nuestro contenido sobra) · teclas
+`Q W E R T / A S D F G / Z X C V B` por posición · tamaño de botón 56 px.
+
+## §24 El panel
+
+1. **Uno solo**, abajo a la derecha, encima del minimapa. Rejilla 5×3.
+2. **Su contenido depende de la selección**, como en AoE2:
+   - Aldeanos seleccionados → **edificios construibles**.
+   - Edificio productor seleccionado → **unidades que entrena** y
+     **tecnologías que investiga**, en ese orden.
+   - Centro seleccionado → además **subir de época**.
+   - Nada seleccionado → panel vacío, no un panel de construcción colgado.
+3. **Botón**: icono, tecla rápida en una esquina, y el número en cola si lo hay.
+4. **Filtrado por civilización y `epoch_window`**, como en la Parte IV. Lo
+   bloqueado por época **se ve atenuado**, no se oculta: enseñar lo que viene
+   es parte de enseñar el juego.
+
+## §25 El tooltip — es la pieza central
+
+Al pasar el ratón, junto al puntero:
+
+```
+Establo de carros                        [Q]
+─────────────────────────────────────────────
+Coste    ● 60 Madera   ● 30 Piedra
+Obra     600 t
+─────────────────────────────────────────────
+Faltan 60 Madera                      (rojo)
+```
+
+1. **Un renglón por recurso**, icono a la izquierda y número entero. **Nunca
+   una frase corrida**: es lo que obligaba a truncar a media palabra.
+2. **El recurso que falta va en rojo**, solo ese, no el bloque entero. Es más
+   preciso que AoE2 y conserva el «cuánto falta» que ya funcionaba bien.
+3. **Tiempo** siempre, en ticks.
+4. **El motivo de bloqueo no económico** en la última línea: «Requiere época 5»,
+   «No pertenece a tu civilización». Sigue valiendo el criterio §18: *el
+   jugador no debe aprender el juego por rechazos*.
+5. El tooltip **no se sale de la pantalla**: si no cabe a la derecha del
+   puntero, se dibuja a la izquierda. Sin truncar nunca.
+
+## §26 Iconos sin arte
+
+No tenemos arte, y esto **no debe bloquear el sprint**.
+
+- Un icono es un **disco de color de la familia** (`resource_family_color`, ya
+  existe) con la **abreviatura de dos letras** del recurso encima. Distingue
+  cobre de estaño, que comparten familia y color.
+- **Toda la pintura de iconos pasa por una única función** `draw_resource_icon`.
+  Sustituir esto por arte real debe ser cambiar **esa función y nada más**.
+
+## §27 Obra en curso
+
+- **Barra de progreso sobre el edificio** en el mundo, no una línea de texto.
+  Sustituye a la línea actual y **quita ruido del centro del mapa**.
+- Barra **roja y parada** si no hay constructores; el texto «SIN CONSTRUCTOR»
+  pasa al panel de selección.
+- El panel de selección muestra **aldeanos trabajando** y **tiempo restante**.
+
+## §28 Qué es probable y qué no
+
+La política pura va a `command_panel_view.hpp`, con pruebas, siguiendo
+`fog_view` / `outcome_view` / `affordability_view`:
+
+- `panel_items_for(selección, civ, época, catálogo)` → qué botones y en qué
+  orden.
+- `button_state(asequibilidad, bloqueo)` → `NORMAL` · `ATENUADO_POR_COSTE` ·
+  `ATENUADO_POR_EPOCA` · `NO_DISPONIBLE`.
+
+Ambas son funciones puras de sus entradas. **Lo que no se puede probar así es
+solo el dibujado**, y ése se verifica con captura mirada.
+
+## §29 Criterios de aceptación
+
+1. El coste **ya no está permanentemente en pantalla**: aparece al pasar el
+   ratón.
+2. El tooltip muestra **un renglón por recurso** con icono y número.
+3. **Construir, entrenar e investigar** usan el mismo panel y el mismo tooltip.
+4. Entrenar e investigar **muestran coste**, cosa que hoy no ocurre.
+5. Lo impagable se **atenúa** y marca en rojo **solo el recurso que falta**.
+6. Lo bloqueado por época **se ve atenuado**, con el motivo en el tooltip.
+7. El contenido del panel **cambia con la selección**.
+8. El tooltip **nunca** se sale de la pantalla ni se trunca a media palabra.
+9. Un edificio en obra muestra **barra de progreso**, roja si nadie trabaja.
+10. Añadir un edificio, unidad o tecnología **por datos** aparece en el panel
+    **sin recompilar**.
+11. `panel_items_for` y `button_state` tienen pruebas, en **fase roja primero**.
+12. Verificado en **captura real mirada** a 1920×1080, sin mojibake.
