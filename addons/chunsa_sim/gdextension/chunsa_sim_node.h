@@ -294,6 +294,46 @@ private:
                               const godot::Color& muted);
     void draw_world_overlay(const godot::Ref<godot::Font>& font,
                             const godot::Color& text);
+
+    // Sprint 1.8H (SPEC-006 Parte V): la barra de comandos de abajo, rejilla
+    // 3x5 con las teclas por posición (Q W E R T / A S D F G / Z X C V B).
+    // Construir, entrenar e investigar comparten panel, botón y tooltip.
+    enum class PanelKind : uint8_t { Build = 0, Train = 1, Research = 2, EpochUp = 3 };
+    struct PanelSlot {
+        PanelKind kind;
+        uint32_t id;
+    };
+    static constexpr uint32_t PANEL_COLS = 5u;
+    static constexpr uint32_t PANEL_ROWS = 3u;
+    static constexpr uint32_t PANEL_SLOTS = PANEL_COLS * PANEL_ROWS;
+
+    uint32_t selected_citizen_count() const;
+    godot::Rect2 command_bar_rect() const;
+    uint32_t collect_command_slots(PanelSlot* out, uint32_t max) const;
+    void draw_command_bar(const godot::Ref<godot::Font>& font,
+                          const godot::Color& text,
+                          const godot::Color& muted);
+    void activate_command_slot(const PanelSlot& slot);
+    const int32_t* slot_costs(const PanelSlot& slot) const;
+    godot::String slot_title(const PanelSlot& slot) const;
+    int64_t slot_time_ticks(const PanelSlot& slot) const;
+    godot::String slot_blocker(const PanelSlot& slot) const;
+
+    // Sprint 1.8H (SPEC-006 Parte V). El icono de recurso pasa SIEMPRE por
+    // aquí: es el único punto que hay que cambiar el día que exista arte.
+    void draw_resource_icon(const godot::Ref<godot::Font>& font,
+                            const godot::Vector2& center,
+                            float radius,
+                            uint32_t resource_id);
+    // Tooltip al estilo AoE2: un renglón por recurso, icono y número, con el
+    // que falta en rojo. Se coloca solo para no salirse de la pantalla.
+    void draw_cost_tooltip(const godot::Ref<godot::Font>& font,
+                           const godot::Vector2& anchor,
+                           const godot::String& title,
+                           const godot::String& hotkey,
+                           const int32_t* costs,
+                           int64_t time_ticks,
+                           const godot::String& blocker);
     void update_pan_key(godot::Key code, bool pressed);
 
 protected:

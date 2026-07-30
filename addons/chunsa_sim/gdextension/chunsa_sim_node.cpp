@@ -2,6 +2,7 @@
 #include "affordability_view.hpp"
 #include "fog_view.hpp"
 #include "outcome_view.hpp"
+#include "command_panel_view.hpp"
 
 // chunsa_sim — ChunsaSimNode (Sprint 1.4, skirmish jugable: humano contra IA,
 // combate + moral + economía visibles). El kernel avanza a 20 Hz en un hilo;
@@ -665,7 +666,6 @@ void ChunsaSimNode::_draw() {
     const godot::Color muted(0.72, 0.82, 0.9, 1.0);
     draw_world_overlay(font, text);
     draw_resource_hud(font, text, muted);
-    draw_building_catalog(font, text, muted);
 
     uint32_t constructing = 0;
     uint32_t idle = 0;
@@ -753,6 +753,10 @@ void ChunsaSimNode::_draw() {
                         : godot::Color(1.0, 0.45, 0.35, 1.0));
 
     draw_selection_panel(font, text, muted);
+    // La barra de comandos se dibuja DESPUES del panel de seleccion: su tooltip
+    // tiene que quedar por encima de todo, y en la primera version el panel la
+    // tapaba entera.
+    draw_command_bar(font, text, muted);
     draw_minimap(font, text);
 
     if (snap_curr.game_over != 0u) {
@@ -1764,26 +1768,30 @@ void ChunsaSimNode::recenter_from_minimap(const godot::Vector2& screen) {
 }
 
 bool ChunsaSimNode::handle_hud_press(const godot::Vector2& screen) {
-    if (placement_mode && building_catalog_rect().has_point(screen)) {
-        const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
-        uint32_t row = 0;
-        const godot::Rect2 panel = building_catalog_rect();
-        for (uint32_t building_id = 0; building_id < catalog.building_count;
-             ++building_id) {
-            if (!building_available(building_id)) continue;
-            const godot::Rect2 row_rect(
-                    godot::Vector2(panel.position.x + 8.0f,
-                                   panel.position.y + 50.0f +
-                                           static_cast<float>(row) * 52.0f),
-                    godot::Vector2(panel.size.x - 16.0f, 49.0f));
-            if (row_rect.has_point(screen)) {
-                bid_buildable = building_id;
-                queue_redraw();
-                return true;
+    // SPEC-006 Parte V: la barra de comandos atiende PRIMERO, y con la misma
+    // geometria con la que se dibuja (rejilla 3x5 de 56 px). Construir,
+    // entrenar e investigar entran por aqui, sin tres caminos distintos.
+    {
+        const godot::Rect2 bar = command_bar_rect();
+        if (bar.has_point(screen)) {
+            PanelSlot slots[PANEL_SLOTS];
+            const uint32_t count = collect_command_slots(slots, PANEL_SLOTS);
+            const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+            for (uint32_t i = 0; i < count && i < PANEL_SLOTS; ++i) {
+                if (slots[i].id == UINT32_MAX) continue;
+                const float bx = bar.position.x + pad +
+                        static_cast<float>(i % PANEL_COLS) * (btn + gap);
+                const float by = bar.position.y + pad + 18.0f +
+                        static_cast<float>(i / PANEL_COLS) * (btn + gap);
+                if (godot::Rect2(godot::Vector2(bx, by),
+                                 godot::Vector2(btn, btn)).has_point(screen)) {
+                    activate_command_slot(slots[i]);
+                    queue_redraw();
+                    return true;
+                }
             }
-            ++row;
+            return true;
         }
-        return true;
     }
     if (minimap_rect().has_point(screen)) {
         recenter_from_minimap(screen);
@@ -2116,6 +2124,432 @@ void ChunsaSimNode::draw_building_catalog(const godot::Ref<godot::Font>& font,
     }
 }
 
+// SPEC-006 §24: la barra de comandos va ABAJO (verificado en la investigación
+// propia; mi primera versión del SPEC decía «abajo a la derecha» y era
+// inexacto), junto al minimapa. Rejilla 3x5 de 56 px.
+// Cuantos ciudadanos propios hay seleccionados. Mismo criterio que usa el
+// encolado de construccion, extraido para que la barra de comandos decida que
+// pagina mostrar sin duplicar la condicion.
+uint32_t ChunsaSimNode::selected_citizen_count() const {
+    if (!have_curr) return 0u;
+    const uint32_t cap = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < cap; ++i) {
+        if (!selected_slot_is_current(i) || snap_curr.owner[i] != 0u ||
+            snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) {
+            continue;
+        }
+        ++n;
+    }
+    return n;
+}
+
+godot::Rect2 ChunsaSimNode::command_bar_rect() const {
+    const godot::Vector2 vp = get_viewport()->get_visible_rect().size;
+    const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+    const float w = static_cast<float>(PANEL_COLS) * btn +
+            static_cast<float>(PANEL_COLS - 1u) * gap + pad * 2.0f;
+    const float h = static_cast<float>(PANEL_ROWS) * btn +
+            static_cast<float>(PANEL_ROWS - 1u) * gap + pad * 2.0f + 18.0f;
+    const godot::Rect2 mini = minimap_rect();
+    float x = mini.position.x - w - 12.0f;
+    if (x < 12.0f) x = 12.0f;
+    return godot::Rect2(godot::Vector2(x, vp.y - h - 12.0f), godot::Vector2(w, h));
+}
+
+// Qué botones hay AHORA depende de la selección, como en AoE2: aldeanos →
+// edificios; edificio productor → lo que entrena y lo que investiga.
+uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) const {
+    if (out == nullptr || !have_curr) return 0u;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    uint32_t n = 0;
+
+    const bool citizens_selected = selected_citizen_count() > 0u;
+    if (citizens_selected) {
+        for (uint32_t bid = 0; bid < catalog.building_count && n < max; ++bid) {
+            const chunsa::BuildingDefinitionV1& def = catalog.buildings[bid];
+            if (def.constructible == 0u) continue;
+            const bool civ_ok = snap_curr.player_civ == chunsa::INVALID_CIV_ID ||
+                    def.civ_id == snap_curr.player_civ;
+            if (!chunsa::presentation::panel_item_visible(
+                        def.epoch_min, def.epoch_max, snap_curr.player_epoch, civ_ok)) {
+                continue;
+            }
+            out[n++] = PanelSlot{PanelKind::Build, bid};
+        }
+        return n;
+    }
+
+    const int32_t sel = selected_single_building_slot();
+    if (sel < 0 || snap_curr.building_id[sel] >= catalog.building_count) return 0u;
+    const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[sel]];
+    // Fila de arriba para lo que se produce, filas de abajo para tecnologías:
+    // es la convención de AoE2 y sale gratis si se emiten en este orden.
+    for (uint32_t k = 0; k < def.train_count && n < max; ++k) {
+        out[n++] = PanelSlot{PanelKind::Train, def.trains[k]};
+    }
+    while (n % PANEL_COLS != 0u && n < max) {
+        out[n++] = PanelSlot{PanelKind::Build, UINT32_MAX};  // hueco
+    }
+    for (uint32_t k = 0; k < def.research_count && n < max; ++k) {
+        out[n++] = PanelSlot{PanelKind::Research, def.researches[k]};
+    }
+    return n;
+}
+
+const int32_t* ChunsaSimNode::slot_costs(const PanelSlot& slot) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    switch (slot.kind) {
+        case PanelKind::Build:
+            return slot.id < catalog.building_count ? catalog.buildings[slot.id].cost : nullptr;
+        case PanelKind::Train:
+            return slot.id < catalog.unit_count ? catalog.units[slot.id].cost : nullptr;
+        case PanelKind::Research:
+            return slot.id < catalog.tech_count ? catalog.techs[slot.id].cost : nullptr;
+        default: return nullptr;
+    }
+}
+
+godot::String ChunsaSimNode::slot_title(const PanelSlot& slot) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    switch (slot.kind) {
+        case PanelKind::Build:
+            if (slot.id >= catalog.building_count || catalog.building_names == nullptr) break;
+            return catalog_name(catalog.building_names[slot.id].record_id_utf8,
+                                catalog.building_names[slot.id].record_id_bytes);
+        case PanelKind::Train:  return unit_display_name(slot.id);
+        case PanelKind::Research: return tech_display_name(slot.id);
+        default: break;
+    }
+    return U("—");
+}
+
+int64_t ChunsaSimNode::slot_time_ticks(const PanelSlot& slot) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    switch (slot.kind) {
+        case PanelKind::Build:
+            return slot.id < catalog.building_count
+                    ? static_cast<int64_t>(catalog.buildings[slot.id].build_time_ticks) : 0;
+        case PanelKind::Train:
+            return slot.id < catalog.unit_count
+                    ? static_cast<int64_t>(catalog.units[slot.id].build_time_ticks) : 0;
+        case PanelKind::Research:
+            return slot.id < catalog.tech_count
+                    ? static_cast<int64_t>(catalog.techs[slot.id].research_time_ticks) : 0;
+        default: return 0;
+    }
+}
+
+// El motivo que se enseña es el MISMO que daría el kernel, en su mismo orden
+// (command_panel_view.hpp). Decir «te falta madera» cuando lo que falta es la
+// edad haría al jugador juntar madera para siempre.
+godot::String ChunsaSimNode::slot_blocker(const PanelSlot& slot) const {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    chunsa::presentation::ButtonGating g{};
+    g.belongs_to_player_civ = true;
+    g.epoch_reached = true;
+    g.otherwise_blocked = false;
+    uint8_t required_epoch = 0;
+
+    const int32_t* costs = slot_costs(slot);
+    g.affordable = costs != nullptr &&
+            chunsa::presentation::assess_affordability(
+                    costs, snap_curr.stock, chunsa::RESOURCE_COUNT).affordable;
+
+    const int32_t sel = selected_single_building_slot();
+    switch (slot.kind) {
+        case PanelKind::Build: {
+            if (slot.id >= catalog.building_count) return godot::String();
+            const chunsa::BuildingDefinitionV1& d = catalog.buildings[slot.id];
+            g.belongs_to_player_civ = snap_curr.player_civ == chunsa::INVALID_CIV_ID ||
+                    d.civ_id == snap_curr.player_civ;
+            g.epoch_reached = chunsa::presentation::window_epoch_reached(
+                    d.epoch_min, d.epoch_max, snap_curr.player_epoch);
+            required_epoch = d.epoch_min;
+            break;
+        }
+        case PanelKind::Train: {
+            if (slot.id >= catalog.unit_count) return godot::String();
+            const chunsa::UnitDefinitionV1& d = catalog.units[slot.id];
+            g.epoch_reached = chunsa::presentation::window_epoch_reached(
+                    d.epoch_min, d.epoch_max, snap_curr.player_epoch);
+            required_epoch = d.epoch_min;
+            // OJO: presentation_rejection_explanation tambien informa de coste
+            // y epoca, asi que usarlo tal cual como "otro bloqueo" clasificaba
+            // una falta de stock como NO DISPONIBLE y se saltaba la precedencia
+            // que command_panel_view existe para imponer. Solo cuenta como otro
+            // bloqueo lo que queda cuando coste y epoca estan en orden.
+            g.otherwise_blocked = g.affordable && g.epoch_reached &&
+                    !presentation_rejection_explanation(
+                            chunsa::CommandType::TRAIN_UNIT,
+                            static_cast<uint32_t>(sel < 0 ? 0 : sel), slot.id).is_empty();
+            break;
+        }
+        case PanelKind::Research: {
+            if (slot.id >= catalog.tech_count) return godot::String();
+            const chunsa::TechDefinitionV1& d = catalog.techs[slot.id];
+            g.epoch_reached = chunsa::presentation::tech_epoch_reached(
+                    d.epoch, snap_curr.player_epoch);
+            required_epoch = d.epoch;
+            g.otherwise_blocked = g.affordable && g.epoch_reached &&
+                    !presentation_rejection_explanation(
+                            chunsa::CommandType::RESEARCH_TECH,
+                            static_cast<uint32_t>(sel < 0 ? 0 : sel), slot.id).is_empty();
+            break;
+        }
+        default: break;
+    }
+
+    switch (chunsa::presentation::button_state(g)) {
+        case chunsa::presentation::ButtonState::AVAILABLE:
+            return godot::String();
+        case chunsa::presentation::ButtonState::DIMMED_EPOCH:
+            return U("Requiere época ") + godot::String::num_int64(required_epoch);
+        case chunsa::presentation::ButtonState::DIMMED_COST:
+            return missing_summary(costs);
+        case chunsa::presentation::ButtonState::UNAVAILABLE: {
+            const godot::String detail = slot.kind == PanelKind::Build
+                    ? presentation_rejection_explanation(
+                              chunsa::CommandType::PLACE_BUILDING, UINT32_MAX, slot.id)
+                    : presentation_rejection_explanation(
+                              slot.kind == PanelKind::Research
+                                      ? chunsa::CommandType::RESEARCH_TECH
+                                      : chunsa::CommandType::TRAIN_UNIT,
+                              static_cast<uint32_t>(sel < 0 ? 0 : sel), slot.id);
+            return detail.is_empty() ? U("No disponible") : detail;
+        }
+    }
+    return godot::String();
+}
+
+void ChunsaSimNode::activate_command_slot(const PanelSlot& slot) {
+    if (slot.id == UINT32_MAX) return;
+    if (slot.kind == PanelKind::Build) {
+        bid_buildable = slot.id;
+        placement_mode = true;
+        queue_redraw();
+        return;
+    }
+    const int32_t sel = selected_single_building_slot();
+    if (sel < 0) return;
+    const chunsa::BuildingDefinitionV1& def =
+            catalog_storage.catalog().buildings[snap_curr.building_id[sel]];
+    const bool research = slot.kind == PanelKind::Research;
+    const uint32_t count = research ? def.research_count : def.train_count;
+    for (uint32_t k = 0; k < count; ++k) {
+        const uint32_t id = research ? def.researches[k] : def.trains[k];
+        if (id == slot.id) {
+            enqueue_selected_action(k, research);
+            return;
+        }
+    }
+}
+
+// SPEC-006 §26. Sin arte, un icono es un disco del color de la familia con la
+// abreviatura de dos letras encima: el color solo no basta porque cobre, estaño
+// y oro comparten familia y se confundirían. TODO el dibujo de iconos pasa por
+// aquí, así que meter arte real será cambiar esta función y nada más.
+void ChunsaSimNode::draw_resource_icon(const godot::Ref<godot::Font>& font,
+                                       const godot::Vector2& center,
+                                       float radius,
+                                       uint32_t resource_id) {
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+    const godot::Color fill = resource_color(catalog, resource_id);
+    draw_circle(center, radius, fill);
+    draw_circle(center, radius, godot::Color(0.0, 0.0, 0.0, 0.55), false, 1.0f);
+
+    const godot::String name = resource_display_name(resource_id);
+    if (name.is_empty()) return;
+    // Dos letras: la inicial en mayúscula y la siguiente en minúscula, que es
+    // como se distingue "Ma"dera de "Me"na sin depender del color.
+    godot::String tag = name.substr(0, 2);
+    if (font.is_valid()) {
+        // Texto oscuro o claro según lo claro que sea el disco, para que la
+        // abreviatura se lea sobre cualquier familia.
+        const float luma = 0.299f * static_cast<float>(fill.r) +
+                0.587f * static_cast<float>(fill.g) +
+                0.114f * static_cast<float>(fill.b);
+        const godot::Color on_icon = luma > 0.55f ? godot::Color(0.05, 0.05, 0.07, 1.0)
+                                                  : godot::Color(1.0, 1.0, 1.0, 1.0);
+        draw_string(font, center + godot::Vector2(-radius, radius * 0.42f), tag,
+                    static_cast<godot::HorizontalAlignment>(1), radius * 2.0f,
+                    static_cast<int32_t>(radius * 1.15f), on_icon);
+    }
+}
+
+// SPEC-006 §25. Un renglón por recurso, nunca una frase corrida: la frase es lo
+// que obligaba a truncar a media palabra («… · Falt»). El tooltip crece con su
+// contenido y se reposiciona para no salirse de la pantalla.
+void ChunsaSimNode::draw_cost_tooltip(const godot::Ref<godot::Font>& font,
+                                      const godot::Vector2& anchor,
+                                      const godot::String& title,
+                                      const godot::String& hotkey,
+                                      const int32_t* costs,
+                                      int64_t time_ticks,
+                                      const godot::String& blocker) {
+    if (!font.is_valid() || costs == nullptr) return;
+    const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
+
+    // Qué recursos entran y cuáles faltan, con la política ya probada.
+    const chunsa::presentation::AffordabilityResult afford =
+            chunsa::presentation::assess_affordability(
+                    costs, snap_curr.stock, chunsa::RESOURCE_COUNT);
+
+    uint32_t rows = 0;
+    for (uint32_t rid = 0; rid < catalog.resource_count; ++rid) {
+        const uint32_t idx = catalog.resources[rid].index;
+        if (idx < chunsa::RESOURCE_COUNT && costs[idx] > 0) ++rows;
+    }
+
+    const float line_h = 19.0f;
+    const float pad = 10.0f;
+    const float width = 250.0f;
+    const float height = pad + 22.0f                              // título
+            + static_cast<float>(rows) * line_h                   // costes
+            + line_h                                              // tiempo
+            + (blocker.is_empty() ? 0.0f : line_h)                // motivo
+            + pad;
+
+    // Colocación: a la derecha del cursor si cabe, si no a la izquierda; y
+    // subiendo si se saldría por abajo. Nunca fuera de pantalla (§25.5).
+    const godot::Vector2 viewport = get_viewport()->get_visible_rect().size;
+    float x = anchor.x + 18.0f;
+    if (x + width > viewport.x - 8.0f) x = anchor.x - width - 18.0f;
+    if (x < 8.0f) x = 8.0f;
+    float y = anchor.y + 12.0f;
+    if (y + height > viewport.y - 8.0f) y = viewport.y - height - 8.0f;
+    if (y < 8.0f) y = 8.0f;
+
+    const godot::Rect2 box(godot::Vector2(x, y), godot::Vector2(width, height));
+    draw_rect(box, godot::Color(0.02, 0.035, 0.06, 0.97));
+    draw_rect(box, godot::Color(0.45, 0.6, 0.8, 0.9), false, 1.0f);
+
+    const godot::Color text(0.92, 0.95, 1.0, 1.0);
+    const godot::Color muted(0.62, 0.7, 0.82, 1.0);
+    const godot::Color bad(1.0, 0.42, 0.34, 1.0);
+
+    float cy = y + pad + 13.0f;
+    draw_string(font, godot::Vector2(x + pad, cy), title,
+                static_cast<godot::HorizontalAlignment>(0), width - pad * 2.0f - 28.0f,
+                14, text);
+    if (!hotkey.is_empty()) {
+        draw_string(font, godot::Vector2(x + width - pad - 24.0f, cy),
+                    U("[") + hotkey + U("]"),
+                    static_cast<godot::HorizontalAlignment>(0), 26.0f, 13, muted);
+    }
+    cy += 20.0f;
+
+    for (uint32_t rid = 0; rid < catalog.resource_count; ++rid) {
+        const uint32_t idx = catalog.resources[rid].index;
+        if (idx >= chunsa::RESOURCE_COUNT || costs[idx] <= 0) continue;
+        bool short_of = false;
+        for (uint32_t m = 0; m < afford.missing_count; ++m) {
+            if (afford.missing[m].resource_index == idx) short_of = true;
+        }
+        draw_resource_icon(font, godot::Vector2(x + pad + 7.0f, cy - 4.0f), 7.0f, rid);
+        draw_string(font, godot::Vector2(x + pad + 20.0f, cy),
+                    godot::String::num_int64(costs[idx]) + " " +
+                            resource_display_name(rid),
+                    static_cast<godot::HorizontalAlignment>(0),
+                    width - pad * 2.0f - 20.0f, 12, short_of ? bad : muted);
+        cy += line_h;
+    }
+
+    draw_string(font, godot::Vector2(x + pad, cy),
+                U("Tiempo ") + godot::String::num_int64(time_ticks) + U(" t"),
+                static_cast<godot::HorizontalAlignment>(0),
+                width - pad * 2.0f, 12, muted);
+    cy += line_h;
+
+    if (!blocker.is_empty()) {
+        draw_string(font, godot::Vector2(x + pad, cy), blocker,
+                    static_cast<godot::HorizontalAlignment>(0),
+                    width - pad * 2.0f, 12, bad);
+    }
+}
+
+// Las teclas van por POSICIÓN en la rejilla, no por nombre: es lo que hace que
+// la memoria muscular funcione aunque cambie el contenido (verificado en AoE2,
+// docs/research/AOE2_INTERFAZ_Y_JUGABILIDAD.md).
+static const char* const PANEL_HOTKEYS[15] = {
+    "Q", "W", "E", "R", "T",
+    "A", "S", "D", "F", "G",
+    "Z", "X", "C", "V", "B",
+};
+
+void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
+                                     const godot::Color& text,
+                                     const godot::Color& muted) {
+    PanelSlot slots[PANEL_SLOTS];
+    const uint32_t count = collect_command_slots(slots, PANEL_SLOTS);
+
+    const godot::Rect2 bar = command_bar_rect();
+    draw_rect(bar, godot::Color(0.03, 0.05, 0.08, 0.94));
+    draw_rect(bar, godot::Color(0.3, 0.4, 0.55, 0.8), false, 1.0f);
+
+    const godot::String header = selected_citizen_count() > 0u
+            ? U("CONSTRUIR")
+            : (selected_single_building_slot() >= 0 ? U("PRODUCIR E INVESTIGAR")
+                                                    : U("Sin selección"));
+    draw_string(font, bar.position + godot::Vector2(10.0f, 15.0f), header,
+                static_cast<godot::HorizontalAlignment>(0), bar.size.x - 20.0f, 12, muted);
+
+    if (count == 0u) {
+        draw_string(font, bar.position + godot::Vector2(10.0f, 40.0f),
+                    U("Selecciona aldeanos o un edificio"),
+                    static_cast<godot::HorizontalAlignment>(0),
+                    bar.size.x - 20.0f, 11, muted);
+        return;
+    }
+
+    const float btn = 56.0f, gap = 4.0f, pad = 10.0f;
+    int32_t hovered = -1;
+    for (uint32_t i = 0; i < count && i < PANEL_SLOTS; ++i) {
+        if (slots[i].id == UINT32_MAX) continue;  // hueco de relleno
+        const float bx = bar.position.x + pad +
+                static_cast<float>(i % PANEL_COLS) * (btn + gap);
+        const float by = bar.position.y + pad + 18.0f +
+                static_cast<float>(i / PANEL_COLS) * (btn + gap);
+        const godot::Rect2 cell(godot::Vector2(bx, by), godot::Vector2(btn, btn));
+
+        const godot::String blocker = slot_blocker(slots[i]);
+        const bool blocked = !blocker.is_empty();
+        // Atenuado, NO oculto ni desactivado: enseñar lo que viene es parte de
+        // enseñar el juego, y ocultarlo obliga a aprender por rechazos.
+        godot::Color face = slots[i].kind == PanelKind::Research
+                ? godot::Color(0.30, 0.22, 0.09, 1.0)
+                : (slots[i].kind == PanelKind::Train ? godot::Color(0.10, 0.24, 0.38, 1.0)
+                                                     : godot::Color(0.12, 0.30, 0.24, 1.0));
+        if (blocked) face = godot::Color(face.r * 0.42, face.g * 0.42, face.b * 0.42, 1.0);
+        draw_rect(cell, face);
+
+        if (cell.has_point(cursor_screen)) {
+            hovered = static_cast<int32_t>(i);
+            draw_rect(cell, godot::Color(0.85, 0.92, 1.0, 0.9), false, 2.0f);
+        } else {
+            draw_rect(cell, godot::Color(0.0, 0.0, 0.0, 0.5), false, 1.0f);
+        }
+
+        const godot::Color label = blocked ? godot::Color(0.62, 0.62, 0.66, 1.0) : text;
+        const godot::String title = slot_title(slots[i]);
+        draw_string(font, godot::Vector2(bx + 5.0f, by + 26.0f), title.substr(0, 2),
+                    static_cast<godot::HorizontalAlignment>(1), btn - 10.0f, 20, label);
+        draw_string(font, godot::Vector2(bx + 5.0f, by + 44.0f), title,
+                    static_cast<godot::HorizontalAlignment>(1), btn - 10.0f, 9, label);
+        draw_string(font, godot::Vector2(bx + 4.0f, by + 12.0f),
+                    U(PANEL_HOTKEYS[i]), static_cast<godot::HorizontalAlignment>(0),
+                    16.0f, 10, godot::Color(1.0, 0.85, 0.4, 0.95));
+    }
+
+    // El tooltip se dibuja el ÚLTIMO para que quede por encima de todo.
+    if (hovered >= 0) {
+        const PanelSlot& s = slots[hovered];
+        draw_cost_tooltip(font, cursor_screen, slot_title(s),
+                          U(PANEL_HOTKEYS[hovered]), slot_costs(s),
+                          slot_time_ticks(s), slot_blocker(s));
+    }
+}
+
 void ChunsaSimNode::draw_minimap(const godot::Ref<godot::Font>& font,
                                  const godot::Color& text) {
     const godot::Rect2 panel = minimap_rect();
@@ -2363,73 +2797,10 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
                                 ? godot::Color(1.0, 0.45, 0.35, 1.0)
                                 : godot::Color(1.0, 0.7, 0.25, 1.0));
         }
-        const godot::Rect2 train_tab(panel.position + godot::Vector2(16, 114),
-                                     godot::Vector2(75, 26));
-        const godot::Rect2 tech_tab(panel.position + godot::Vector2(97, 114),
-                                    godot::Vector2(75, 26));
-        draw_rect(train_tab, research_mode ? godot::Color(0.08, 0.12, 0.17, 1.0)
-                                           : godot::Color(0.14, 0.35, 0.55, 1.0));
-        draw_rect(tech_tab, research_mode ? godot::Color(0.55, 0.35, 0.12, 1.0)
-                                          : godot::Color(0.08, 0.12, 0.17, 1.0));
-        draw_string(font, train_tab.position + godot::Vector2(12, 18), "TRAIN",
-                    static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
-        draw_string(font, tech_tab.position + godot::Vector2(14, 18), "TECH",
-                    static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
-
-        const uint32_t action_count = research_mode ? def.research_count : def.train_count;
-        const float button_w = (panel.size.x - 50.0f) / 4.0f;
-        const float button_h = 56.0f;
-        const float gap = 6.0f;
-        for (uint32_t k = 0; k < action_count && k < 8u; ++k) {
-            const float x = panel.position.x + 16.0f +
-                    static_cast<float>(k % 4u) * (button_w + gap);
-            const float y = panel.position.y + 149.0f +
-                    static_cast<float>(k / 4u) * (button_h + gap);
-            const uint32_t id = research_mode ? def.researches[k] : def.trains[k];
-            godot::String label = research_mode ? U("Investigar ") : U("Entrenar ");
-            label += research_mode ? tech_display_name(id) : unit_display_name(id);
-            const int32_t* costs = research_mode
-                    ? catalog_storage.catalog().techs[id].cost
-                    : catalog_storage.catalog().units[id].cost;
-            const godot::String detail = presentation_rejection_explanation(
-                    research_mode ? chunsa::CommandType::RESEARCH_TECH
-                                   : chunsa::CommandType::TRAIN_UNIT,
-                    static_cast<uint32_t>(selected_building), id);
-            const bool affordable = chunsa::presentation::assess_affordability(
-                    costs, snap_curr.stock, chunsa::RESOURCE_COUNT).affordable;
-            const bool epoch_ok = research_mode
-                    ? snap_curr.player_epoch == catalog_storage.catalog().techs[id].epoch
-                    : snap_curr.player_epoch >= catalog_storage.catalog().units[id].epoch_min &&
-                              snap_curr.player_epoch <= catalog_storage.catalog().units[id].epoch_max;
-            godot::String status = U("Disponible");
-            if (!epoch_ok) {
-                const uint8_t required_epoch = research_mode
-                        ? catalog_storage.catalog().techs[id].epoch
-                        : catalog_storage.catalog().units[id].epoch_min;
-                status = U("Requiere época ") +
-                        godot::String::num_int64(required_epoch);
-            } else if (!affordable) {
-                status = missing_summary(costs);
-            } else if (!detail.is_empty()) {
-                status = detail.left(30);
-            }
-            const bool blocked = !detail.is_empty();
-            const godot::Color button_color = blocked
-                    ? godot::Color(0.32, 0.12, 0.12, 1.0)
-                    : (research_mode ? godot::Color(0.35, 0.24, 0.1, 1.0)
-                                     : godot::Color(0.1, 0.25, 0.4, 1.0));
-            draw_rect(godot::Rect2(godot::Vector2(x, y),
-                                   godot::Vector2(button_w, button_h)), button_color);
-            draw_string(font, godot::Vector2(x + 7, y + 17), label.left(25),
-                        static_cast<godot::HorizontalAlignment>(0), -1, 12, text);
-            draw_string(font, godot::Vector2(x + 7, y + 34),
-                        cost_summary(costs).left(29),
-                        static_cast<godot::HorizontalAlignment>(0), -1, 10, muted);
-            draw_string(font, godot::Vector2(x + 7, y + 50), status.left(29),
-                        static_cast<godot::HorizontalAlignment>(0), -1, 10,
-                        blocked ? godot::Color(1.0, 0.45, 0.35, 1.0)
-                                : godot::Color(0.45, 1.0, 0.55, 1.0));
-        }
+        // SPEC-006 Parte V: las pestanas TRAIN/TECH y su rejilla de botones se
+        // han ido a la barra de comandos de abajo, que ensena ambas cosas a la
+        // vez (fila de arriba produce, filas de abajo investigan) como AoE2. El
+        // panel de seleccion se queda con lo que es: informacion de lo elegido.
         const bool has_train = snap_curr.prod_count[selected_building] > 0u;
         const bool has_research = snap_curr.research_tech[selected_building] != chunsa::INVALID_TECH_ID;
         if (has_train || has_research) {
