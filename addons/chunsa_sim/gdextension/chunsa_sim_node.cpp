@@ -297,8 +297,8 @@ void ChunsaSimNode::_ready() {
         // sesión de verificación del Director: los aldeanos se auto-asignaban y
         // caminaban eternamente (stock 0 tras 3800 ticks), y como ningún
         // depósito era visible NO había nada sobre lo que hacer clic derecho, así
-        // que el jugador no tenía NINGÚN control sobre ellos (los ciudadanos
-        // están excluidos de MOVE_TO por movement_v1, SPEC-001 §12).
+        // que el jugador no tenía NINGÚN control sobre ellos (entonces los
+        // ciudadanos estaban excluidos de MOVE_TO; desde SPEC-004 §22.2 ya no).
         // Los depósitos del mapa base están a 8–20 tiles de cada base.
         chunsa::gs_init_economy_from_catalog(*gs);
         uid_cavalry = chunsa::catalog_find_unit(
@@ -970,7 +970,13 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
         for (uint32_t i = 0; i < cap; ++i) {
             if (!selected_slot_is_current(i)) continue;
             if (snap_curr.owner[i] != 0u) continue;  // pudo morir
-            if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] > 2u) continue;
+            // SPEC-004 §22.2: los ciudadanos (unit_class==3) SI aceptan MOVE_TO
+            // desde el Sprint 1.7 — citizen_move_system los mueve, movement_v1
+            // sigue congelado y no los toca. La cota `> 2u` que habia aqui era
+            // correcta ANTES de §22 y quedo obsoleta sin que nadie lo notara:
+            // el Director reporto "los aldeanos no permiten que se les ordene
+            // que vayan a un lugar especifico" jugando.
+            if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] > 3u) continue;
             chunsa::RawCommand c;
             std::memset(&c, 0, sizeof(c));
             c.target_tick = 0;
