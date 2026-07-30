@@ -244,8 +244,11 @@ private:
     godot::Rect2 minimap_rect() const;
     godot::Rect2 minimap_world_rect() const;
     godot::Rect2 resource_hud_rect() const;
+    godot::Rect2 building_catalog_rect() const;
     godot::Rect2 epoch_button_rect() const;
     godot::Rect2 selection_panel_rect() const;
+    bool building_available(chunsa::BuildingId building_id) const;
+    uint32_t available_building_count() const;
     int32_t selected_count() const;
     int32_t selected_single_building_slot() const;
     bool presentation_entity_visible(uint32_t slot) const;
@@ -262,6 +265,8 @@ private:
     godot::String unit_display_name(uint32_t unit_id) const;
     godot::String tech_display_name(uint32_t tech_id) const;
     godot::String unit_class_display_name(uint8_t unit_class) const;
+    godot::String cost_summary(const int32_t* costs) const;
+    godot::String missing_summary(const int32_t* costs) const;
     godot::String presentation_rejection_explanation(
             chunsa::CommandType type, uint32_t building_slot,
             uint32_t item_id) const;
@@ -281,6 +286,9 @@ private:
     void draw_resource_hud(const godot::Ref<godot::Font>& font,
                            const godot::Color& text,
                            const godot::Color& muted);
+    void draw_building_catalog(const godot::Ref<godot::Font>& font,
+                               const godot::Color& text,
+                               const godot::Color& muted);
     void draw_selection_panel(const godot::Ref<godot::Font>& font,
                               const godot::Color& text,
                               const godot::Color& muted);
