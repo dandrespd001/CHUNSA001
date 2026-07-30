@@ -226,6 +226,11 @@ target_compile_definitions(chunsa_test_civ_start_epoch PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME civ_start_epoch COMMAND chunsa_test_civ_start_epoch)
 
+# --- Test Sprint 1.18: fórmula de daño por tipo (SPEC-004 Parte VI) -----------
+add_executable(chunsa_test_combat_damage tests/unit/test_combat_damage.cpp)
+target_link_libraries(chunsa_test_combat_damage PRIVATE chunsa_sim_core)
+add_test(NAME combat_damage COMMAND chunsa_test_combat_damage)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
@@ -313,7 +318,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view affordability_view
-                     command_panel_view craft civ_start_epoch data_compile
+                     command_panel_view craft civ_start_epoch combat_damage data_compile
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---
