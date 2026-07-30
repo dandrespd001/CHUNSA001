@@ -93,6 +93,10 @@ public:
         int32_t eco_carry[1024];
         uint8_t eco_carry_resource[1024];
         uint8_t eco_state[1024]; // 0=SEEK 1=HARVEST 2=RETURN
+        // Sprint 1.8H: tarea explicita del ciudadano (SPEC-004 §22). Hacia
+        // falta para contar OCIOSOS de verdad: con solo eco_state, un aldeano
+        // andando hacia un sitio se contaba como ocioso.
+        uint8_t citizen_task[1024];
         uint32_t eco_assigned_deposit[1024];
 
         // Sprint 1.8C: stock completo del jugador 0. El índice es el slot

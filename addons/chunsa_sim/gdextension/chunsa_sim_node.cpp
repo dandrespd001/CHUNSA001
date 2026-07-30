@@ -454,6 +454,7 @@ void ChunsaSimNode::sim_loop() {
                 s->eco_carry[i] = gs->eco_carry[i];
                 s->eco_carry_resource[i] = gs->eco_carry_resource[i];
                 s->eco_state[i] = static_cast<uint8_t>(gs->eco_state[i]);
+                s->citizen_task[i] = gs->citizen_task[i];
                 s->eco_assigned_deposit[i] = gs->eco_assigned_deposit[i];
             }
             s->n_deposits = gs->n_deposits;
@@ -678,19 +679,12 @@ void ChunsaSimNode::_draw() {
             ++idle;
         }
     }
-    const godot::Rect2 epoch_rect = epoch_button_rect();
-    const godot::String citizen_line = U("Aldeanos · construyendo ") +
-            godot::String::num_int64(constructing) + U(" · ociosos ") +
-            godot::String::num_int64(idle);
-    draw_string(font, godot::Vector2(28, epoch_rect.position.y + 86.0f),
-                citizen_line, static_cast<godot::HorizontalAlignment>(0), -1,
-                13, muted);
-
-    const godot::String controls =
-        U("1..9 grupos · flechas: cámara · rueda: zoom · MMB: pan · clic dcho. en minimapa: mover");
-    draw_string(font, godot::Vector2(28, epoch_rect.position.y + 104.0f),
-                controls, static_cast<godot::HorizontalAlignment>(0), -1, 13,
-                muted);
+    // El contador de aldeanos y la chuleta de controles ESTABAN FLOTANDO sobre
+    // el terreno de juego. El contador se ha ido a la barra superior (que es
+    // donde AoE2 pone poblacion y ociosos) y la chuleta al panel de comandos
+    // cuando no hay nada seleccionado: informacion util, fuera del tablero.
+    (void)constructing;
+    (void)idle;
 
     if (snap_curr.last_receipt_sequence != UINT64_MAX &&
         snap_curr.last_receipt_sequence >= 1000000ull) {
@@ -710,7 +704,11 @@ void ChunsaSimNode::_draw() {
                         U("civilización, prerrequisitos o estado del edificio");
             }
         }
-        draw_string(font, godot::Vector2(28, epoch_rect.position.y + 122.0f), feedback,
+        const godot::Rect2 fb_bar = command_bar_rect();
+        draw_string(font,
+                    godot::Vector2(fb_bar.position.x,
+                                   fb_bar.position.y - 8.0f * ui_scale()),
+                    feedback,
                      static_cast<godot::HorizontalAlignment>(0), -1, 14,
                      snap_curr.last_receipt_result ==
                                      static_cast<uint16_t>(chunsa::RejectReason::ACCEPTED)
@@ -1275,7 +1273,7 @@ godot::Rect2 ChunsaSimNode::selection_panel_rect() const {
     const godot::Rect2 mini = minimap_rect();
     const float x = bar.position.x + bar.size.x + 12.0f * k;
     const float right = mini.position.x - 12.0f * k;
-    const float height = std::min(340.0f * k, viewport_size.y * 0.42f);
+    const float height = bar.size.y;
     const float width = std::max(240.0f * k, right - x);
     return godot::Rect2(
             godot::Vector2(x, viewport_size.y - height - 12.0f * k),
@@ -2026,7 +2024,7 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
             const uint32_t rid = resource_id_for_stock_index(static_cast<uint8_t>(idx));
             if (rid == chunsa::INVALID_RESOURCE_ID) continue;
             if (catalog.resources[rid].appearance_epoch > snap_curr.player_epoch) continue;
-            if (bx + 96.0f > panel.position.x + panel.size.x - 226.0f) break;
+            if (bx + 96.0f > panel.position.x + panel.size.x - 312.0f) break;
             draw_resource_icon(font, godot::Vector2(bx + 8.0f, by - 5.0f), 8.0f, rid);
             draw_string(font, godot::Vector2(bx + 20.0f, by),
                         godot::String::num_int64(snap_curr.stock[idx]) + " " +
@@ -2043,17 +2041,28 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
     for (uint32_t i = 0; i < cap_i; ++i) {
         if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;
         if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) continue;
-        if (snap_curr.eco_state[i] == 0u &&
-            snap_curr.build_target[i] == chunsa::BUILD_NO_TARGET) {
+        // Ocioso es QUIETO SIN HACER NADA. Un aldeano andando hacia un sitio
+        // no lo esta: antes se contaban como ociosos y el numero enganaba.
+        if (snap_curr.citizen_task[i] == chunsa::CITIZEN_TASK_IDLE &&
+            snap_curr.build_target[i] == chunsa::BUILD_NO_TARGET &&
+            snap_curr.eco_assigned_deposit[i] == chunsa::ECO_NO_DEPOSIT &&
+            snap_curr.eco_carry[i] == 0) {
             ++idle;
         }
     }
+    uint32_t building_now = 0;
+    for (uint32_t i = 0; i < cap_i; ++i) {
+        if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;
+        if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) continue;
+        if (snap_curr.build_target[i] != chunsa::BUILD_NO_TARGET) ++building_now;
+    }
     draw_string(font,
-                godot::Vector2(panel.position.x + panel.size.x - 212.0f, by),
+                godot::Vector2(panel.position.x + panel.size.x - 300.0f, by),
                 U("Pobl. ") + godot::String::num_int64(snap_curr.pop_used) + U("/200") +
+                        U("   Constr. ") + godot::String::num_int64(building_now) +
                         U("   Ociosos ") + godot::String::num_int64(idle) +
                         U("   Época ") + godot::String::num_int64(snap_curr.player_epoch),
-                static_cast<godot::HorizontalAlignment>(0), 206.0f, 13, text);
+                static_cast<godot::HorizontalAlignment>(0), 294.0f, 13, text);
 
     draw_string(font, panel.position + godot::Vector2(16, 43),
                 U("Pulsa una familia para ver sus recursos individuales"),
@@ -2596,6 +2605,7 @@ void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
     draw_rect(bar, godot::Color(0.03, 0.05, 0.08, 0.94));
     draw_rect(bar, godot::Color(0.3, 0.4, 0.55, 0.8), false, 1.0f);
 
+    const float k = ui_scale();
     const godot::String header = selected_citizen_count() > 0u
             ? U("CONSTRUIR")
             : (selected_single_building_slot() >= 0 ? U("PRODUCIR E INVESTIGAR")
@@ -2604,14 +2614,9 @@ void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
                 static_cast<godot::HorizontalAlignment>(0), bar.size.x - 20.0f, 12, muted);
 
     if (count == 0u) {
-        draw_string(font, bar.position + godot::Vector2(10.0f, 40.0f),
-                    U("Selecciona aldeanos o un edificio"),
-                    static_cast<godot::HorizontalAlignment>(0),
-                    bar.size.x - 20.0f, 11, muted);
         return;
     }
 
-    const float k = ui_scale();
     const float btn = 56.0f * k, gap = 4.0f * k, pad = 10.0f * k;
     int32_t hovered = -1;
     for (uint32_t i = 0; i < count && i < PANEL_SLOTS; ++i) {
@@ -2829,16 +2834,21 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
     const float hp_ratio = max_hp_sum > 0
             ? std::clamp(static_cast<float>(hp_sum) / static_cast<float>(max_hp_sum), 0.0f, 1.0f)
             : 0.0f;
+    // Acotada: antes tomaba TODO el ancho del panel y con el panel ancho se
+    // convertia en una franja verde enorme que dominaba la pantalla.
     const godot::Rect2 hp_bar(panel.position + godot::Vector2(16.0f * k, 61.0f * k),
-                              godot::Vector2(panel.size.x - 32.0f, 12.0f));
+                              godot::Vector2(std::min(220.0f * k, panel.size.x - 32.0f * k),
+                                             9.0f * k));
     draw_rect(hp_bar, godot::Color(0.18, 0.12, 0.15, 1.0));
     draw_rect(godot::Rect2(hp_bar.position,
                            godot::Vector2(hp_bar.size.x * hp_ratio, hp_bar.size.y)),
               godot::Color(0.25, 0.85, 0.35, 1.0));
-    draw_string(font, panel.position + godot::Vector2(16.0f * k, 87.0f * k),
+    draw_string(font,
+                godot::Vector2(hp_bar.position.x + hp_bar.size.x + 10.0f * k,
+                               hp_bar.position.y + 9.0f * k),
                 "HP " + godot::String::num_int64(hp_sum) + "/" +
                         godot::String::num_int64(max_hp_sum),
-                static_cast<godot::HorizontalAlignment>(0), -1, 13, text);
+                static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
 
     if (single_combat_unit) {
         const uint32_t unit = static_cast<uint32_t>(first);
@@ -2929,12 +2939,9 @@ void ChunsaSimNode::draw_selection_panel(const godot::Ref<godot::Font>& font,
             draw_string(font, panel.position + godot::Vector2(16.0f * k, 279.0f * k), queue.left(96),
                         static_cast<godot::HorizontalAlignment>(0), -1, 12, muted);
         }
-    } else {
-        const float actions_y = single_combat_unit || single_citizen ? 126.0f : 116.0f;
-        draw_string(font, panel.position + godot::Vector2(16, actions_y),
-                    U("Clic derecho: mover/recolectar · con edificio: punto de reunión"),
-                    static_cast<godot::HorizontalAlignment>(0), -1, 13, muted);
     }
+    // Sin chuleta de controles en el panel: saturaba y se cortaba. Los
+    // controles se aprenden jugando, no leyendo encima del tablero.
 }
 
 void ChunsaSimNode::draw_world_overlay(const godot::Ref<godot::Font>& font,
