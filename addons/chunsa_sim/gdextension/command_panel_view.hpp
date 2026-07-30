@@ -32,6 +32,20 @@ inline ButtonState button_state(const ButtonGating& g) noexcept {
     return ButtonState::AVAILABLE;
 }
 
+// El kernel rechaza con `tdef.epoch > player_epoch` (step.hpp:602): una
+// tecnología NO caduca al pasar de edad. draw_selection_panel usaba igualdad
+// exacta y, con las tecnologías egipcias de época 4, al llegar a la 5 habría
+// dicho «Requiere época 4» sobre algo perfectamente investigable.
+inline bool tech_epoch_reached(uint8_t tech_epoch, uint8_t player_epoch) noexcept {
+    return tech_epoch <= player_epoch;
+}
+
+inline bool window_epoch_reached(uint8_t epoch_min,
+                                 uint8_t epoch_max,
+                                 uint8_t player_epoch) noexcept {
+    return player_epoch >= epoch_min && player_epoch <= epoch_max;
+}
+
 // Se enseña la edad actual y UNA de adelanto. Mostrar las 15 edades haría el
 // panel ilegible desde el primer minuto; mostrar solo la actual escondería
 // hacia dónde va la partida, que es la mitad de la decisión de subir de época.

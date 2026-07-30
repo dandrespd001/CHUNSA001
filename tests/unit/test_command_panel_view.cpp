@@ -24,6 +24,8 @@ using chunsa::presentation::ButtonGating;
 using chunsa::presentation::ButtonState;
 using chunsa::presentation::button_state;
 using chunsa::presentation::panel_item_visible;
+using chunsa::presentation::tech_epoch_reached;
+using chunsa::presentation::window_epoch_reached;
 
 void expect(bool condition, const char* name, int& failures) {
     if (!condition) {
@@ -95,6 +97,26 @@ int main() {
 
     expect(button_state(gating(false, false, false, false)) == ButtonState::UNAVAILABLE,
            "la civilización manda sobre edad y stock", failures);
+
+    // --- El gate de época, que discrepaba del kernel ---------------------
+    // step.hpp:602 rechaza con `tdef.epoch > player_epoch`, o sea que vale
+    // CUALQUIER época alcanzada o superada. draw_selection_panel usaba
+    // igualdad exacta, así que al pasar de edad la interfaz declaraba
+    // «Requiere época 4» sobre tecnologías que el kernel investigaba sin
+    // objeción. La UI no puede contradecir al kernel sobre el motivo.
+    expect(tech_epoch_reached(4u, 4u), "tecnología de la edad actual", failures);
+    expect(tech_epoch_reached(4u, 5u),
+           "una tecnología de una edad ya superada SIGUE disponible", failures);
+    expect(tech_epoch_reached(1u, 15u),
+           "ninguna edad posterior caduca una tecnología", failures);
+    expect(!tech_epoch_reached(5u, 4u),
+           "una tecnología de una edad futura no está disponible", failures);
+
+    // Unidades y edificios sí tienen ventana con cierre (epoch_window).
+    expect(window_epoch_reached(3u, 4u, 3u), "unidad dentro de su ventana", failures);
+    expect(window_epoch_reached(3u, 4u, 4u), "unidad al final de su ventana", failures);
+    expect(!window_epoch_reached(3u, 4u, 5u), "unidad con la ventana pasada", failures);
+    expect(!window_epoch_reached(3u, 4u, 2u), "unidad aún no disponible", failures);
 
     if (failures == 0) {
         std::cout << "command_panel_view OK\n";

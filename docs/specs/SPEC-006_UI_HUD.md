@@ -406,15 +406,37 @@ para investigaciones y entrenar unidades como funciona ahí»*.
 ## §22 Qué falla en lo que hay
 
 El 1.8E resolvió el problema de fondo —el coste se ve antes de actuar— pero con
-la forma equivocada, y **solo para edificios**:
+la forma equivocada.
+
+**Corrección de una afirmación mía errónea**: escribí que entrenar e investigar
+«no muestran coste ninguno». **Es falso**, y lo comprobé después en el código:
+`draw_selection_panel` sí los muestra, en botones propios, con
+`cost_summary(costs).left(29)`. El problema real no es la ausencia sino la
+**incoherencia**: dos formas distintas para la misma pregunta, y ambas
+truncadas.
 
 | | Hoy | AoE2 |
 |---|---|---|
-| Forma | Lista vertical de texto, 3 renglones por elemento | Rejilla de botones con icono |
+| Forma | Lista vertical de texto (edificios) **y** botones de otro estilo (entrenar/investigar) | Una sola rejilla de botones con icono |
 | Cuándo se ve el coste | **Siempre**, ocupando pantalla | Al **pasar el ratón** |
 | Coste | Frase: «30 de Piedra · 60 de Madera» | **Icono + número**, uno por recurso |
-| Entrenar unidades | **No existe** | Mismo panel |
-| Investigar | **No existe** | Mismo panel |
+| Truncado | `.left(29)`, `.left(30)` — corta a media palabra | No aplica: el tooltip crece |
+
+### §22.1 Un defecto real encontrado al revisar
+
+`draw_selection_panel` decide si una tecnología está disponible con
+**igualdad exacta** de época:
+
+```cpp
+epoch_ok = snap_curr.player_epoch == catalog.techs[id].epoch;   // MAL
+```
+
+El kernel usa `tdef.epoch > player_epoch ⇒ ILLEGAL_STATE` (`step.hpp:602`), es
+decir **`<=`**. Con los datos actuales las tecnologías egipcias son de época 4:
+al llegar a la época 5 la interfaz diría «Requiere época 4» sobre una
+tecnología que el kernel investigaría sin objeción. Es exactamente el fallo que
+`button_state` existe para impedir —la UI y el kernel discrepando sobre el
+motivo— y se corrige en este sprint.
 
 Que el coste esté permanentemente en pantalla es además lo que agrava el
 solapamiento del §1.8G: menos texto fijo, mapa más legible. Las dos cosas se
