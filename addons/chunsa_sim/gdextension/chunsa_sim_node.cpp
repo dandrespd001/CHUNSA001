@@ -746,7 +746,7 @@ void ChunsaSimNode::_draw() {
                 cost_summary(epoch_cost), static_cast<godot::HorizontalAlignment>(0),
                 epoch_rect.size.x - 24.0f, 12, muted);
     draw_string(font, epoch_rect.position + godot::Vector2(12, 59),
-                epoch_status.left(50), static_cast<godot::HorizontalAlignment>(0),
+                epoch_status, static_cast<godot::HorizontalAlignment>(0),
                 epoch_rect.size.x - 24.0f, 11,
                 epoch_affordability.affordable
                         ? godot::Color(0.45, 1.0, 0.55, 1.0)
@@ -1485,6 +1485,11 @@ godot::String ChunsaSimNode::missing_summary(const int32_t* costs) const {
     const chunsa::presentation::AffordabilityResult result =
             chunsa::presentation::assess_affordability(
                     costs, snap_curr.stock, chunsa::RESOURCE_COUNT);
+    // "Faltan" UNA vez y sin la preposición: con tres recursos, repetirlo
+    // producía una línea que no cabía en el panel de 330 px y se cortaba a
+    // media palabra («… · Falt»). Un texto truncado a medias es justo el hueco
+    // invisible que el criterio de diseño quiere evitar: el jugador no debe
+    // aprender el juego por rechazos, y menos aún por rechazos ilegibles.
     godot::String summary;
     for (uint32_t i = 0; i < result.missing_count; ++i) {
         const uint32_t resource_id =
@@ -1492,11 +1497,10 @@ godot::String ChunsaSimNode::missing_summary(const int32_t* costs) const {
                         static_cast<uint8_t>(result.missing[i].resource_index));
         if (resource_id == chunsa::INVALID_RESOURCE_ID) continue;
         if (!summary.is_empty()) summary += U(" · ");
-        summary += U("Faltan ") +
-                godot::String::num_int64(result.missing[i].amount) + U(" de ") +
+        summary += godot::String::num_int64(result.missing[i].amount) + " " +
                 resource_display_name(resource_id);
     }
-    return summary;
+    return summary.is_empty() ? summary : U("Faltan: ") + summary;
 }
 
 godot::String ChunsaSimNode::unit_class_display_name(uint8_t unit_class) const {
@@ -2085,7 +2089,7 @@ void ChunsaSimNode::draw_building_catalog(const godot::Ref<godot::Font>& font,
         const godot::String detail = presentation_rejection_explanation(
                 chunsa::CommandType::PLACE_BUILDING, UINT32_MAX, building_id);
         const godot::String status = !affordability.affordable
-                ? missing_summary(definition.cost).left(43)
+                ? missing_summary(definition.cost)
                 : (!detail.is_empty() ? detail.left(43) : U("Asequible"));
         draw_string(font, godot::Vector2(panel.position.x + 18.0f, y + 46.0f),
                     status, static_cast<godot::HorizontalAlignment>(0),
