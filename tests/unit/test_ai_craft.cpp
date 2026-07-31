@@ -7,8 +7,9 @@
 // jugador humano**. Un adversario que juega a un juego más pobre no es un
 // adversario difícil: es uno que se supera por acumulación.
 //
-// Fase A: que la IA FABRIQUE. Que ataque con órdenes y que elija mirando
-// contadores va en fases siguientes.
+// Fase A: que la IA FABRIQUE.
+// Fase B: que ATAQUE CON ÓRDENES en vez de caminar y esperar al enganche
+//         automático. Elegir mirando contadores va en una fase siguiente.
 
 #include <cstdint>
 #include <cstdio>
@@ -84,6 +85,26 @@ MatchConfig01A cfg_of() {
     c.seed = 20260731ull;
     c.allow_debug_stat_payload = 0;
     return c;
+}
+
+uint32_t put_soldier(GameState& g, uint8_t owner, int64_t tx, int64_t ty) {
+    const EntityHandle h = et_spawn(g.entities);
+    const uint32_t i = h.index;
+    zero_components(g, i);
+    g.owner[i] = owner;
+    g.entity_kind[i] = 0u;
+    g.unit_class[i] = 0u;              // infantería
+    g.unit_id[i] = INVALID_UNIT_ID;
+    g.hp[i] = 100; g.max_hp[i] = 100;
+    g.attack[i] = 10;
+    g.range_mt[i] = 0;
+    g.speed_mtpt[i] = 200;
+    g.morale[i] = 100;
+    g.pos_x[i] = tx * FX_ONE_RAW;
+    g.pos_y[i] = ty * FX_ONE_RAW;
+    g.tgt_x[i] = g.pos_x[i];
+    g.tgt_y[i] = g.pos_y[i];
+    return i;
 }
 
 uint32_t put_foundry(GameState& g, uint8_t owner) {
@@ -191,6 +212,61 @@ int main() {
                 CHECK(ba.result[k].p.unit_id == bb.result[k].p.unit_id);
             }
         }
+    }
+
+    // --- Fase B: la IA ataca con ÓRDENES, no caminando y esperando --------
+    //
+    // Antes emitía MOVE_TO hacia la posición del enemigo y dependía del
+    // enganche automático para pelear. Con proyectiles que fallan, eso la
+    // castiga más que antes: camina, llega desordenada y dispara a lo que pilla.
+    {
+        auto g = std::make_unique<GameState>();
+        gs_init(*g, cfg_of());
+        g->catalog = &cat;
+        for (uint32_t p = 0; p < 8u; ++p) g->player_epoch[p] = 4u;
+        put_foundry(*g, 1);                       // ancla de base de la IA
+        for (uint32_t k = 0; k < 12u; ++k) {      // ejército por encima del umbral
+            put_soldier(*g, 1, 42 + static_cast<int64_t>(k % 4u), 42);
+        }
+        put_soldier(*g, 0, 120, 120);             // enemigo LEJOS de la base
+
+        AiJobBox box; ai_box_init(box, 1);
+        AiRuntimeV1 rt{0, 0};
+        ai_dispatch(box, 0u, rt);
+        ai_execute(box, *g);
+
+        uint32_t n_attack = 0, n_move = 0;
+        for (uint32_t k = 0; k < box.result_count; ++k) {
+            if (box.result[k].type == CommandType::ATTACK) ++n_attack;
+            if (box.result[k].type == CommandType::MOVE_TO) ++n_move;
+        }
+        // Fuego focalizado sobre el objetivo que la capa táctica ya elegía:
+        // ATTACK sobre esa entidad, no MOVE_TO a sus coordenadas.
+        CHECK(n_attack > 0u);
+        CHECK(n_move == 0u);
+    }
+
+    // Defendiendo, ATTACK_MOVE hacia la base: vuelve peleando con lo que se
+    // encuentre por el camino en vez de atravesarlo.
+    {
+        auto g = std::make_unique<GameState>();
+        gs_init(*g, cfg_of());
+        g->catalog = &cat;
+        for (uint32_t p = 0; p < 8u; ++p) g->player_epoch[p] = 4u;
+        put_foundry(*g, 1);
+        for (uint32_t k = 0; k < 12u; ++k) put_soldier(*g, 1, 60 + static_cast<int64_t>(k % 4u), 60);
+        put_soldier(*g, 0, 41, 41);               // enemigo PEGADO a la base
+
+        AiJobBox box; ai_box_init(box, 1);
+        AiRuntimeV1 rt{0, 0};
+        ai_dispatch(box, 0u, rt);
+        ai_execute(box, *g);
+
+        uint32_t n_amove = 0;
+        for (uint32_t k = 0; k < box.result_count; ++k) {
+            if (box.result[k].type == CommandType::ATTACK_MOVE) ++n_amove;
+        }
+        CHECK(n_amove > 0u);
     }
 
     if (g_fails == 0) {

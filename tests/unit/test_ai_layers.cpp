@@ -332,11 +332,15 @@ static void test_layer_attack() {
 
     AiJobBox box{};
     run_ai_once(*g, 1, g->tick, /*ai_sequence=*/6, box);
+    // Sprint 1.19 fase B: la intencion es la MISMA —los 5 soldados reciben
+    // orden de atacar al objetivo elegido— pero ya no es MOVE_TO a sus
+    // coordenadas, sino ATTACK sobre ESA entidad (fuego focalizado). El
+    // objetivo viaja en unit_id, como fija SPEC-004 §24.2.
+    (void)enemy_x; (void)enemy_y;
     uint32_t moves = 0;
     for (uint32_t i = 0; i < box.result_count; ++i) {
-        if (box.result[i].type == CommandType::MOVE_TO) {
-            CHECK(box.result[i].p.x_raw == enemy_x);
-            CHECK(box.result[i].p.y_raw == enemy_y);
+        if (box.result[i].type == CommandType::ATTACK) {
+            CHECK(box.result[i].p.unit_id == enemy_idx);
             ++moves;
         }
     }
@@ -389,8 +393,10 @@ static void test_layer_defend_reactive_priority() {
     AiJobBox box{};
     run_ai_once(*g, 1, g->tick, /*ai_sequence=*/6, box);
     uint32_t moves = 0;
+    // Defendiendo: ATTACK_MOVE a la base — vuelve PELEANDO con lo que se
+    // encuentre en vez de atravesarlo. El destino sigue siendo el ancla.
     for (uint32_t i = 0; i < box.result_count; ++i) {
-        if (box.result[i].type == CommandType::MOVE_TO) {
+        if (box.result[i].type == CommandType::ATTACK_MOVE) {
             CHECK(box.result[i].p.x_raw == anchor_x);
             CHECK(box.result[i].p.y_raw == anchor_y);
             ++moves;

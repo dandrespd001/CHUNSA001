@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 4;  // Sprint 1.19: la IA fabrica
+inline constexpr uint32_t AI_ALGO_VERSION     = 5;  // Sprint 1.19: la IA fabrica y ordena atacar
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -975,13 +975,19 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         if (threshold < 1) threshold = 1;
         if (threshold > 10) threshold = 10;
 
+        // Sprint 1.19 fase B: la IA usa las ORDENES DE COMBATE del 1.13 en vez
+        // de caminar y esperar al enganche automatico. Antes emitia MOVE_TO y
+        // dependia del aggro para pelear; con proyectiles que fallan eso la
+        // castiga mas que antes, porque llega desordenada y dispara a lo que
+        // pilla en vez de a lo que decidio atacar.
         if (defend) {
+            // Volver a casa PELEANDO con lo que se encuentre, no atravesandolo.
             const uint32_t cap = g.entities.capacity;
             for (uint32_t i = 0; i < cap && count < AI_MAX_COMMANDS; ++i) {
                 if (!g.entities.alive[i]) continue;
                 if (g.owner[i] != ai_player) continue;
                 if (g.unit_class[i] > 2u) continue;
-                emit(CommandType::MOVE_TO, EntityHandle{i, g.entities.generation[i]},
+                emit(CommandType::ATTACK_MOVE, EntityHandle{i, g.entities.generation[i]},
                      macro.anchor_x, macro.anchor_y, 0u);
             }
         } else if (macro.army_count >= threshold) {
@@ -989,13 +995,27 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             const int64_t centroid_y = macro.army_sum_y / macro.army_count;
             const AiTargetV1 tgt = ai_find_attack_target(g, ai_player, centroid_x, centroid_y);
             if (tgt.found) {
+                // FUEGO FOCALIZADO sobre el objetivo que la capa tactica ya
+                // elegia: ATTACK sobre ESA entidad, no MOVE_TO a sus
+                // coordenadas. El objetivo va en unit_id (indice) y
+                // speed_mtpt (generacion), como fija SPEC-004 §24.2.
                 const uint32_t cap = g.entities.capacity;
                 for (uint32_t i = 0; i < cap && count < AI_MAX_COMMANDS; ++i) {
                     if (!g.entities.alive[i]) continue;
                     if (g.owner[i] != ai_player) continue;
                     if (g.unit_class[i] > 2u) continue;
-                    emit(CommandType::MOVE_TO, EntityHandle{i, g.entities.generation[i]},
-                         tgt.x, tgt.y, 0u);
+                    if (count >= AI_MAX_COMMANDS) break;
+                    RawCommand cmd{};
+                    cmd.target_tick = target_tick;
+                    cmd.emitter     = static_cast<uint16_t>(ai_player);
+                    cmd.type        = CommandType::ATTACK;
+                    cmd.sequence    = seq_base + static_cast<uint64_t>(count + 1u);
+                    cmd.p.handle    = EntityHandle{i, g.entities.generation[i]};
+                    cmd.p.unit_id   = tgt.index;
+                    cmd.p.speed_mtpt =
+                        static_cast<int32_t>(g.entities.generation[tgt.index]);
+                    b.result[count] = cmd;
+                    ++count;
                 }
             }
         }

@@ -27,26 +27,31 @@ inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0x0f7697bab8cf68d6ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xbe342c99580984bfull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x77c1c2c74c2a5411ull;
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0x4e13df1aa3e88c7cull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x7f8317cd60a08653ull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0xc8f591e0a188c330ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0xe0909adc47eb1e8bull;
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0xb523a7c91c4cf2d1ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x28917e7ed7b6824full;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xfd703c703acf5ed6ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x09c169bb8f3a3e06ull;
-inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1107u;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xae62f2b8a290382cull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x589d8f8fdbb0b6ceull;
+inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
 // remotos; winner=1 y las cuatro fases se conservan, fin 12292→9317.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=9317 intacto.
+// Sprint 1.19 fase B (la IA usa las ordenes de combate): desplazamientos
+// pequenos y en la direccion esperada —skirmish 1226->1227, eco 1107->1108,
+// apertura 11001->11160—. La IA pelea de forma mas ordenada: fuego focalizado
+// al atacar y ATTACK_MOVE al replegarse. winner=1 y las cuatro fases, intactas.
+//
 // Sprint 1.13 fase C (proyectiles SIN persecucion, correccion del Director):
 // la flecha vuela al punto PREDICHO y puede FALLAR si el objetivo se aparta,
 // como en AoE2. La apertura se alarga 9542 -> 11001 justamente por eso: el
@@ -84,8 +89,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1107u;
 // golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
 // hashes y el end_tick son los medidos por el gate canónico contra el CHDB
 // recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xa32101afba3a781cull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x43a3339df715e230ull;
-inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 11001u;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x774d001064a49e61ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xbccf3d1cddaa3167ull;
+inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 11160u;
 
 }  // namespace chunsa::determinism_baselines
