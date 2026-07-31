@@ -21,8 +21,8 @@ Un fichero de `extractos/` no vale si le falta algo de esto:
 
 ## Estado del corpus (2026-07-31)
 
-**17 de 18 temas poblados** · **612 afirmaciones verificadas** · **148
-declaradas NO VERIFICADO** · **2705 citas literales**.
+**LOS 18 TEMAS POBLADOS** · **631 afirmaciones verificadas** · **165
+declaradas NO VERIFICADO** · **2851 citas literales** · **547 KB**.
 
 | Tema | `[V]` | NO VERIF. | Citas | Fuentes principales |
 |---|---:|---:|---:|---|
@@ -43,7 +43,7 @@ declaradas NO VERIFICADO** · **2705 citas literales**.
 | quimica | 38 | 7 | 164 | Archive |
 | textiles | 45 | 8 | 265 | Archive |
 | transporte | 25 | 11 | 137 | Archive |
-| **aeronautica** | — | — | — | **pendiente, relanzado** |
+| aeronautica | 19 | 17 | 146 | Archive |
 
 **La proporción de NO VERIFICADO importa tanto como la de verificado.** 148
 huecos declarados en vez de rellenados con números creíbles es la señal de que
