@@ -1,0 +1,57 @@
+schema_version: 1
+id: rome:remedello_hamlet
+civ_id: rome:republic_imperial
+display_name_key: rome:building.remedello_hamlet
+description_key: rome:building.remedello_hamlet.description
+epoch_window:
+  - 3
+  - 4
+kind: economic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 450
+  armor:
+    cut: 2
+    pierce: 4
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 60
+  chunsa:stone: 40
+build_time_ticks: 500
+dropoff_resources:
+  - chunsa:copper
+trains:
+  - rome:camp_work_crew
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:remedello_copper
+  - rome:terramare_bronze
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Remedello culture: fechada en «3400–2400 BCE», se desarrolla «during the Copper Age (4th and 3rd millennium BCE)» en «Northern Italy, particularly in the area of the Po Valley»; produce «objects in copper and arsenical silver (arms, pins, pectorals, bracelets)» y sus tumbas contienen «arrows, stone daggers and polished stone axes, with a few tombs having axes and daggers or ornaments made of copper»"
+        locator: "Dates, region, copper metallurgy and grave goods"
+        url: "https://en.wikipedia.org/wiki/Remedello_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Aquí EMPIEZA la asimetría, y por eso este edificio no tiene gemelo egipcio. La época 3 de CHUNSA es la Calcolítica del cobre nativo (SPEC-007 §3) y la Remedello es exactamente eso en Italia: 3400–2400 a.C., valle del Po, objetos de cobre y plata arsenical junto a dagas y hachas todavía de piedra. Ese solapamiento —cobre y piedra en la misma tumba— es la lección de la época 3 y por eso el edificio acepta COBRE como punto de acopio pero sigue costando piedra. Antes del 1.22 Roma no tenía absolutamente nada en las épocas 3 y 4: empezaba en la 5 y las dos anteriores eran inalcanzables. Entrena obreros para que la Calcolítica no dependa del centro."
+    reviewed_by:
+      - architect

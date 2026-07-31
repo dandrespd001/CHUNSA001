@@ -97,8 +97,21 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
 // hashes y el end_tick son los medidos por el gate canónico contra el CHDB
 // recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xdd3b0a7d1a5e293bull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x7e838ebc68d2bd14ull;
+// Sprint 1.22 (epocas 1-5 jugables): los dos hashes de la APERTURA se
+// re-registran, y el motivo NO es que cambiara ninguna regla del kernel. El
+// catalogo pasa de 8 a 16 edificios y de 5 a 7 unidades, y `BuildingId`/
+// `UnitId` son EL INDICE en orden bytewise de record_id: meter
+// `egipto:flint_workshop` o `rome:epigravettian_camp` REORDENA los
+// identificadores de los edificios que ya existian. A eso se suman 4
+// depositos nuevos en el mapa (lino x2, lana x2), que cambian la economia
+// desde el tick 0. Cualquiera de las dos cosas basta para mover el hash.
+//
+// end_tick se queda en 10473 y winner=1: la partida se juega igual, lo que
+// cambia es la numeracion interna. Esa es justo la comprobacion que separa
+// "cambio de datos" de "cambio de comportamiento", y por eso el end_tick NO
+// se toca aqui.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x70415ea4b5229cf4ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xdfce17b35331c927ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

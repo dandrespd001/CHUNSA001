@@ -4,8 +4,8 @@ display_name_key: egipto:unit.work_crew
 description_key: egipto:unit.work_crew.description
 civ_id: egipto:dynastic_nile
 epoch_window:
-  - 3
-  - 4
+  - 1
+  - 5
 class: citizen
 tags:
   - drop_off_carrier
@@ -24,6 +24,9 @@ stats:
     impact: 0
   attack_damage_type: cut
 playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+  - egipto:late_period
   - egipto:old_kingdom
   - egipto:new_kingdom
 availability_mode: historical

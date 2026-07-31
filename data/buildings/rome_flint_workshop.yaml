@@ -1,0 +1,56 @@
+schema_version: 1
+id: rome:flint_workshop
+civ_id: rome:republic_imperial
+display_name_key: rome:building.flint_workshop
+description_key: rome:building.flint_workshop.description
+epoch_window:
+  - 1
+  - 2
+kind: military
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 200
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 20
+  chunsa:stone: 30
+build_time_ticks: 300
+dropoff_resources: []
+trains:
+  - rome:italic_forager
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:italic_epigravettian
+  - rome:italic_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Epigravettian: el utillaje lítico son «microliths, such as backed blades, backed points, and bladelets with retouched end»"
+        locator: "Stone tool technology — la hojita de dorso rebajado es el fósil director del Paleolítico final italiano"
+        url: "https://en.wikipedia.org/wiki/Epigravettian"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Gemelo del egipcio:flint_workshop por la misma razon que los campamentos: en la epoca 1 la talla de silex es la tecnologia, no un rasgo civilizatorio. Lo que cambia es el fosil director —hojita de dorso rebajado epigravetiense frente a hoja con lustre de silice qadan— y eso va en la cita, no en los numeros. Costes y HP identicos a proposito: cualquier asimetria aqui seria invencion."
+    reviewed_by:
+      - architect

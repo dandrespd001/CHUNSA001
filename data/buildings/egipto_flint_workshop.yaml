@@ -1,0 +1,56 @@
+schema_version: 1
+id: egipto:flint_workshop
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.flint_workshop
+description_key: egipto:building.flint_workshop.description
+epoch_window:
+  - 1
+  - 2
+kind: military
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 200
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 20
+  chunsa:stone: 30
+build_time_ticks: 300
+dropoff_resources: []
+trains:
+  - egipto:nile_forager
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Qadan culture: «Large numbers of grinding stones and blades have been found with glossy films of silica on them, which could possibly be the result of cutting grass stems»"
+        locator: "Tools — el lustre de sílice sobre las hojas es el indicio material del corte de tallos"
+        url: "https://en.wikipedia.org/wiki/Qadan_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "El segundo edificio de la época 1, y no es relleno: ADVANCE_EPOCH exige DOS edificios completos cuya ventana incluya la época actual, así que sin él la civilización quedaría atrapada en la Paleolítica para siempre. Cuesta piedra además de madera porque su materia prima ES la piedra — es el primer edificio del juego que pide un mineral, y enseña la idea de que fabricar consume material. Entrena al recolector-cazador (única unidad militar de la época). HP 200: más frágil que el campamento, porque es un taller a cielo abierto, no un recinto."
+    reviewed_by:
+      - architect

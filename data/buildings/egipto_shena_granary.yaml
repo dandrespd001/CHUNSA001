@@ -5,7 +5,7 @@ display_name_key: egipto:building.shena_granary
 description_key: egipto:building.shena_granary.description
 epoch_window:
   - 3
-  - 4
+  - 5
 kind: dropoff
 footprint:
   width_cells: 2
@@ -29,6 +29,7 @@ required_capabilities: []
 grants_capabilities: []
 recipes: []
 playable_period_ids:
+  - egipto:late_period
   - egipto:old_kingdom
   - egipto:new_kingdom
 availability_mode: historical

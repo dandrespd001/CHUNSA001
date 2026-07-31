@@ -1,0 +1,50 @@
+schema_version: 2
+id: egipto:nile_forager
+display_name_key: egipto:unit.nile_forager
+description_key: egipto:unit.nile_forager.description
+civ_id: egipto:dynastic_nile
+epoch_window:
+  - 1
+  - 2
+class: infantry
+tags: []
+resource_costs:
+  chunsa:food: 35
+  chunsa:stone: 10
+stats:
+  hp: 40
+  attack: 4
+  range_millitiles: 0
+  speed_millitile_tick: 62
+  morale: 40
+  build_time_ticks: 260
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: pierce
+playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Qadan culture: la economía se apoyaba en «fishing, hunting, and, as mentioned, the extensive use of wild grain»; se han hallado «Large numbers of grinding stones and blades have been found with glossy films of silica on them»"
+        locator: "Subsistence and tools; la cultura floreció «approximately 15,000 years ago»"
+        url: "https://en.wikipedia.org/wiki/Qadan_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Ataque 4 y daño de tipo PIERCE, no cut: el arma de la época 1 es la punta lítica montada —lanza, azagaya, flecha—, y perfora. Un filo de sílex corta, pero lo que mata a distancia de brazo en el Paleolítico es la punta. ARMADURA CERO EN LOS TRES TIPOS: nadie lleva protección en la época 1, y esa es justamente la lección de la fórmula de daño (SPEC-004 Parte VI) — con armadura 0 el daño recibido es el ataque íntegro, así que la época 1 es rápida y sangrienta, y toda armadura posterior se siente como una mejora real. Cuesta 10 de piedra además de comida porque su punta es piedra tallada. Velocidad 62 (más que el obrero, 55): caza. NO es un aldeano — no recolecta; el trabajo económico de la época 1 lo hace egipto:work_crew, cuya ventana se amplía a [1,5] en este mismo sprint."
+    reviewed_by:
+      - architect

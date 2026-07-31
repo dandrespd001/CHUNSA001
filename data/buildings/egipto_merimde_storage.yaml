@@ -1,0 +1,57 @@
+schema_version: 1
+id: egipto:merimde_storage
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.merimde_storage
+description_key: egipto:building.merimde_storage.description
+epoch_window:
+  - 2
+  - 3
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 350
+  armor:
+    cut: 1
+    pierce: 3
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 40
+  chunsa:clay: 20
+build_time_ticks: 400
+dropoff_resources:
+  - chunsa:food
+  - chunsa:clay
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:fayum_neolithic
+  - egipto:old_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Faiyum A culture: la cultura de Faiyum A es «the earliest farming culture in the Nile Valley», fechada hacia 5600-4400 a.C., y en ella «Near Eastern domesticates were incorporated into a pre-existing foraging strategy»; el mismo artículo atribuye a MERIMDE, no a Faiyum A, unas «communal storage pits»"
+        locator: "Faiyum Neolithic; la atribución del almacenamiento comunal es de Merimde — la fuente NO documenta silos ni cestería para Faiyum A"
+        url: "https://en.wikipedia.org/wiki/Faiyum_A_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "AVISO DE PROCEDENCIA, deliberado: este edificio se llama merimde_storage y NO fayum_silo porque la fuente atribuye las fosas de almacenamiento comunal a Merimde, mientras que de Faiyum A sólo sostiene que es la agricultura más antigua del valle del Nilo. Nombrarlo por el Fayum habría sido colgarle a un yacimiento una prueba que es de otro. Mecánicamente es el salto de la época 1 a la 2: el campamento qadan acopiaba grano SILVESTRE, este almacena la cosecha de domesticados de Oriente Próximo, y por eso es el primero que pide ARCILLA (recurso de época 2, SPEC-007 §14) y el primero con armadura distinta de cero — hay algo dentro que merece la pena defender. Ventana [2,3] para que solape con el granero dinástico y la transición no deje hueco."
+    reviewed_by:
+      - architect

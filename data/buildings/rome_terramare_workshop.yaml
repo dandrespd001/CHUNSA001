@@ -1,0 +1,71 @@
+schema_version: 1
+id: rome:terramare_workshop
+civ_id: rome:republic_imperial
+display_name_key: rome:building.terramare_workshop
+description_key: rome:building.terramare_workshop.description
+epoch_window:
+  - 4
+  - 5
+kind: economic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 500
+  armor:
+    cut: 2
+    pierce: 5
+    impact: 1
+constructible: true
+resource_costs:
+  chunsa:wood: 70
+  chunsa:clay: 40
+  chunsa:stone: 30
+build_time_ticks: 550
+dropoff_resources:
+  - chunsa:tin
+  - chunsa:copper
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes:
+  - id: rome:terramare_bronze_casting
+    input_resource_costs:
+      chunsa:copper: 3
+      chunsa:tin: 1
+    output_resource_id: chunsa:bronze
+    output_amount: 2
+    duration_ticks: 260
+  - id: rome:terramare_flax_retting
+    input_resource_costs:
+      chunsa:flax: 3
+    output_resource_id: chunsa:cloth
+    output_amount: 1
+    duration_ticks: 220
+playable_period_ids:
+  - rome:terramare_bronze
+  - rome:republican_expansion
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Terramare culture: fechada «c. 1700–1150 BC» en el Bronce Medio y Final, «mainly of the central Po Valley, in Emilia, Northern Italy»; sus gentes eran «fairly skilful metallurgists, casting bronze in moulds of stone and clay», produciendo «axes, daggers, swords, razors, and knives»; cultivaban «beans, grapes, wheat, and flax»"
+        locator: "Dates, location, bronze working and agriculture; los poblados llevaban «an earthwork strengthened on the inside by buttresses, and encircled by a wide moat supplied with running water»"
+        url: "https://en.wikipedia.org/wiki/Terramare_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Las dos recetas salen LITERALMENTE de la misma frase de la fuente, no de un diseño de escritorio. La fundición de bronce en moldes «of stone and clay» es la razón de que el edificio cueste piedra Y arcilla, y de que acepte cobre y estaño como acopio. El enlutado del lino sale de «beans, grapes, wheat, and flax»: la Terramare es la primera prueba citada que tenemos de lino cultivado en Italia, y engancha los textiles del 1.9C con la época 4 en vez de dejarlos flotando. La proporción cobre 3 : estaño 1 se copia de rome:bronze_smelting a propósito —es la misma aleación, no puede dar otra cosa— pero tarda 260 ticks frente a 240: el molde bipartito de piedra es más lento que la fundición clásica, y esa es la mejora que la época 5 aporta. HP 500 y armadura de impacto 1 recogen el terraplén con contrafuertes y el foso que describe la fuente. Cierra el hueco de Roma en la época 4."
+    reviewed_by:
+      - architect

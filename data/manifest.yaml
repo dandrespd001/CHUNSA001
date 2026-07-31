@@ -9,8 +9,10 @@ owned_namespaces:
   - rome
 declared_capabilities:
   - egipto:coordinate_flood
+  - egipto:wild_grain_harvest
   - egipto:composite_bow_craft
   - egipto:corvee_levy
+  - rome:backed_bladelet
   - rome:legion_drill
   - rome:maintain_public_infrastructure
 declared_behaviors:

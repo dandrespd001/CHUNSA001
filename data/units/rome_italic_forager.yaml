@@ -1,0 +1,50 @@
+schema_version: 2
+id: rome:italic_forager
+display_name_key: rome:unit.italic_forager
+description_key: rome:unit.italic_forager.description
+civ_id: rome:republic_imperial
+epoch_window:
+  - 1
+  - 2
+class: infantry
+tags: []
+resource_costs:
+  chunsa:food: 35
+  chunsa:stone: 10
+stats:
+  hp: 40
+  attack: 4
+  range_millitiles: 0
+  speed_millitile_tick: 62
+  morale: 40
+  build_time_ticks: 260
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: pierce
+playable_period_ids:
+  - rome:italic_epigravettian
+  - rome:italic_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Epigravettian: el utillaje es de «microliths, such as backed blades, backed points, and bladelets with retouched end»; la caza sostenía la economía y una figurilla epigravetiense de Croacia representa «a horse or deer»"
+        locator: "Stone tool technology and subsistence; el conjunto abarca «~21,000 – 10,000 cal. BP»"
+        url: "https://en.wikipedia.org/wiki/Epigravettian"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Gemelo del egipcio:nile_forager, con los mismos numeros. La punta de dorso rebajado epigravetiense y la punta qadan son la misma solucion tecnica al mismo problema, y darles estadisticas distintas seria inventarse una ventaja. Lo que la fuente si sostiene y merece quedar escrito es la presa: una figurilla epigravetiense representa «a horse or deer». Ataque PIERCE y armadura cero por el mismo motivo que el egipcio."
+    reviewed_by:
+      - architect

@@ -1,10 +1,10 @@
 schema_version: 1
 id: rome:republic_imperial
 historical_window:
-  start_year: -509
+  start_year: -19000
   end_year: 476
 epoch_window:
-  - 5
+  - 1
   - 5
 region_key: rome:region.mediterranean
 display_name_key: rome:civ.republic_imperial
@@ -14,6 +14,22 @@ gameplay_verb:
   name_key: rome:verb.maintain_public_infrastructure
   description_key: rome:verb.maintain_public_infrastructure.description
 playable_periods:
+  - id: rome:italic_epigravettian
+    start_year: -19000
+    end_year: -8000
+    label_key: rome:period.italic_epigravettian
+  - id: rome:italic_neolithic
+    start_year: -6000
+    end_year: -3500
+    label_key: rome:period.italic_neolithic
+  - id: rome:remedello_copper
+    start_year: -3400
+    end_year: -2400
+    label_key: rome:period.remedello_copper
+  - id: rome:terramare_bronze
+    start_year: -1700
+    end_year: -1150
+    label_key: rome:period.terramare_bronze
   - id: rome:republican_expansion
     start_year: -264
     end_year: -133
@@ -33,15 +49,22 @@ social_tensions:
     name_key: rome:tension.legal_status
     description_key: rome:tension.legal_status.description
 unit_ids:
+  - rome:italic_forager
   - rome:ballista_crew
   - rome:camp_work_crew
   - rome:legionary
 building_ids:
+  - rome:epigravettian_camp
+  - rome:flint_workshop
+  - rome:italic_storehouse
+  - rome:remedello_hamlet
+  - rome:terramare_workshop
   - rome:forum_center
   - rome:horreum
   - rome:castra_barracks
   - rome:foundry
 tech_ids:
+  - rome:backed_bladelet
   - rome:marching_drill
   - rome:road_engineering
 art_rule_keys:

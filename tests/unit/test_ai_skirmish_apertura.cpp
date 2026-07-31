@@ -67,11 +67,34 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     gs_set_player_civ(*g, 0, setup.civ_egipto);
     gs_set_player_civ(*g, 1, setup.civ_rome);
     gs_init_epoch_from_catalog_per_player(*g);
+    // Sprint 1.22 — LA APERTURA SE FIJA EN LA ÉPOCA 5, A PROPÓSITO.
+    //
+    // Desde el 1.22 ambas civilizaciones arrancan en la época 1 (Paleolítica),
+    // porque las épocas 1-4 por fin tienen contenido. Al dejar que este
+    // escenario heredara ese arranque, la apertura DEJÓ DE TERMINAR: 36000
+    // ticks, winner=255, p1_built=0, p1_trained=0.
+    //
+    // La causa no es un fallo de datos: es que `ai_execute` NO SABE SUBIR DE
+    // ÉPOCA. Nunca emite ADVANCE_EPOCH, así que en la época 1 se queda mirando
+    // un catálogo militar que empieza en la 5 y no construye nada. Es un
+    // límite REAL del kernel, no un artefacto de la prueba, y está anotado
+    // como el trabajo siguiente (SPEC-005: la IA necesita política de época).
+    //
+    // Este escenario existe para vigilar la APERTURA ECONÓMICA Y MILITAR de
+    // la época 5 —recolección, dropoff, cuartel, tropa— y lleva baselines de
+    // determinismo colgando de eso. Dejar que un cambio de época inicial le
+    // cambie el significado en silencio sería perder la prueba y el aviso a la
+    // vez. Se fija donde estaba; que la IA aprenda a jugar las épocas 1-4 es
+    // otro sprint, y cuando lo haga tendrá su propio escenario.
+    for (uint8_t p = 0; p < 2u; ++p) {
+        g->player_epoch[p] = 5u;
+        g->epoch_initial[p] = 5u;
+    }
     gs_init_economy_from_catalog(*g);
     // Pre-flight duro del escenario: un estado con otro número de depósitos
     // no es una apertura válida y no debe producir ruido derivado en el resto
     // de asertos.
-    if (g->n_deposits != 18u) return nullptr;
+    if (g->n_deposits != 22u) return nullptr;
     return g;
 }
 
@@ -89,7 +112,7 @@ static bool test_apertura_preflight() {
     auto g = make_apertura_state(store.catalog(), setup, 20260724ull);
     CHECK(g != nullptr);
     if (g == nullptr) {
-        std::printf("apertura pre-flight: se esperaban 18 depósitos reales\n");
+        std::printf("apertura pre-flight: se esperaban 22 depositos reales (1.22: +lino x2, +lana x2)\n");
         return false;
     }
     return true;

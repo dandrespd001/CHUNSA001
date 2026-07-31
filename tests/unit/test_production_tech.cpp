@@ -871,9 +871,9 @@ static void test_catalog_real_golden() {
     CHECK(code == CatalogLoadCode::Ok);
     if (!store.valid()) { std::printf("catalog_real_golden: catálogo inválido, abortando subtest\n"); return; }
     const DataCatalogV1& cat = store.catalog();
-    CHECK(cat.building_count == 8);
-    CHECK(cat.tech_count == 4);
-    CHECK(cat.capability_count == 5);
+    CHECK(cat.building_count == 16);
+    CHECK(cat.tech_count == 6);
+    CHECK(cat.capability_count == 7);
 
     auto find_b = [&](const char* name) { return catalog_find_building(cat, name, std::strlen(name)); };
     auto find_t = [&](const char* name) { return catalog_find_tech(cat, name, std::strlen(name)); };

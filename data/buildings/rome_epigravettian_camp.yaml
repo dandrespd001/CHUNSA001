@@ -1,0 +1,58 @@
+schema_version: 1
+id: rome:epigravettian_camp
+civ_id: rome:republic_imperial
+display_name_key: rome:building.epigravettian_camp
+description_key: rome:building.epigravettian_camp.description
+epoch_window:
+  - 1
+  - 2
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 250
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 30
+build_time_ticks: 250
+dropoff_resources:
+  - chunsa:food
+  - chunsa:wood
+  - chunsa:stone
+trains: []
+researches:
+  - rome:backed_bladelet
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:italic_epigravettian
+  - rome:italic_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Epigravettian: abarca «~21,000 – 10,000 cal. BP», se extiende por «southern, central and most of eastern Europe, including southwestern France, Italy, Southeast Europe, the Caucasus, Ukraine and Western Russia», y su utillaje lítico son «microliths, such as backed blades, backed points, and bladelets with retouched end»"
+        locator: "Dates, distribution and lithic toolkit; subdivisiones Early (20,000–16,000 BP), Evolved (16,000–14,000 BP) y Final (14,000–8,000 BP)"
+        url: "https://en.wikipedia.org/wiki/Epigravettian"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Gemelo estructural del egipcio:qadan_camp, y a propósito. En la época 1 (Paleolítica) NO EXISTEN ni Egipto ni Roma: hay cazadores-recolectores en el valle del Nilo y cazadores-recolectores en la península itálica, con la misma economía de subsistencia. Aplicar aquí la asimetría de civilización sería inventar una diferencia que la arqueología no sostiene. Por eso los números son idénticos y lo que cambia es el nombre, la región y la tecnología que investiga (grano silvestre en el Nilo, hojita de dorso rebajado en Italia), que sí son rasgos documentados y distintos. Es el principio de SPEC-007 §22.2 —contenido compartido por defecto, diferenciado por excepción— aplicado donde más claro está."
+    reviewed_by:
+      - architect

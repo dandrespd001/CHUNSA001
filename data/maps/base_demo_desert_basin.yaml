@@ -101,6 +101,39 @@ resource_spawns:
     x_millitiles: 223500
     y_millitiles: 112500
     amount: 800
+  # --- Sprint 1.22: pares espejados de LINO y LANA, las dos fibras de las
+  # épocas 1-2 (SPEC-007 §14: lana aparece en la 1, lino en la 2). El lino no
+  # es adorno: `rome:terramare_flax_retting` lo consume, y la Terramare está
+  # documentada cultivando «beans, grapes, wheat, and flax». Sin él en el mapa
+  # la receta sería infabricable — que es el patrón que ya nos mordió tres
+  # veces (estaño, mena de hierro, caliza) y que hoy caza el guardián de
+  # obtenibilidad de test_craft.
+  #
+  # AVISO HONESTO SOBRE LA LANA: un «depósito» de lana es una abstracción. La
+  # lana sale de un rebaño, no de un yacimiento, y el modelo de ganado no
+  # existe hasta el Sprint 1.12. Se deja como depósito finito —un rebaño
+  # salvaje que se agota— y se sustituirá cuando haya ganado de verdad. Queda
+  # dicho aquí para que nadie lo lea como una decisión de diseño meditada.
+  - kind: resource
+    id: chunsa:flax
+    x_millitiles: 36500
+    y_millitiles: 144500
+    amount: 700
+  - kind: resource
+    id: chunsa:flax
+    x_millitiles: 219500
+    y_millitiles: 144500
+    amount: 700
+  - kind: resource
+    id: chunsa:wool
+    x_millitiles: 16500
+    y_millitiles: 148500
+    amount: 600
+  - kind: resource
+    id: chunsa:wool
+    x_millitiles: 239500
+    y_millitiles: 148500
+    amount: 600
   # --- Neutros IMPAR (x=128000, y∈[124000, 132000), 4 depósitos disputados) ---
   - kind: resource
     id: chunsa:copper
@@ -130,7 +163,7 @@ starting_positions:
     x_millitiles: 235500
     y_millitiles: 128500
 recommended_epoch_window:
-  - 4
+  - 1
   - 5
 provenance:
   status: promoted

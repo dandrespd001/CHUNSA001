@@ -1,0 +1,58 @@
+schema_version: 1
+id: egipto:qadan_camp
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.qadan_camp
+description_key: egipto:building.qadan_camp.description
+epoch_window:
+  - 1
+  - 2
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 250
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 30
+build_time_ticks: 250
+dropoff_resources:
+  - chunsa:food
+  - chunsa:wood
+  - chunsa:stone
+trains: []
+researches:
+  - egipto:wild_grain_harvest
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Qadan culture: «a unique approach to food gathering that incorporated the preparation and consumption of wild grasses and grains»; «Large numbers of grinding stones and blades have been found with glossy films of silica on them, which could possibly be the result of cutting grass stems»; la economía se apoyaba en «fishing, hunting, and, as mentioned, the extensive use of wild grain»"
+        locator: "Subsistence and tools; sitios «from the Second Cataract of the Nile to Tushka»; floreció «approximately 15,000 years ago» y persistió «approximately 4,000 years»"
+        url: "https://en.wikipedia.org/wiki/Qadan_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "La época 1 de CHUNSA es la Paleolítica (SPEC-007 §3) y hasta el Sprint 1.22 NO EXISTÍA para ninguna civilización: Egipto abría en la 3 y Roma en la 5. Este campamento es el punto de acopio de una economía de caza, pesca y recolección de grano SILVESTRE — la fuente subraya que «grains were not planted in ordered rows», que es justo lo que separa la época 1 de la 2. Por eso admite comida, madera y piedra (los tres recursos de la época 1 según SPEC-007 §14) y NO grano cultivado. Coste 30 de madera, HP 250 y 250 ticks son diseño: debe ser lo más barato del catálogo, porque es lo único que hay. Armadura 0 en los tres tipos: no es una fortificación, es un campamento."
+    reviewed_by:
+      - architect

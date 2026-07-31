@@ -4,8 +4,8 @@ civ_id: egipto:dynastic_nile
 display_name_key: egipto:building.settlement_center
 description_key: egipto:building.settlement_center.description
 epoch_window:
-  - 3
-  - 4
+  - 1
+  - 5
 kind: civic
 footprint:
   width_cells: 3
@@ -32,6 +32,9 @@ required_capabilities: []
 grants_capabilities: []
 recipes: []
 playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+  - egipto:late_period
   - egipto:old_kingdom
   - egipto:new_kingdom
 availability_mode: historical

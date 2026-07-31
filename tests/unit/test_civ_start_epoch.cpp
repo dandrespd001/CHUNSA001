@@ -47,12 +47,26 @@ struct Expected {
     uint8_t     start_epoch;
 };
 
-// Egipto dinástico abre en la 3 y Roma en la 5. Son las ventanas declaradas en
-// data/civilizations/, y el mínimo de sus datos debe coincidir con ellas: una
-// civ que arranca ANTES de su propia ventana es un dato mal puesto.
+// CAMBIO INTENCIONADO — Sprint 1.22, 2026-07-31. Antes: Egipto 3, Roma 5.
+// Ahora AMBAS arrancan en la 1, y este guardián lo detectó en cuanto ocurrió,
+// que es exactamente para lo que se escribió.
+//
+// El motivo es que las épocas 1 (Paleolítica) y 2 (Neolítica) existían en la
+// escala de SPEC-007 §3 y NO LAS JUGABA NADIE: Egipto abría en la 3, Roma en
+// la 5, y Roma además no tenía ningún dato en las épocas 1-4. Siete de las
+// diez casillas civilización×época del rango 1-5 estaban muertas.
+//
+// El 1.22 les da contenido —campamentos qadan y epigravetiense, talleres
+// líticos, almacenes neolíticos, aldea Remedello, taller Terramare— y amplía
+// a [1,5] la ventana de los obreros y los centros. Al bajar el `epoch_min`
+// de esos datos a 1, la época inicial baja con ellos: es el mismo mecanismo
+// que en el 1.9 nos costó tres bisecciones, sólo que esta vez es lo que se
+// quería y está escrito.
+//
+// La partida empieza ahora en el Paleolítico, no en la Edad del Bronce.
 constexpr Expected kExpected[] = {
-    {"egipto:dynastic_nile", 3},
-    {"rome:republic_imperial", 5},
+    {"egipto:dynastic_nile", 1},
+    {"rome:republic_imperial", 1},
 };
 
 }  // namespace

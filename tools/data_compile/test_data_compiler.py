@@ -333,7 +333,7 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(out.read_bytes(), golden.read_bytes())
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
             self.assertIn(
-                "records unit=5 building=8 tech=4 civ=2 map=1 "
+                "records unit=7 building=16 tech=6 civ=2 map=1 "
                 "ai-profile=1 resource=36",
                 stdout,
             )
@@ -342,8 +342,13 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(
                 [record["id"] for record in records[2]],
                 [
-                    "egipto:chariot_warrior", "egipto:work_crew",
-                    "rome:ballista_crew", "rome:camp_work_crew", "rome:legionary",
+                    # Sprint 1.22: +2 recolectores-cazadores de la epoca 1. El
+                    # orden es bytewise por record_id, asi que nile_forager cae
+                    # ENTRE chariot_warrior y work_crew: es la misma reordenacion
+                    # que mueve los BuildingId y los hashes de la apertura.
+                    "egipto:chariot_warrior", "egipto:nile_forager", "egipto:work_crew",
+                    "rome:ballista_crew", "rome:camp_work_crew", "rome:italic_forager",
+                    "rome:legionary",
                 ],
             )
 

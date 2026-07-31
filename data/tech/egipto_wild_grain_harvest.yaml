@@ -1,0 +1,53 @@
+schema_version: 1
+id: egipto:wild_grain_harvest
+display_name_key: egipto:tech.wild_grain_harvest
+description_key: egipto:tech.wild_grain_harvest.description
+available_to:
+  - egipto:dynastic_nile
+epoch: 1
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 40
+  chunsa:stone: 20
+required_capabilities: []
+research_time_ticks: 400
+prerequisites: []
+required_buildings:
+  - egipto:qadan_camp
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - egipto:wild_grain_harvest
+stat_effects:
+  - stat: armor_cut
+    amount: 1
+    applies_to:
+      - citizen
+playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Qadan culture: «a unique approach to food gathering that incorporated the preparation and consumption of wild grasses and grains»; «grains were not planted in ordered rows»; «Large numbers of grinding stones and blades have been found with glossy films of silica on them, which could possibly be the result of cutting grass stems»"
+        locator: "Wild grain harvesting and tools"
+        url: "https://en.wikipedia.org/wiki/Qadan_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "La primera tecnología del juego, y cuenta la idea más importante de la época 1: se siega grano que NADIE ha plantado. La fuente lo dice con una precisión que vale oro —«grains were not planted in ordered rows»— y ese es exactamente el límite que la época 2 romperá. El efecto es armor_cut +1 sobre citizen, un efecto DELIBERADAMENTE modesto: la piedra de moler y la hoz de sílice no hacen a nadie más fuerte, y prometer un salto económico aquí sería mentir sobre lo que fue esta tecnología. Lo que hace es que el trabajador aguante un poco más, que es lo que da una dieta más constante. Cuando exista el sistema de granjas (Sprint 1.12) esta tech será el contraste didáctico de la siembra."
+    reviewed_by:
+      - architect

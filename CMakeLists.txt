@@ -228,6 +228,16 @@ target_compile_definitions(chunsa_test_civ_start_epoch PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME civ_start_epoch COMMAND chunsa_test_civ_start_epoch)
 
+# --- Test Sprint 1.22: jugabilidad por época (épocas 1-5 completas) -----------
+# Hermano del anterior: aquel vigila DÓNDE empieza una civilización, este que
+# NO QUEDE ATRAPADA en ninguna época del rango. La condición sale de la puerta
+# `count_ok < 2u` de ADVANCE_EPOCH, no del gusto de nadie.
+add_executable(chunsa_test_epoch_playability tests/unit/test_epoch_playability.cpp)
+target_link_libraries(chunsa_test_epoch_playability PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_epoch_playability PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME epoch_playability COMMAND chunsa_test_epoch_playability)
+
 # --- Test Sprint 1.18: fórmula de daño por tipo (SPEC-004 Parte VI) -----------
 add_executable(chunsa_test_combat_damage tests/unit/test_combat_damage.cpp)
 target_link_libraries(chunsa_test_combat_damage PRIVATE chunsa_sim_core)

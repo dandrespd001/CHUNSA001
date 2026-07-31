@@ -1,0 +1,53 @@
+schema_version: 1
+id: rome:backed_bladelet
+display_name_key: rome:tech.backed_bladelet
+description_key: rome:tech.backed_bladelet.description
+available_to:
+  - rome:republic_imperial
+epoch: 1
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 40
+  chunsa:stone: 20
+required_capabilities: []
+research_time_ticks: 400
+prerequisites: []
+required_buildings:
+  - rome:epigravettian_camp
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - rome:backed_bladelet
+stat_effects:
+  - stat: attack
+    amount: 1
+    applies_to:
+      - infantry
+playable_period_ids:
+  - rome:italic_epigravettian
+  - rome:italic_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Epigravettian: el utillaje lítico lo forman «microliths, such as backed blades, backed points, and bladelets with retouched end»; el conjunto abarca «~21,000 – 10,000 cal. BP» con una fase Final de «14,000–8,000 BP»"
+        locator: "Stone tool technology and chronology"
+        url: "https://en.wikipedia.org/wiki/Epigravettian"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Aqui las dos civilizaciones SI divergen, y es la primera vez en la partida. Egipto invierte su epoca 1 en la siega de grano silvestre (efecto economico, armadura del trabajador); Roma la invierte en el microlito de dorso rebajado, que es utillaje de CAZA, y el efecto es ataque +1 sobre infanteria. Misma epoca, mismo coste, dos apuestas distintas documentadas en dos culturas reales. Es la asimetria mas barata posible: no exige contenido nuevo, solo que cada civ gaste su epoca 1 en lo que de verdad hizo. El +1 sobre un ataque base de 4 es un 25 por ciento, que en una epoca sin armadura ninguna se nota de inmediato."
+    reviewed_by:
+      - architect

@@ -5,7 +5,7 @@ display_name_key: egipto:building.foundry
 description_key: egipto:building.foundry.description
 epoch_window:
   - 4
-  - 4
+  - 5
 kind: economic
 footprint:
   width_cells: 2
@@ -36,6 +36,7 @@ recipes:
     output_amount: 2
     duration_ticks: 240
 playable_period_ids:
+  - egipto:late_period
   - egipto:old_kingdom
   - egipto:new_kingdom
 availability_mode: historical

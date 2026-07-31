@@ -4,7 +4,7 @@ civ_id: rome:republic_imperial
 display_name_key: rome:building.forum_center
 description_key: rome:building.forum_center.description
 epoch_window:
-  - 5
+  - 1
   - 5
 kind: civic
 footprint:
@@ -32,6 +32,10 @@ required_capabilities: []
 grants_capabilities: []
 recipes: []
 playable_period_ids:
+  - rome:italic_epigravettian
+  - rome:italic_neolithic
+  - rome:remedello_copper
+  - rome:terramare_bronze
   - rome:republican_expansion
   - rome:high_empire
 availability_mode: historical

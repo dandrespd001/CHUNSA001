@@ -1,0 +1,57 @@
+schema_version: 1
+id: rome:italic_storehouse
+civ_id: rome:republic_imperial
+display_name_key: rome:building.italic_storehouse
+description_key: rome:building.italic_storehouse.description
+epoch_window:
+  - 2
+  - 3
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 350
+  armor:
+    cut: 1
+    pierce: 3
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 40
+  chunsa:clay: 20
+build_time_ticks: 400
+dropoff_resources:
+  - chunsa:food
+  - chunsa:clay
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:italic_neolithic
+  - rome:remedello_copper
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_EPOCAS_1_5.md
+    sources:
+      - citation: "Wikipedia, Remedello culture: la cultura se desarrolla «during the Copper Age (4th and 3rd millennium BCE)» en «Northern Italy, particularly in the area of the Po Valley», con enterramientos que contienen «arrows, stone daggers and polished stone axes»"
+        locator: "Period and region — el hacha de piedra PULIDA (no tallada) es el marcador neolítico que sostiene la continuidad con la época 2"
+        url: "https://en.wikipedia.org/wiki/Remedello_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "De la Remedello calcolitica la fuente da fechas, region y ajuar; de un almacen NEOLITICO italico concreto no cita ninguna excavacion. Lo que sostiene la cita es el MARCO —hachas de piedra PULIDA, es decir neolitico, en continuidad hacia el Calcolitico del Po— y no el edificio en si. Se marca H porque el informe VERIF_EPOCAS_1_5 recoge y acota exactamente ese alcance; lo que no se afirma es que exista un almacen excavado con estas caracteristicas. Gemelo mecanico del egipcio:merimde_storage, con los mismos numeros y por la misma razon que los campamentos y los talleres: la asimetria de civilizacion empieza en la epoca 3, no antes. Su ventana [2,3] es la que da a Roma su SEGUNDO edificio en la epoca 3, que hasta el 1.22 no tenia ninguno."
+    reviewed_by:
+      - architect
