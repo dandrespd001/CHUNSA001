@@ -1,0 +1,47 @@
+# Plantilla: vivienda. El edificio mas repetido de una partida.
+#
+# POR QUE ES BARATA Y POR QUE APORTA 5. Es la unica construccion que el jugador
+# levanta DECENAS de veces, asi que su coste no es un numero de balance
+# cualquiera: es el impuesto que se paga por crecer. 35 de madera y 5 de
+# poblacion significa que llegar al tope duro de 200 cuesta 40 casas y 1400 de
+# madera, una cifra que compite de verdad con el ejercito. Si fuera mas barata
+# el tope dejaria de decidir nada; si fuera mas cara la partida se atascaria.
+#
+# No aparece en ninguna epoca concreta porque la vivienda no es una tecnologia:
+# se vive bajo techo en las quince. Lo que cambia entre epocas es el aspecto,
+# no la funcion, y eso es cosa de la presentacion, no del kernel.
+template_id: base:dwelling
+schema_version: 1
+epoch_window:
+  - 1
+  - 15
+kind: housing
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 200
+  armor:
+    cut: 0
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 35
+build_time_ticks: 220
+population_provided: 5
+dropoff_resources: []
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.14-poblacion
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect

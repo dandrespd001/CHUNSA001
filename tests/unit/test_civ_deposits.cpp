@@ -622,6 +622,9 @@ inline BuildingDefinitionV1 make_barracks_a() {
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 0; d.trains[1] = 1; d.train_count = 2;  // warrior_a(0), warrior_b(1)
+    // Sprint 1.14: fixture sintetico, no va de poblacion. Declara el tope
+    // entero para seguir midiendo lo que media.
+    d.population_provided = static_cast<int32_t>(POP_CAP_V1);
     for (uint32_t k = 2; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
     d.researches[0] = 0; d.researches[1] = 1; d.research_count = 2;  // tech_a(0), tech_b(1)
     for (uint32_t k = 2; k < PROD_TECHS_MAX; ++k) d.researches[k] = INVALID_TECH_ID;

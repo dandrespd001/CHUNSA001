@@ -238,6 +238,13 @@ target_compile_definitions(chunsa_test_epoch_playability PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME epoch_playability COMMAND chunsa_test_epoch_playability)
 
+# --- Test Sprint 1.14: poblacion por casas (SPEC-004 §11.3) -------------------
+# El tope deja de ser una constante regalada y pasa a construirse. Devuelve al
+# juego la decision economica de crecer frente a militarizar.
+add_executable(chunsa_test_population_housing tests/unit/test_population_housing.cpp)
+target_link_libraries(chunsa_test_population_housing PRIVATE chunsa_sim_core)
+add_test(NAME population_housing COMMAND chunsa_test_population_housing)
+
 # --- Test Sprint 1.23: politica de epoca de la IA ----------------------------
 # El 1.22 abrio las epocas 1-5 al humano. Este mide si la MAQUINA sabe jugarlas:
 # que suba de epoca y que use el contenido temprano en vez de esperar a la 5.

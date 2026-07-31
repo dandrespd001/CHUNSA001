@@ -68,6 +68,10 @@ inline BuildingDefinitionV1 make_center() {
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 0 /*soldier*/; d.train_count = 1;
+    // Sprint 1.14: el tope de poblacion pasa a salir de los edificios. Este
+    // fixture es sintetico y no va de poblacion, asi que declara el tope
+    // entero para seguir midiendo lo que media.
+    d.population_provided = static_cast<int32_t>(POP_CAP_V1);
     for (uint32_t k = 1; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
     for (uint32_t k = 0; k < PROD_TECHS_MAX; ++k) d.researches[k] = INVALID_TECH_ID;
     d.research_count = 0;

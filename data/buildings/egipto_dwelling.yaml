@@ -1,0 +1,28 @@
+# Hereda de base:dwelling. Una casa no afirma nada historico, asi que su
+# procedencia es evidence N: sin fuentes y sin informe, que es lo que el
+# esquema exige para ese grado. Inventarle una cita seria peor que no tenerla.
+extends: base:dwelling
+id: egipto:dwelling
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.dwelling
+description_key: egipto:building.dwelling.description
+playable_period_ids:
+  - egipto:qadan_paleolithic
+  - egipto:fayum_neolithic
+  - egipto:late_period
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.14-poblacion
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Vivienda generica de egipto. El tope de poblacion pasa a construirse en vez de regalarse, asi que este edificio es la decision economica mas repetida de la partida: cada casa son 35 de madera que no van al ejercito. Aporta 5 y el tope duro sigue en 200, o sea 40 casas para llegar arriba. Ventana [1,15] porque se vive bajo techo en todas las epocas; lo que cambia con la epoca es el aspecto, y eso es presentacion, no kernel."
+    reviewed_by:
+      - architect

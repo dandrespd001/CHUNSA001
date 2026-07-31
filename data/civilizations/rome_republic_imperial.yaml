@@ -95,6 +95,7 @@ unit_ids:
   - rome:legionary
 building_ids:
   - rome:castra_barracks
+  - rome:dwelling
   - rome:epigravettian_camp
   - rome:epoch_15_works
   - rome:filatoio_mill

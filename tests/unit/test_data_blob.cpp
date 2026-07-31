@@ -274,8 +274,8 @@ int main() {
     // data/compiled/chunsa_base.chdb.content.json, que es la declaración del
     // compilador y ha coincidido con este golden en todos los sprints previos.
     static constexpr uint8_t kExpectedHash[32] = {
-        0x24, 0x2c, 0x71, 0xaa, 0x25, 0x01, 0x6b, 0x1c, 0xd7, 0x06, 0x62, 0x78, 0x55, 0xf2, 0x1f, 0x47,
-        0x4e, 0xcb, 0xa0, 0x75, 0x5d, 0x98, 0x44, 0xf6, 0x7d, 0x21, 0xbc, 0x14, 0xd4, 0x61, 0xc2, 0x5e,
+        0x6a, 0xc7, 0x48, 0xa6, 0x1d, 0xb6, 0x0e, 0x38, 0x66, 0x34, 0xfb, 0x70, 0xcb, 0x83, 0x17, 0xeb,
+        0x8e, 0x0e, 0xa5, 0x9a, 0x92, 0x45, 0xd7, 0xc2, 0x6d, 0xd2, 0xdd, 0xe0, 0x7e, 0x7b, 0xc7, 0x2d,
     };
     CHECK(std::memcmp(cat.content_hash.bytes, kExpectedHash, 32) == 0);
     CHECK(cat.blob_format_major == 1 && cat.blob_format_minor == 1);
@@ -637,7 +637,7 @@ int main() {
         // Sprint 1.2 añade los cuarteles: el conteo crece con los datos (>= 4,
         // exacto 6 desde mm/datos-tech-1.2); los checks por record_id de abajo
         // son los que fijan el contrato, no el conteo.
-        CHECK(cat.building_count == 36);  // 1.25: +20 de las epocas 6-15  // 1.22: +8 de las epocas 1-4
+        CHECK(cat.building_count == 38);  // 1.14: +2 viviendas  // 1.25: +20 de las epocas 6-15  // 1.22: +8 de las epocas 1-4
 
         auto find = [&](const char* name) {
             return catalog_find_building(cat, name, std::strlen(name));

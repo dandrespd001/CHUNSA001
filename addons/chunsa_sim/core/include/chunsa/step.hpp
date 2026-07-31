@@ -40,6 +40,34 @@ inline constexpr int64_t GATHER_PICK_RADIUS_RAW = FX_ONE_RAW;
 // mínimo desde la época inicial). EPOCH_COST_*: coste fijo v1. EPOCH_MAX_V1:
 // época máxima del slice — v1 la fija como constante literal (no derivada del
 // catálogo pese a la prosa "de los datos del match" del spec; ver RESULT).
+// Sprint 1.14 (SPEC-004 §11.3) — tope de poblacion DERIVADO de las viviendas.
+//
+// Funcion PURA del estado: suma `population_provided` de los edificios propios
+// COMPLETOS y acota por POP_CAP_V1. Que sea derivada y no un campo nuevo evita
+// el fallo clasico del contador incremental —desincronizarse al morir un
+// edificio a medio construir, al cancelar una cola o al reciclar un slot— y
+// ademas la deja FUERA del dominio del checksum, igual que `flow`: la
+// informacion para recalcularla ya viaja en el estado.
+inline int32_t player_pop_cap(const GameState& g, uint8_t player) noexcept {
+    if (g.catalog == nullptr) return 0;
+    int64_t total = 0;
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] != player) continue;
+        if (g.entity_kind[i] != 1u) continue;                    // solo edificios
+        if (g.building_id[i] >= g.catalog->building_count) continue;
+        const BuildingDefinitionV1& bdef = g.catalog->buildings[g.building_id[i]];
+        // COMPLETO: una casa a medio construir no aloja a nadie. Si contara,
+        // se podria entrenar contra poblacion inexistente y bastaria cancelar
+        // la obra para quedarse por encima del tope.
+        if (static_cast<uint32_t>(g.build_progress[i]) < bdef.build_time_ticks) continue;
+        if (bdef.population_provided <= 0) continue;
+        total += bdef.population_provided;
+        if (total >= static_cast<int64_t>(POP_CAP_V1)) return static_cast<int32_t>(POP_CAP_V1);
+    }
+    return static_cast<int32_t>(total);
+}
+
 inline constexpr uint32_t EPOCH_MIN_TICKS = 6000;
 inline constexpr int32_t EPOCH_COST_A = 200;
 inline constexpr int32_t EPOCH_COST_B = 200;
@@ -539,7 +567,10 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             if (g.prod_count[bi] >= PROD_QUEUE_CAP) return RejectReason::ILLEGAL_STATE;
 
             const int32_t pop_cost = udef.pop_cost;  // constante v1 = 1
-            if (g.pop_used[c.emitter] + pop_cost > static_cast<int32_t>(POP_CAP_V1)) {
+            // Sprint 1.14: el tope ya no es la constante regalada, sino lo que
+            // el jugador HAYA CONSTRUIDO. POP_CAP_V1 sigue dentro, como cota
+            // dura, en player_pop_cap.
+            if (g.pop_used[c.emitter] + pop_cost > player_pop_cap(g, c.emitter)) {
                 return RejectReason::ILLEGAL_STATE;
             }
 

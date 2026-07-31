@@ -273,6 +273,11 @@ struct BuildingDefinitionV1 {
     // lo declara `required`), misma disciplina de referencia diferida que
     // trains/researches/required_capabilities — ver load_impl.
     CivId civ_id;
+    // Sprint 1.14 (SPEC-004 §11.3): poblacion que aporta este edificio cuando
+    // esta COMPLETO. 0 = no es vivienda. El tipo `housing` existia en
+    // building.schema.json desde el 1.1 y ninguna parte del kernel lo miraba;
+    // este campo es lo que le da consecuencia.
+    int32_t population_provided;
     // Sprint 1.9 (SPEC-007 §12): recetas que ejecuta este edificio, como
     // RecipeId hacia la tabla plana del catalogo.
     RecipeId recipes[RECIPES_PER_BUILDING_MAX];
@@ -1200,6 +1205,16 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     }
     const uint8_t constructible = static_cast<uint8_t>(constructible_v->tag == 0x02u ? 1u : 0u);
 
+    // Sprint 1.14: OPCIONAL con defecto 0. Los 36 edificios anteriores no lo
+    // declaran y deben seguir cargando; hacerlo obligatorio habria invalidado
+    // el catalogo entero por un campo que solo importa a las viviendas.
+    int32_t population_provided = 0;
+    if (const CveValue* ppv = obj.find("population_provided")) {
+        if (!ppv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (ppv->i < 0 || ppv->i > 10000) fail(CatalogLoadCode::InvalidBuilding);
+        population_provided = static_cast<int32_t>(ppv->i);
+    }
+
     const CveValue* btv = obj.find("build_time_ticks");
     if (!btv || !btv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
     // Enmienda del Arquitecto 2026-07-23 (SPEC-004 §4.1.2/§4.3): >= 0, no >= 1.
@@ -1283,6 +1298,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     }
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
+    def.population_provided = population_provided;
 
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window + listas de
     // referencia crudas (resueltas más tarde por load_impl).

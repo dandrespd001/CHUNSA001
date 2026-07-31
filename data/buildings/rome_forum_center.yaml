@@ -18,6 +18,7 @@ stats:
     pierce: 6
     impact: 0
 constructible: false
+population_provided: 5
 resource_costs: {}
 build_time_ticks: 0
 dropoff_resources:

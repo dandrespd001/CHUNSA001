@@ -1021,3 +1021,64 @@ vista quién está herido, que es justo lo que el jugador necesita saber.
 9. Clic en un icono de la rejilla deja seleccionada esa unidad.
 10. El escenario de la apertura sigue terminando con `winner=1` por debajo de
     36000 ticks: las trayectorias **cambian a propósito**, el resultado no.
+
+## §11.3 Población por viviendas (Sprint 1.14)
+
+### El problema que resuelve
+
+Hasta el 1.14 el tope de población era `POP_CAP_V1 = 200`: una constante igual
+para todos y disponible **desde el tick 0**. Eso quitaba del juego la decisión
+económica más básica de un RTS —**crecer cuesta**— y dejaba como única presión
+sobre el jugador el precio de la unidad. Expandirse no tenía precio propio.
+
+El tipo `housing` existía en `building.schema.json` desde el Sprint 1.1 y
+**ninguna parte del kernel lo miraba**. Era una etiqueta sin consecuencia.
+
+### La regla
+
+```
+tope(jugador) = Σ population_provided de sus edificios COMPLETOS,
+                acotado por POP_CAP_V1
+```
+
+`TRAIN_UNIT` rechaza con `ILLEGAL_STATE` cuando `pop_used + pop_cost > tope`.
+
+### Por qué es DERIVADA y no un campo del estado
+
+Es la decisión de diseño que importa, y tiene dos consecuencias buenas:
+
+1. **No entra en el dominio del checksum**, igual que `flow`, que también es
+   derivada. Por tanto **no hay bump de `CHECKSUM_ALGO_VERSION`**: la
+   información necesaria para recalcularla (`building_id`, `build_progress`,
+   `owner`) ya viajaba en el estado.
+2. **No puede desincronizarse.** Un contador incremental habría que ajustarlo
+   al completar una obra, al morir un edificio a medio construir, al cancelar
+   una cola y al reciclar un slot. Cada uno de esos es una oportunidad de
+   dejarlo mal, y el síntoma —un tope que no cuadra— aparecería lejos de la
+   causa.
+
+El coste es un barrido por entidades en `TRAIN_UNIT`. Es aceptable porque
+`TRAIN_UNIT` es un **comando**, no trabajo por tick y por entidad, y
+`ADVANCE_EPOCH` ya hacía exactamente lo mismo.
+
+### `POP_CAP_V1` no desaparece
+
+Sobrevive como **cota dura de seguridad**, no como regla de juego: acota los
+arrays y evita que un dato absurdo (`population_provided` enorme) deje al
+kernel sin límite. Un dato malo degrada el balance; nunca la integridad.
+
+### Una obra a medio hacer no aloja a nadie
+
+Sólo cuentan los edificios con `build_progress >= build_time_ticks`. Si
+contaran las obras en curso, se podría entrenar contra población inexistente y
+**bastaría cancelar la obra para quedarse por encima del tope**.
+
+### Efecto en la IA, medido
+
+Al entrar la regla, la IA pasó de entrenar **44 unidades a 0** en 30 000 ticks:
+llena el cupo del centro y no construye viviendas, porque nada en `ai_execute`
+mira la población. Es la **misma clase de fallo** que el del Sprint 1.23, donde
+`ai_find_trainer_type` no miraba la época: la IA no está ciega por falta de
+inteligencia, sino porque **nadie le dio el candidato**.
+
+Queda como trabajo inmediato y obliga a subir `AI_ALGO_VERSION`.

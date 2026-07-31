@@ -39,8 +39,8 @@ inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x7abc1a1ab2d246bcull;
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x886ea3d7ae279650ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x3df4652260b6926dull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x052aa6591bafe8e2ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0xfed5496ac359cfcdull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
@@ -128,8 +128,22 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // invariables: eso ya no es casualidad, es la firma de un cambio que solo
 // toca NOMBRES. Si alguna vez el end_tick se mueve con un renombrado, ahi hay
 // un fallo de verdad que buscar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x9f05458167aafb12ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x18ea66993f131802ull;
+//
+// Sprint 1.14 — ESTE re-registro es de otra naturaleza y conviene no
+// confundirlo con los anteriores. Los del 1.22, 1.25 y 1.26 eran renombrados:
+// cambiaba la numeracion y nada mas. Este cambia DOS REGLAS de verdad: el tope
+// de poblacion pasa a construirse (SPEC-004 §11.3) y la IA aprende a levantar
+// viviendas (AI_ALGO_VERSION 7->8). Que los hashes se muevan era inevitable.
+//
+// Lo que SI merece atencion: end_tick sigue en 10473 y winner=1. Una regla que
+// limita el crecimiento y un procedimiento de IA nuevo, y la apertura dura
+// exactamente lo mismo. No es casualidad: la IA construye casas a tiempo y no
+// llega a quedarse bloqueada, asi que su ritmo no cambia. Si el end_tick se
+// hubiera disparado, habria significado que la IA se atasca esperando
+// poblacion — y eso si habria sido un fallo que corregir, no un baseline que
+// re-registrar.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xed04cc5b890e8b72ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x521199cfa6d6a9bcull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

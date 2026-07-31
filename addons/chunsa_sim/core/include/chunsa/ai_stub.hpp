@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 7;  // Sprint 1.23: la eleccion de edificio entrenador respeta la EPOCA
+inline constexpr uint32_t AI_ALGO_VERSION     = 8;  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -420,6 +420,26 @@ inline AiTrainerTypeV1 ai_find_trainer_type(const DataCatalogV1& cat, CivId civ,
         }
     }
     return r;
+}
+
+// Sprint 1.14 — tipo de VIVIENDA de la civilizacion, valido en esta epoca.
+//
+// Mismo patron que ai_find_trainer_type y por la misma leccion del 1.23: el
+// filtro va DENTRO del barrido para que la busqueda CONTINUE hasta el primer
+// candidato valido, en vez de rendirse en el primero a secas. Devolver el
+// primer edificio con poblacion sin mirar la epoca dejaria a la IA enganchada
+// a una casa que no puede construir todavia.
+inline BuildingId ai_find_housing_type(const DataCatalogV1& cat, CivId civ,
+                                       uint8_t epoch) noexcept {
+    for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
+        const BuildingDefinitionV1& bdef = cat.buildings[bt];
+        if (civ != INVALID_CIV_ID && bdef.civ_id != civ) continue;
+        if (bdef.population_provided <= 0) continue;
+        if (bdef.constructible == 0u) continue;   // el centro da poblacion pero no se construye
+        if (!ai_epoch_ok(epoch, bdef.epoch_min, bdef.epoch_max)) continue;
+        return static_cast<BuildingId>(bt);
+    }
+    return INVALID_BUILDING_ID;
 }
 
 // ¿El jugador IA ya posee (vivo) al menos una instancia del tipo de edificio
@@ -850,6 +870,48 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             }
         }
 
+        // Candidato VIVIENDA (Sprint 1.14). Se dispara con MARGEN, no al tocar
+        // el tope: la casa tarda 220 ticks en levantarse, asi que esperar a
+        // estar bloqueado significa quedarse parado todo ese rato. Con margen
+        // 2 la IA construye mientras aun puede entrenar.
+        //
+        // Ademas NO encadena casas: si ya tiene una en obra, espera. Sin esa
+        // condicion gastaria toda la madera en viviendas en cuanto se acercara
+        // al tope, que es la forma tonta de arruinarse.
+        bool       house_ok = false;
+        BuildingId house_type = INVALID_BUILDING_ID;
+        AiFreeCellV1 house_cell{};
+        {
+            const int32_t cap = player_pop_cap(g, ai_player);
+            const int32_t margen = 2;
+            if (g.pop_used[ai_player] + margen >= cap && macro.has_anchor) {
+                const BuildingId ht = ai_find_housing_type(cat, ai_civ, epoch);
+                if (ht != INVALID_BUILDING_ID) {
+                    // ¿Hay ya una vivienda EN OBRA? Barrido ascendente.
+                    bool en_obra = false;
+                    for (uint32_t j = 0; j < g.entities.capacity && !en_obra; ++j) {
+                        if (!g.entities.alive[j]) continue;
+                        if (g.owner[j] != ai_player) continue;
+                        if (g.entity_kind[j] != 1u) continue;
+                        if (g.building_id[j] != ht) continue;
+                        if (static_cast<uint32_t>(g.build_progress[j]) < cat.buildings[ht].build_time_ticks) {
+                            en_obra = true;
+                        }
+                    }
+                    const BuildingDefinitionV1& hd = cat.buildings[ht];
+                    if (!en_obra && ai_caps_ok(g, ai_player, hd)
+                        && ai_afford(g, ai_player, hd.cost)) {
+                        house_cell = ai_find_free_cell(g, macro.anchor_tx, macro.anchor_ty,
+                                                       hd.footprint_w, hd.footprint_h);
+                        if (house_cell.found) {
+                            house_ok = true;
+                            house_type = ht;
+                        }
+                    }
+                }
+            }
+        }
+
         // Candidato MILITARIZAR: entrenar una unidad de combate en el primer
         // edificio propio COMPLETO capaz de hacerlo.
         bool     mil_ok = false;
@@ -1011,6 +1073,17 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         if (u_build > best_u) { best_u = u_build; best_idx = 1; }
         if (u_mil   > best_u) { best_u = u_mil;   best_idx = 2; }
         if (u_tech  > best_u) { best_u = u_tech;  best_idx = 3; }
+        // La VIVIENDA se evalua la ULTIMA y con estricto mayor, asi que en
+        // empate pierde. Pero su utilidad no es un peso del perfil: es 10000
+        // bp, el maximo. Es deliberado y merece justificarse — estar topado de
+        // poblacion no es "una opcion mas peor o mejor", es que TODAS las demas
+        // intenciones economicas y militares quedan bloqueadas. Ceder la
+        // prioridad aqui seria dejar a la IA mirando un tope que ella misma
+        // puede levantar. El margen de 2 y la condicion de "no encadenar" son
+        // lo que impide que esta prioridad maxima degenere en construir casas
+        // sin parar.
+        const int32_t u_house = house_ok ? 10000 : 0;
+        if (u_house > best_u) { best_u = u_house; best_idx = 5; }
         if (u_craft > best_u) { best_u = u_craft; best_idx = 4; }
 
         if (best_u > 0) {
@@ -1022,6 +1095,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
                      static_cast<int64_t>(build_cell.tx), static_cast<int64_t>(build_cell.ty),
                      build_type);
+            } else if (best_idx == 5) {
+                emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
+                     static_cast<int64_t>(house_cell.tx), static_cast<int64_t>(house_cell.ty),
+                     house_type);
             } else if (best_idx == 2) {
                 emit(CommandType::TRAIN_UNIT,
                      EntityHandle{mil_building, g.entities.generation[mil_building]},

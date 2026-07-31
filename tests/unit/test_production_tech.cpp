@@ -107,6 +107,9 @@ inline BuildingDefinitionV1 make_barracks() {
     d.dropoff_mask = 0; d.constructible = 0;
     d.epoch_min = 1; d.epoch_max = 15;
     d.trains[0] = 1; d.trains[1] = 2; d.train_count = 2;
+    // Sprint 1.14: fixture sintetico, no va de poblacion. Declara el tope
+    // entero para seguir midiendo lo que media.
+    d.population_provided = static_cast<int32_t>(POP_CAP_V1);
     for (uint32_t k = 2; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
     // tech_a(0)/tech_b(1)/tech_c(2) resolubles; tech_high_epoch(3) NO está
     // aquí a propósito (§4e del test ejercita el rechazo por "no en researches").
@@ -871,7 +874,7 @@ static void test_catalog_real_golden() {
     CHECK(code == CatalogLoadCode::Ok);
     if (!store.valid()) { std::printf("catalog_real_golden: catálogo inválido, abortando subtest\n"); return; }
     const DataCatalogV1& cat = store.catalog();
-    CHECK(cat.building_count == 36);
+    CHECK(cat.building_count == 38);
     CHECK(cat.tech_count == 6);
     CHECK(cat.capability_count == 7);
 
