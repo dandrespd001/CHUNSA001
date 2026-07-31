@@ -116,6 +116,18 @@ struct Hasher {
     void i32(int32_t v) noexcept { u32(static_cast<uint32_t>(v)); }
     void i64(int64_t v) noexcept { u64(static_cast<uint64_t>(v)); }
     uint64_t digest() noexcept { return XXH3_64bits_digest(&st); }
+    // Sprint 1.21: un array CONTIGUO de golpe. Alimenta exactamente los mismos
+    // bytes, en el mismo orden, que `for (i<n) bytes(&a[i], sizeof(T))`, asi
+    // que el digest NO cambia — XXH3 en streaming solo depende de la secuencia,
+    // no del troceado. Los tipos con signo valen: int32_t y uint32_t comparten
+    // representacion, y `i32()` ya hacia ese mismo cast antes de hashear.
+    //
+    // NO es portable entre plataformas de distinto orden de bytes para T de mas
+    // de un byte — pero es que el bucle original TAMPOCO lo era: hasheaba la
+    // representacion en memoria igual que esto. No se pierde ninguna garantia,
+    // solo se dejan de pagar n llamadas.
+    template <typename T>
+    void array(const T* a, uint32_t n) noexcept { bytes(a, size_t(n) * sizeof(T)); }
 };
 
 }  // namespace detail
@@ -184,24 +196,42 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     }
     // Flujo de navegación: cost_grid + flow_mode + goal. `flow` es derivada
     // (excluida) y `flow_dirty` es transitorio de cómputo (excluido).
-    for (uint32_t i = 0; i < FF_CELLS; ++i) h.u8(g.cost_grid[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.flow_mode[i]);
+    // Sprint 1.21 — de 65536 llamadas a UNA, y sin cambiar el resultado.
+    //
+    // Antes esto era `for (i < FF_CELLS) h.u8(g.cost_grid[i])`: 65536
+    // invocaciones a XXH3_64bits_update de UN byte cada una, por tick. El banco
+    // del 1.20 lo midio y lo dejo escrito: 508 us frente a un presupuesto de
+    // 200, x2,5 pasado, y era con diferencia el bloque mas caro del checksum.
+    //
+    // POR QUE EL VALOR NO CAMBIA, que es lo que hace este arreglo barato:
+    // XXH3 en modo streaming produce el mismo digest sea cual sea el TROCEADO
+    // de la entrada — solo depende de la secuencia de bytes. Hashear el array
+    // entero de una vez alimenta exactamente los mismos bytes en el mismo
+    // orden, asi que el hash es identico. NO hace falta subir
+    // CHECKSUM_ALGO_VERSION ni regenerar un solo golden, y que la suite siga
+    // verde es la comprobacion de que esto es cierto y no una suposicion.
+    //
+    // Es portable ademas: `cost_grid` es uint8_t[], y un array de bytes no
+    // tiene orden de bytes que respetar. Con cualquier tipo mas ancho esto
+    // seria un fallo de determinismo entre plataformas.
+    h.bytes(g.cost_grid, FF_CELLS);
+    h.array(g.flow_mode, t.capacity);
     h.u32(g.flow_goal_cell);
     h.u8(g.flow_has_goal);
     // Combate (Sprint 0.3): componentes por índice ascendente, todos los slots.
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.hp[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.max_hp[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.attack[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.range_mt[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.unit_class[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.atk_cd[i]);
+    h.array(g.hp, t.capacity);
+    h.array(g.max_hp, t.capacity);
+    h.array(g.attack, t.capacity);
+    h.array(g.range_mt, t.capacity);
+    h.array(g.unit_class, t.capacity);
+    h.array(g.atk_cd, t.capacity);
     // Moral (Sprint 0.3): componentes por índice ascendente, todos los slots.
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.morale[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.fleeing[i]);
+    h.array(g.morale, t.capacity);
+    h.array(g.fleeing, t.capacity);
     // Catálogo (Sprint 0.4, SPEC-002 §8.5): unit_id por índice, todos los
     // slots (misma convención que combate/moral). `catalog` (puntero binding)
     // NUNCA se hashea — no es estado simulado.
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.unit_id[i]);
+    h.array(g.unit_id, t.capacity);
     // Economía (Sprint 0.3): depósitos (todos los slots fijos), dropoffs y stock
     // por emisor, y componentes por-ciudadano por índice ascendente.
     h.u32(g.n_deposits);
@@ -219,18 +249,18 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         }
     }
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(static_cast<uint8_t>(g.eco_state[i]));
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.eco_assigned_deposit[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i32(g.eco_carry[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.eco_carry_resource[i]);
+    h.array(g.eco_assigned_deposit, t.capacity);
+    h.array(g.eco_carry, t.capacity);
+    h.array(g.eco_carry_resource, t.capacity);
     // Edificios (Sprint 1.1, SPEC-004 §3/§8): AL FINAL, tras todo lo v7, en el
     // mismo orden en que aparecen en §3. Todos los slots (misma convención que
     // unit_id/combate/moral), sin gate de alive[].
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.entity_kind[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.building_id[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.build_progress[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_tx[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u16(g.bld_anchor_ty[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.build_target[i]);
+    h.array(g.entity_kind, t.capacity);
+    h.array(g.building_id, t.capacity);
+    h.array(g.build_progress, t.capacity);
+    h.array(g.bld_anchor_tx, t.capacity);
+    h.array(g.bld_anchor_ty, t.capacity);
+    h.array(g.build_target, t.capacity);
     // Producción y tecnología (Sprint 1.2, SPEC-004 §11.2/§12.2/§13): AL
     // FINAL, tras todo lo v4, en el mismo orden que aparecen en §11.2/§12.2
     // (+ epoch_initial, deviación documentada en game_state.hpp). Todos los
@@ -238,11 +268,11 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) {
         for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) h.u32(g.prod_queue[i][k]);
     }
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.prod_count[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.prod_progress[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i64(g.rally_x[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.i64(g.rally_y[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.rally_set[i]);
+    h.array(g.prod_count, t.capacity);
+    h.array(g.prod_progress, t.capacity);
+    h.array(g.rally_x, t.capacity);
+    h.array(g.rally_y, t.capacity);
+    h.array(g.rally_set, t.capacity);
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.i32(g.pop_used[e]);
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         for (uint32_t w = 0; w < TECH_WORDS; ++w) h.u64(g.player_techs[e][w]);
@@ -252,16 +282,16 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.player_epoch[e]);
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u8(g.epoch_initial[e]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_tech[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.research_progress[i]);
+    h.array(g.research_tech, t.capacity);
+    h.array(g.research_progress, t.capacity);
     // Sprint 1.9 (SPEC-007 §12.5): la fabricacion entra en el dominio del
     // checksum, AL FINAL como todo lo anadido despues (append-only).
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.craft_recipe[i]);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.craft_progress[i]);
+    h.array(g.craft_recipe, t.capacity);
+    h.array(g.craft_progress, t.capacity);
     // Sprint 1.13 (SPEC-004 §24.6): las ordenes entran en el dominio.
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.attack_target[i].index);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.attack_target[i].generation);
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.order_mode[i]);
+    h.array(g.order_mode, t.capacity);
     // Proyectiles: SOLO los vivos, en orden. Hashear el array entero metería
     // basura de slots retirados y haría el checksum dependiente de la historia
     // en vez del estado.
@@ -291,7 +321,7 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) h.u32(g.player_civ[e]);
     // Tarea explícita del ciudadano (Sprint 1.7, SPEC-004 §22.5): AL FINAL,
     // todos los slots, sin condicionales por contenido.
-    for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.citizen_task[i]);
+    h.array(g.citizen_task, t.capacity);
     return h.digest();
 }
 

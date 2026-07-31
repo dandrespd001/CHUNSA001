@@ -39,8 +39,12 @@ namespace {
 // Se re-registra a mano cuando un cambio justifique el coste, igual que los
 // baselines de determinismo.
 // MEDIDAS REALES, no estimaciones. Las primeras que existen en el proyecto.
-constexpr double REF_STEP_US = 975.0;      // microsegundos por Step()
-constexpr double REF_CHECKSUM_US = 530.0;  // microsegundos por checksum
+// Re-registradas tras el Sprint 1.21. El checksum baja de 530 a ~135 us y
+// Step() de 975 a ~577 — Step() incluye un checksum por tick en este escenario
+// (checksum_every_ticks = 1), asi que la mejora se ve en los dos numeros.
+// El hash NO cambio: la suite entera siguio verde sin regenerar un solo golden.
+constexpr double REF_STEP_US = 577.0;      // microsegundos por Step()
+constexpr double REF_CHECKSUM_US = 135.0;  // microsegundos por checksum
 // Factor de tolerancia: solo interesa cazar duplicaciones, no ruido.
 constexpr double TOLERANCE = 3.0;
 
@@ -154,8 +158,14 @@ int main() {
     }
     if (ck_us > 200.0) {
         std::printf("AVISO: checksum SUPERA el presupuesto de 0,2 ms de SPEC-008 §2.1 "
-                    "(x%.1f) — causa medida: hashea cost_grid BYTE A BYTE, 65536 "
-                    "llamadas por tick. Sprint 1.21.\n", ck_us / 200.0);
+                    "(x%.1f)\n", ck_us / 200.0);
+    } else {
+        // El 1.21 lo metio dentro: de 508 us a ~135. La causa era hashear
+        // cost_grid byte a byte (65536 llamadas a XXH3 por tick) mas 30 bucles
+        // por entidad; ahora son 31 llamadas con array contiguo. Se deja el
+        // margen VISIBLE para que una regresion futura se vea venir antes de
+        // llegar a rojo.
+        std::printf("PERF checksum dentro del presupuesto (margen x%.1f)\n", 200.0 / ck_us);
     }
 
     if (fails == 0) {
