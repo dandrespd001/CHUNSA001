@@ -746,6 +746,30 @@ activa) · `CHECKSUM_ALGO_VERSION` +1.
 
 # §14 Reserva y recuperación (Sprint 1.11)
 
+## §14.0 Fundamento documental (corpus, 2026-07-31)
+
+Este sistema se diseñó por intuición —«con tecnología se saca más de un
+yacimiento agotado»— y **ahora tiene fuente**. De
+`docs/research/corpus/extractos/mineria.md`:
+
+1. `[V]` **La ley del mineral cae históricamente y no solo por agotamiento.**
+   El grueso del oro se extrajo primero de placeres —entre el 75 y el 90 % del
+   total— y las vetas posteriores se explotan a leyes mucho más bajas. Es decir:
+   lo que queda en un yacimiento «agotado» **sigue estando ahí**, solo que a una
+   concentración que la técnica del momento no sabía aprovechar.
+
+2. `[V]` **La flotación por aceite convierte en recuperable lo que antes se
+   abandonaba.** Aparece como técnica industrial entre 1900 y 1916 (Hoover,
+   *Concentrating ores by flotation*; Rickard, *The flotation process*, 1916).
+   **Antes de ella, el mineral de cobre de baja ley simplemente se dejaba en la
+   mina.** Corresponde a la **época 11–12**.
+
+**Lo que esto fija del diseño**: la «recuperación» no es un bono abstracto de
+porcentaje. Es que **una tecnología concreta hace accesible una fracción del
+yacimiento que antes no lo era**, y por eso tiene sentido que un yacimiento
+declarado agotado vuelva a producir. El nombre del mecanismo en el juego debería
+poder explicarse en la guía didáctica con este caso real.
+
 ## §14.1 Modelo
 
 Sustituye `remaining` (§4.2 ya lo estableció; aquí se detalla).
