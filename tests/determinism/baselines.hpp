@@ -47,6 +47,10 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
 // remotos; winner=1 y las cuatro fases se conservan, fin 12292→9317.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=9317 intacto.
+// Sprint 1.9B (mena de hierro en el mapa): dos depositos mas cambian el reparto
+// de aldeanos y la apertura se acorta 11160 -> 10473. winner=1 y las cuatro
+// fases, intactas.
+//
 // Sprint 1.19 fase B (la IA usa las ordenes de combate): desplazamientos
 // pequenos y en la direccion esperada —skirmish 1226->1227, eco 1107->1108,
 // apertura 11001->11160—. La IA pelea de forma mas ordenada: fuego focalizado
@@ -89,8 +93,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
 // hashes y el end_tick son los medidos por el gate canónico contra el CHDB
 // recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x774d001064a49e61ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xbccf3d1cddaa3167ull;
-inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 11160u;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x163f8692ef83067cull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x176d0554ee66734full;
+inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

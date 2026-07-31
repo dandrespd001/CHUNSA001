@@ -214,6 +214,8 @@ add_test(NAME command_panel_view COMMAND chunsa_test_command_panel_view)
 # --- Test Sprint 1.9: recetas y CRAFT (SPEC-007 §12.6) -------------------------
 add_executable(chunsa_test_craft tests/unit/test_craft.cpp)
 target_link_libraries(chunsa_test_craft PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_craft PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME craft COMMAND chunsa_test_craft)
 
 # --- Guardián Sprint 1.9: época inicial por civilización ----------------------

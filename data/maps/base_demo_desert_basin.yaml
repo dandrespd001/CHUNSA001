@@ -74,6 +74,18 @@ resource_spawns:
     x_millitiles: 239500
     y_millitiles: 140500
     amount: 700
+  # --- Sprint 1.9B: par espejado de MENA DE HIERRO. Sin el, el hierro
+  # forjado es infabricable, igual que pasaba con el estano en el 1.9.
+  - kind: resource
+    id: chunsa:iron_ore
+    x_millitiles: 24500
+    y_millitiles: 116500
+    amount: 900
+  - kind: resource
+    id: chunsa:iron_ore
+    x_millitiles: 231500
+    y_millitiles: 116500
+    amount: 900
   # --- Neutros IMPAR (x=128000, y∈[124000, 132000), 4 depósitos disputados) ---
   - kind: resource
     id: chunsa:copper

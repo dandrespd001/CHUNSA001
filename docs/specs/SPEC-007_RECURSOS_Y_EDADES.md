@@ -536,14 +536,34 @@ Un **recurso producido** no existe en el mapa: sale de un edificio que consume
 otros recursos según una **receta**. Es la mecánica que hace que cobre y estaño
 importen más allá de la edad 4.
 
-**Restricción de diseño, deliberada y no negociable:** las cadenas son de **un
-solo paso**. `cobre + estaño → bronce`, nunca `A → B → C → D`.
+**Restricción de diseño — REVISADA POR EL DIRECTOR el 2026-07-31.**
 
-`[V] [Widelands]` demuestra que las cadenas profundas funcionan, pero convierten
-el juego en gestión logística. `[I] [DeepSeek]` lo señaló como riesgo:
-«se añade una capa de gestión de fábricas típica de Factorio, ajena al ritmo de
-un RTS». Se acepta la crítica: profundidad 1, y quien quiera más, que juegue a
-otra cosa.
+**Antes**: profundidad **1**, «no negociable». **Ahora**: profundidad **máxima
+5**, con la exigencia de que las cadenas sean **realistas y científicamente
+correctas**.
+
+El cambio no es un capricho ni una relajación: **cambia la razón de ser de las
+cadenas**. La regla de profundidad 1 venía de una crítica del panel —«se añade
+una capa de gestión de fábricas típica de Factorio, ajena al ritmo de un RTS»
+`[I] [DeepSeek]`— que trataba la cadena como **coste de logística**.
+
+El Director ha fijado que las cadenas son también **contenido didáctico**: el
+juego debe poder explicar, paso a paso, cómo se fabrica realmente cada cosa y
+por qué (ver §12.7). Bajo esa luz, `madera → carbón vegetal → hierro forjado`
+no es burocracia: **es la lección**. Aplanarla a `mena + madera → hierro` no
+ahorraba trabajo al jugador, ocultaba el proceso.
+
+Lo que **sigue prohibido** y hay que vigilar:
+
+- Cadenas de más de **5** pasos.
+- Intermedios **inventados** para alargar. Cada paso debe existir en la realidad
+  y poder explicarse en la guía didáctica.
+- Que el jugador tenga que **microgestionar** cada paso. La profundidad vive en
+  los datos y en la guía; la interfaz debe seguir dejando fabricar en un clic.
+
+`[V] [Widelands]` sigue siendo el aviso: las cadenas profundas funcionan, pero
+convierten el juego en gestión logística **si la interfaz no las absorbe**. Esa
+es ahora una responsabilidad de la UI, no una razón para no tenerlas.
 
 ## §12.2 Datos
 
@@ -1391,3 +1411,75 @@ o ampliar `RESOURCE_COUNT` con el coste de migración que eso implica.
 17. La máscara de alcance se calcula **una vez por tick**, no por edificio.
 18. Un escenario anterior a la edad 4 es **bit-idéntico**: sin mecánica de
     energía no hay cambio de trayectoria.
+
+---
+
+# §21 Guía didáctica de producción (directriz del Director, 2026-07-31)
+
+**Requisito nuevo y de primer orden**: el juego debe **enseñar mientras se
+juega**. Para cada proceso de fabricación el jugador debe poder consultar, si
+quiere, **cómo se hace realmente y por qué**: entradas, proceso físico o
+químico, qué aporta la energía, condiciones críticas y contexto histórico. Lo
+mismo a nivel histórico para las campañas.
+
+**Esto cambia el estatus de los datos de receta.** Dejan de ser solo balance:
+pasan a ser **contenido educativo**, y un dato falso ya no es un desequilibrio,
+es **enseñar algo falso a quien juega**.
+
+Consecuencias que ya se aplican:
+
+1. La regla de profundidad pasó de 1 a **5** (§12.1): aplanar
+   `madera → carbón vegetal → hierro` no ahorraba trabajo al jugador, **ocultaba
+   el proceso**, que es justo lo que hay que enseñar.
+2. Cada receta necesita **procedencia científica**, no solo balance. El régimen
+   de `provenance` que ya se audita se extiende a las recetas.
+3. La profundidad vive en **los datos y en la guía**, no en la microgestión: la
+   interfaz debe seguir permitiendo fabricar en un clic (§12.1).
+
+**Pendiente**: formato de la guía, dónde se consulta en la interfaz, y de dónde
+salen los textos. Investigación de las diez cadenas reales en curso.
+
+---
+
+# §22 Toda civilización debe poder recorrer las 15 épocas (directriz del Director, 2026-07-31)
+
+**Problema detectado hoy**: Egipto dinástico tiene `epoch_window [3, 4]` y Roma
+`[5, 5]`. **No comparten ni una época**, así que una partida entre ellas es
+incoherente y ninguna de las dos puede recorrer el juego.
+
+**Requisito**: el jugador elige una civilización y debe poder llevarla **de la
+época 1 a la 15**, con sus unidades, tecnologías y rasgos propios. Todas
+competitivas, cada una con sus ventajas y limitaciones, **sin desequilibrio
+total**.
+
+**Esto invalida el modelo actual de `epoch_window` por civilización**, que hoy
+recorta a la civilización a su ventana histórica.
+
+## §22.1 Enfoque propuesto: línea temporal de continuidad
+
+La idea del Director: cada civilización tiene una **línea histórica** —de dónde
+viene, hasta la actualidad— y, para las épocas que su periodo histórico no
+cubre, **se continúa con la historia de su territorio y su descendencia
+cultural**.
+
+Egipto no se detiene en el Reino Nuevo: sigue por el Egipto helenístico, romano,
+árabe, otomano, moderno. Roma continúa en Bizancio, Italia medieval, moderna. La
+civilización **no es una foto de un periodo**, es un **hilo que llega hasta hoy**
+y se proyecta a las épocas futuras.
+
+**Ventaja**: mantiene la corrección histórica y evita el anacronismo de un
+faraón con tanques.
+
+**Lo que hay que decidir todavía**, y no se decide aquí:
+
+- Si `epoch_window` de la civilización **desaparece** o pasa a ser
+  «época de inicio de campaña», no un techo.
+- Cómo se nombra y representa una civilización que cambia tanto a lo largo de
+  15 épocas.
+- Cómo se garantiza el equilibrio si cada línea tiene 15 épocas de contenido
+  propio. **Es el mayor riesgo de alcance de todo el proyecto**: 15 épocas × N
+  civilizaciones es una superficie de contenido enorme.
+
+**Recordatorio del alcance de la 1.0 (ADR-012)**: 4–6 civilizaciones y las
+épocas del slice, no las 15. Esta directriz describe el juego completo; el plan
+sigue construyendo el slice.

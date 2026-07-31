@@ -285,6 +285,41 @@ int main() {
         CHECK(g->player_stock[0][R_TIN] == 0);
     }
 
+    // Sprint 1.9B: la cadena del hierro llega DESDE EL BLOB REAL. Un fixture
+    // en memoria no prueba que el dato haya viajado; esto si.
+    {
+        DataCatalogStorageV1 store;
+        const auto code = catalog_load_file_v1(CHUNSA_GOLDEN_CHDB_PATH,
+                                               CatalogLoadProfile::Verified, store);
+        CHECK(code == CatalogLoadCode::Ok);
+        if (code == CatalogLoadCode::Ok && store.valid()) {
+            const DataCatalogV1& rc = store.catalog();
+            const BuildingId f = catalog_find_building(rc, "rome:foundry",
+                                                       std::strlen("rome:foundry"));
+            CHECK(f != INVALID_BUILDING_ID);
+            if (f != INVALID_BUILDING_ID) {
+                const BuildingDefinitionV1& fd = rc.buildings[f];
+                // Bronce y hierro forjado: dos recetas en la misma fundicion.
+                // Sprint 1.9B: bronce, carboneo y hierro forjado — la cadena real
+                // madera -> carbon vegetal -> hierro, ya con profundidad 5.
+                CHECK(fd.recipe_count == 3);
+                bool halla_hierro = false;
+                for (uint8_t k = 0; k < fd.recipe_count; ++k) {
+                    const RecipeV1& r = rc.recipes[fd.recipes[k]];
+                    // Toda receta debe tener entradas y salida util: una receta
+                    // sin entradas seria una fabrica de recursos de la nada.
+                    int32_t total_in = 0;
+                    for (uint32_t x = 0; x < RESOURCE_COUNT; ++x) total_in += r.input[x];
+                    CHECK(total_in > 0);
+                    CHECK(r.output_amount >= 1);
+                    CHECK(r.duration_ticks >= 1);
+                    if (r.duration_ticks == 300u) halla_hierro = true;
+                }
+                CHECK(halla_hierro);
+            }
+        }
+    }
+
     if (g_fails == 0) {
         std::printf("craft OK\n");
         return 0;

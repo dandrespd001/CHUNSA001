@@ -35,6 +35,19 @@ recipes:
     output_resource_id: chunsa:bronze
     output_amount: 2
     duration_ticks: 240
+  - id: rome:charcoal_kiln
+    input_resource_costs:
+      chunsa:wood: 4
+    output_resource_id: chunsa:charcoal
+    output_amount: 2
+    duration_ticks: 180
+  - id: rome:wrought_iron_bloomery
+    input_resource_costs:
+      chunsa:iron_ore: 2
+      chunsa:charcoal: 2
+    output_resource_id: chunsa:wrought_iron
+    output_amount: 1
+    duration_ticks: 300
 playable_period_ids:
   - rome:republican_expansion
   - rome:high_empire
