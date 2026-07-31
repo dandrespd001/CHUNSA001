@@ -58,13 +58,13 @@ std::unique_ptr<GameState> make_state() {
 }
 
 void test_named_capacity_and_versions() {
-    CHECK_EQ(RESOURCE_COUNT, 32u);
-    CHECK_EQ(SAVE_FORMAT_VERSION, 16u);
-    CHECK_EQ(CHECKSUM_ALGO_VERSION, 11u);
+    CHECK_EQ(RESOURCE_COUNT, 64u);
+    CHECK_EQ(SAVE_FORMAT_VERSION, 17u);
+    CHECK_EQ(CHECKSUM_ALGO_VERSION, 12u);
 }
 
 void test_player_stock_index_31_round_trip_in_memory() {
-    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 32u);
+    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 64u);
     if constexpr (PLAYER_STOCK_RESOURCE_COUNT > 31u) {
         auto state = make_state();
         state->player_stock[0][31] = 0x123456789ll;
@@ -76,8 +76,10 @@ void test_player_stock_index_31_round_trip_in_memory() {
 
 template <typename Mask>
 void check_dropoff_bit_31() {
-    CHECK_EQ(sizeof(Mask), sizeof(uint32_t));
-    if constexpr (sizeof(Mask) >= sizeof(uint32_t)) {
+    // Sprint 1.9C: la mascara pasa a 64 bits porque el tope de recursos lo
+    // hace. Son la MISMA restriccion: un bit por recurso.
+    CHECK_EQ(sizeof(Mask), sizeof(uint64_t));
+    if constexpr (sizeof(Mask) >= sizeof(uint64_t)) {
         constexpr uint32_t LOW_BIT = uint32_t{1} << 0u;
         constexpr uint32_t HIGH_BIT = uint32_t{1} << 31u;
         Mask mask = static_cast<Mask>(LOW_BIT | HIGH_BIT);
@@ -111,7 +113,7 @@ void test_all_definition_cost_vectors_have_resource_count_entries() {
 template <typename Definition>
 void check_index_31_building_cost_is_deducted() {
     CHECK_EQ(HasResourceCostVector<Definition>, true);
-    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 32u);
+    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 64u);
     if constexpr (HasResourceCostVector<Definition>
                   && PLAYER_STOCK_RESOURCE_COUNT > 31u) {
         Definition definition{};
@@ -155,7 +157,7 @@ void test_index_31_cost_is_deducted_from_stock() {
 }
 
 void test_save_load_preserves_all_32_stock_entries_including_zeroes() {
-    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 32u);
+    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 64u);
     if constexpr (PLAYER_STOCK_RESOURCE_COUNT > 31u) {
         const char* save_path = "test_resource_count_v14.sav";
         auto source = make_state();
@@ -185,7 +187,7 @@ void test_save_load_preserves_all_32_stock_entries_including_zeroes() {
 }
 
 void test_index_31_belongs_to_checksum_domain() {
-    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 32u);
+    CHECK_EQ(PLAYER_STOCK_RESOURCE_COUNT, 64u);
     if constexpr (PLAYER_STOCK_RESOURCE_COUNT > 31u) {
         auto state = make_state();
         const uint64_t before = state_checksum_v1(*state);

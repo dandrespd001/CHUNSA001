@@ -1,0 +1,22 @@
+schema_version: 1
+id: chunsa:wool
+display_name_key: chunsa:resource.wool
+family: textiles
+appearance_epoch: 1
+nature: collected
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9C-textiles
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Fibra animal de oveja, cabra o camelido. Base textil de Europa, Asia central y los Andes desde el Neolitico. Epoca 1 y naturaleza collected son diseño del proyecto; PENDIENTE de contrastar con el extracto de textiles del corpus."
+    reviewed_by:
+      - architect

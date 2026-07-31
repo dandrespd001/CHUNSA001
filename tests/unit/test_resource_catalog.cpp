@@ -103,7 +103,7 @@ int main() {
     }
 
     const DataCatalogV1& catalog = storage.catalog();
-    CHECK_EQ_U64(30u, catalog.resource_count, "resource_count");
+    CHECK_EQ_U64(36u, catalog.resource_count, "resource_count");
 
     const ResourceDefinitionV1* copper =
         definition_or_null(catalog, "chunsa:copper");
@@ -152,26 +152,29 @@ int main() {
             ++populated;
         }
     }
-    CHECK_EQ_U64(30u, populated, "resources_with_four_metadata_fields");
+    CHECK_EQ_U64(36u, populated, "resources_with_four_metadata_fields");
 
     struct IndexCase {
         const char* id;
         uint8_t expected;
     };
     static constexpr IndexCase INDEX_CASES[] = {
+        // Sprint 1.9C: los seis textiles se intercalan ALFABETICAMENTE y
+        // renumeran todo lo que va detras. Es el comportamiento correcto del
+        // compilador —el indice es determinista y reproducible— pero implica
+        // que anadir un recurso SIEMPRE obliga a subir save y checksum.
         {"chunsa:food", 0}, {"chunsa:wood", 1}, {"chunsa:stone", 2},
         {"chunsa:aluminum", 3}, {"chunsa:bauxite", 4}, {"chunsa:bronze", 5},
         {"chunsa:cement", 6}, {"chunsa:charcoal", 7}, {"chunsa:clay", 8},
-        {"chunsa:coal", 9}, {"chunsa:coke", 10}, {"chunsa:copper", 11},
-        {"chunsa:gold", 12}, {"chunsa:gunpowder", 13},
-        {"chunsa:iron_ore", 14}, {"chunsa:lead", 15},
-        {"chunsa:limestone", 16}, {"chunsa:nitre", 17},
-        {"chunsa:nitrogen_fixed", 18}, {"chunsa:oil", 19},
-        {"chunsa:oil_products", 20}, {"chunsa:quicklime", 21},
-        {"chunsa:rare_earths", 22}, {"chunsa:salt", 23},
-        {"chunsa:silicon", 24}, {"chunsa:steel", 25},
-        {"chunsa:sulfur", 26}, {"chunsa:tin", 27},
-        {"chunsa:uranium", 28}, {"chunsa:wrought_iron", 29},
+        {"chunsa:cloth", 9}, {"chunsa:coal", 10}, {"chunsa:coke", 11},
+        {"chunsa:copper", 12}, {"chunsa:cotton", 13}, {"chunsa:flax", 14},
+        {"chunsa:gold", 15}, {"chunsa:gunpowder", 16}, {"chunsa:iron_ore", 17},
+        {"chunsa:lead", 18}, {"chunsa:limestone", 19}, {"chunsa:nitre", 20},
+        {"chunsa:nitrogen_fixed", 21}, {"chunsa:oil", 22}, {"chunsa:oil_products", 23},
+        {"chunsa:quicklime", 24}, {"chunsa:rare_earths", 25}, {"chunsa:salt", 26},
+        {"chunsa:silicon", 27}, {"chunsa:silk", 28}, {"chunsa:steel", 29},
+        {"chunsa:sulfur", 30}, {"chunsa:synthetic_fiber", 31}, {"chunsa:tin", 32},
+        {"chunsa:uranium", 33}, {"chunsa:wool", 34}, {"chunsa:wrought_iron", 35},
     };
     for (const IndexCase& test : INDEX_CASES) {
         const ResourceDefinitionV1* definition =

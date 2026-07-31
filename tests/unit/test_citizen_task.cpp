@@ -394,8 +394,8 @@ void test_no_deposit_transitions_to_idle() {
 void test_save_load_replay_and_checksum_preserve_task() {
     const char* save_path = "test_citizen_task_v14.sav";
     const char* replay_path = "test_citizen_task_v3.curp";
-    CHECK(SAVE_FORMAT_VERSION == 16u);
-    CHECK(CHECKSUM_ALGO_VERSION == 11u);
+    CHECK(SAVE_FORMAT_VERSION == 17u);
+    CHECK(CHECKSUM_ALGO_VERSION == 12u);
 
     auto direct = make_state();
     const EntityHandle citizen = add_citizen(*direct, 10 * TILE, 10 * TILE);

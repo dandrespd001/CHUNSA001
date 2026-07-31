@@ -34,9 +34,9 @@ KIND_INFO = (("manifest", "manifest.yaml", 1, 1), ("unit", "units", 2, 65535),
              ("building", "buildings", 3, 65535), ("tech", "tech", 4, 65535),
              ("civ", "civilizations", 5, 1024), ("map", "maps", 6, 1024),
              ("ai-profile", "ai_profiles", 7, 1024),
-             ("resource", "resources", 8, 32))
+             ("resource", "resources", 8, 64))
 KIND_BY_DIR = {x[1]: x for x in KIND_INFO[1:]}
-RESOURCE_COUNT = 32
+RESOURCE_COUNT = 64
 BLOB_FORMAT_MAJOR = 1
 BLOB_FORMAT_MINOR = 1
 SCHEMA_SET_VERSION = 2

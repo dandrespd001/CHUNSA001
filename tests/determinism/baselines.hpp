@@ -18,35 +18,39 @@ inline constexpr long GOLDEN_VECTOR_CASES = 1074;
 
 // G1: synthetic_movement_v1@1, 600 unidades, 2000 ticks, seed 20260716.
 // Cambió solo por el bump V8→V9; alloc_delta=0 y doble corrida idéntica.
-inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x9ecea7a426ec2edfull;
+inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x33871dfa8ecce99dull;
 
 // G3: savetest canónico sin IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load conserva la continuación.
-inline constexpr uint64_t G3_SAVETEST_STATE = 0x67a2a9b26df6e930ull;
-inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0x0f7697bab8cf68d6ull;
+inline constexpr uint64_t G3_SAVETEST_STATE = 0x9a8f3e6b1a237eecull;
+inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xd3e141648fa764a3ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0x4e13df1aa3e88c7cull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x7f8317cd60a08653ull;
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xd421eccf7eae3251ull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x45d1d58bf82583deull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0xb523a7c91c4cf2d1ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x28917e7ed7b6824full;
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0x531465489b194a40ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x7abc1a1ab2d246bcull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xae62f2b8a290382cull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x589d8f8fdbb0b6ceull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x886ea3d7ae279650ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x3df4652260b6926dull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
 // remotos; winner=1 y las cuatro fases se conservan, fin 12292→9317.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=9317 intacto.
+// Sprint 1.9C (RESOURCE_COUNT 32 -> 64 y seis textiles): SOLO cambian los
+// hashes, por el bump a checksum V12 y save V17. Los end_tick quedan intactos
+// —1227, 1108, 10473— porque los textiles todavia no los consume nada.
+//
 // Sprint 1.9B (mena de hierro en el mapa): dos depositos mas cambian el reparto
 // de aldeanos y la apertura se acorta 11160 -> 10473. winner=1 y las cuatro
 // fases, intactas.
@@ -93,8 +97,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
 // hashes y el end_tick son los medidos por el gate canónico contra el CHDB
 // recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x163f8692ef83067cull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x176d0554ee66734full;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x4455e3012a9d263bull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xe50dfec2938708e4ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

@@ -1627,7 +1627,7 @@ inline bool find_building_dropoff(const GameState& g, uint8_t owner, uint8_t res
     for (uint32_t j = 0; j < t.capacity; ++j) {
         if (!is_complete_owned_building(g, j, owner)) continue;
         const BuildingDefinitionV1& def = g.catalog->buildings[g.building_id[j]];
-        if ((def.dropoff_mask & (uint32_t{1} << resource_idx)) == 0u) continue;
+        if ((def.dropoff_mask & (uint64_t{1} << resource_idx)) == 0u) continue;
 
         FatalReason local_fatal = FatalReason::NONE;  // descartado a propósito, mismo patrón que combat/aggro
         const Vec2Fx there{Fx{g.pos_x[j]}, Fx{g.pos_y[j]}};

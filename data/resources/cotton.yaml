@@ -1,0 +1,22 @@
+schema_version: 1
+id: chunsa:cotton
+display_name_key: chunsa:resource.cotton
+family: textiles
+appearance_epoch: 3
+nature: collected
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9C-textiles
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Fibra vegetal domesticada de forma INDEPENDIENTE en el valle del Indo y en Mesoamerica. Sirve a las dos lineas sin prestamo cultural. Epoca 3 y naturaleza collected son diseño del proyecto; PENDIENTE de contrastar con el extracto de textiles del corpus."
+    reviewed_by:
+      - architect

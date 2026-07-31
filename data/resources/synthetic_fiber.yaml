@@ -1,0 +1,22 @@
+schema_version: 1
+id: chunsa:synthetic_fiber
+display_name_key: chunsa:resource.synthetic_fiber
+family: textiles
+appearance_epoch: 13
+nature: produced
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9C-textiles
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Derivada del petroleo (nailon, poliester). Rompe la dependencia de la tierra cultivable para vestir a una poblacion. Epoca 13 y naturaleza produced son diseño del proyecto; PENDIENTE de contrastar con el extracto de textiles del corpus."
+    reviewed_by:
+      - architect

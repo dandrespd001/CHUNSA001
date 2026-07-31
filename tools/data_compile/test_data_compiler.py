@@ -334,7 +334,7 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
             self.assertIn(
                 "records unit=5 building=8 tech=4 civ=2 map=1 "
-                "ai-profile=1 resource=30",
+                "ai-profile=1 resource=36",
                 stdout,
             )
             flags, records = compiler.parse_blob(out.read_bytes())
@@ -436,17 +436,18 @@ class ResourceReconciliationTests(unittest.TestCase):
     authors use record ids, while only the compiler may assign kernel indices.
     """
 
-    # Brief 1.8C: catálogo pasa de 3 a 30 recursos (SPEC-007 §9.2).
+    # Sprint 1.9C: 30 -> 36 recursos (seis textiles) y RESOURCE_COUNT 32 -> 64.
     # El invariante crítico sigue siendo food/wood/stone en índices 0/1/2.
     RESOURCE_IDS = (
         "chunsa:aluminum", "chunsa:bauxite", "chunsa:bronze", "chunsa:cement",
-        "chunsa:charcoal", "chunsa:clay", "chunsa:coal", "chunsa:coke",
-        "chunsa:copper", "chunsa:food", "chunsa:gold", "chunsa:gunpowder",
-        "chunsa:iron_ore", "chunsa:lead", "chunsa:limestone", "chunsa:nitre",
-        "chunsa:nitrogen_fixed", "chunsa:oil", "chunsa:oil_products",
-        "chunsa:quicklime", "chunsa:rare_earths", "chunsa:salt",
-        "chunsa:silicon", "chunsa:steel", "chunsa:stone", "chunsa:sulfur",
-        "chunsa:tin", "chunsa:uranium", "chunsa:wood", "chunsa:wrought_iron",
+        "chunsa:charcoal", "chunsa:clay", "chunsa:cloth", "chunsa:coal",
+        "chunsa:coke", "chunsa:copper", "chunsa:cotton", "chunsa:flax",
+        "chunsa:food", "chunsa:gold", "chunsa:gunpowder", "chunsa:iron_ore",
+        "chunsa:lead", "chunsa:limestone", "chunsa:nitre", "chunsa:nitrogen_fixed",
+        "chunsa:oil", "chunsa:oil_products", "chunsa:quicklime", "chunsa:rare_earths",
+        "chunsa:salt", "chunsa:silicon", "chunsa:silk", "chunsa:steel",
+        "chunsa:stone", "chunsa:sulfur", "chunsa:synthetic_fiber", "chunsa:tin",
+        "chunsa:uranium", "chunsa:wood", "chunsa:wool", "chunsa:wrought_iron",
     )
     RESOURCE_INDEX = {
         "chunsa:food": 0,
@@ -454,13 +455,15 @@ class ResourceReconciliationTests(unittest.TestCase):
         "chunsa:stone": 2,
         "chunsa:aluminum": 3, "chunsa:bauxite": 4, "chunsa:bronze": 5,
         "chunsa:cement": 6, "chunsa:charcoal": 7, "chunsa:clay": 8,
-        "chunsa:coal": 9, "chunsa:coke": 10, "chunsa:copper": 11,
-        "chunsa:gold": 12, "chunsa:gunpowder": 13, "chunsa:iron_ore": 14,
-        "chunsa:lead": 15, "chunsa:limestone": 16, "chunsa:nitre": 17,
-        "chunsa:nitrogen_fixed": 18, "chunsa:oil": 19, "chunsa:oil_products": 20,
-        "chunsa:quicklime": 21, "chunsa:rare_earths": 22, "chunsa:salt": 23,
-        "chunsa:silicon": 24, "chunsa:steel": 25, "chunsa:sulfur": 26,
-        "chunsa:tin": 27, "chunsa:uranium": 28, "chunsa:wrought_iron": 29,
+        "chunsa:cloth": 9, "chunsa:coal": 10, "chunsa:coke": 11,
+        "chunsa:copper": 12, "chunsa:cotton": 13, "chunsa:flax": 14,
+        "chunsa:gold": 15, "chunsa:gunpowder": 16, "chunsa:iron_ore": 17,
+        "chunsa:lead": 18, "chunsa:limestone": 19, "chunsa:nitre": 20,
+        "chunsa:nitrogen_fixed": 21, "chunsa:oil": 22, "chunsa:oil_products": 23,
+        "chunsa:quicklime": 24, "chunsa:rare_earths": 25, "chunsa:salt": 26,
+        "chunsa:silicon": 27, "chunsa:silk": 28, "chunsa:steel": 29,
+        "chunsa:sulfur": 30, "chunsa:synthetic_fiber": 31, "chunsa:tin": 32,
+        "chunsa:uranium": 33, "chunsa:wool": 34, "chunsa:wrought_iron": 35,
     }
     RECORD_ID = re.compile(
         r"^[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_]{0,63}$"

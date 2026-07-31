@@ -172,6 +172,9 @@ enum class ResourceFamilyV1 : uint8_t {
     Chemistry,
     Energy,
     HighTech,
+    // Sprint 1.9C: append-only. Anadir en medio renumeraria las familias ya
+    // grabadas en el blob y en el HUD.
+    Textiles,
 };
 
 enum class ResourceNatureV1 : uint8_t {
@@ -252,7 +255,7 @@ struct BuildingDefinitionV1 {
                                    // SPEC-004 §4.1.2/§4.3: 0 = nace completo,
                                    // reservado a `constructible:false` de escenario)
     int32_t  cost[RESOURCE_COUNT];  // >= 0 (deducidos al aceptar PLACE_BUILDING)
-    uint32_t dropoff_mask;          // un bit por índice de recurso
+    uint64_t dropoff_mask;          // un bit por índice de recurso (64 desde 1.9C)
     uint8_t  constructible;        // 0/1 (schema `constructible`)
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window (mismo patrón que
     // unit); trains/researches resueltos desde los record_id del schema
@@ -977,6 +980,8 @@ inline bool resource_family_from_string(
         out = ResourceFamilyV1::Energy;
     } else if (value == "high_tech") {
         out = ResourceFamilyV1::HighTech;
+    } else if (value == "textiles") {
+        out = ResourceFamilyV1::Textiles;
     } else {
         return false;
     }
@@ -1209,7 +1214,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         obj, cost, CatalogLoadCode::InvalidBuilding,
         resource_ids, resource_indices);
 
-    uint32_t dropoff_mask = 0;
+    uint64_t dropoff_mask = 0;
     if (const CveValue* dr = obj.find("dropoff_resources")) {
         if (!dr->is_arr()) fail(CatalogLoadCode::SchemaMismatch);
         for (const auto& item : dr->arr) {
@@ -1220,7 +1225,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
                     || bit >= RESOURCE_COUNT) {
                 fail(CatalogLoadCode::InvalidBuilding);
             }
-            dropoff_mask |= (uint32_t{1} << bit);
+            dropoff_mask |= (uint64_t{1} << bit);
         }
     }
 

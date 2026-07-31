@@ -4,12 +4,28 @@
   "title": "resource v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "id", "display_name_key", "provenance"],
+  "required": [
+    "schema_version",
+    "id",
+    "display_name_key",
+    "provenance"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "id": {"$ref": "common.schema.json#/$defs/record_id"},
-    "display_name_key": {"$ref": "common.schema.json#/$defs/localization_key"},
-    "index": {"type": "integer", "minimum": 0, "maximum": 31, "readOnly": true},
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/record_id"
+    },
+    "display_name_key": {
+      "$ref": "common.schema.json#/$defs/localization_key"
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 63,
+      "readOnly": true
+    },
     "family": {
       "enum": [
         "subsistence",
@@ -18,11 +34,21 @@
         "metallurgy",
         "chemistry",
         "energy",
-        "high_tech"
+        "high_tech",
+        "textiles"
       ]
     },
-    "appearance_epoch": {"$ref": "common.schema.json#/$defs/epoch"},
-    "nature": {"enum": ["collected", "produced"]},
-    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+    "appearance_epoch": {
+      "$ref": "common.schema.json#/$defs/epoch"
+    },
+    "nature": {
+      "enum": [
+        "collected",
+        "produced"
+      ]
+    },
+    "provenance": {
+      "$ref": "common.schema.json#/$defs/provenance"
+    }
   }
 }

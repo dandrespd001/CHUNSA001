@@ -1,0 +1,22 @@
+schema_version: 1
+id: chunsa:silk
+display_name_key: chunsa:resource.silk
+family: textiles
+appearance_epoch: 5
+nature: collected
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9C-textiles
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Fibra animal del gusano de seda. Monopolio chino durante siglos y motor de la ruta que lleva su nombre. Epoca 5 y naturaleza collected son diseño del proyecto; PENDIENTE de contrastar con el extracto de textiles del corpus."
+    reviewed_by:
+      - architect

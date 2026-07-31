@@ -1,0 +1,22 @@
+schema_version: 1
+id: chunsa:flax
+display_name_key: chunsa:resource.flax
+family: textiles
+appearance_epoch: 2
+nature: collected
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.9C-textiles
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Fibra vegetal del lino. Textil caracteristico de Egipto: el vestido de lino es su seña, no la lana. Epoca 2 y naturaleza collected son diseño del proyecto; PENDIENTE de contrastar con el extracto de textiles del corpus."
+    reviewed_by:
+      - architect
