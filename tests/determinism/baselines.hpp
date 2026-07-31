@@ -115,8 +115,14 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // orden bytewise de record_id, asi que los identificadores de los edificios
 // que ya existian se reordenan. end_tick sigue en 10473 y winner=1: la partida
 // se juega igual, cambia la numeracion.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x7a4dbfaf97976ba1ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xd40f950f1c9be7e5ull;
+//
+// Re-registrados otra vez en el 1.26 por la MISMA causa y no por una nueva:
+// cinco edificios de andamiaje pasaron a tener nombre propio (nilometer,
+// murano_glassworks, suez_canal, pirelli_works, aswan_dam) y renombrar
+// reordena el indice igual que anadir. end_tick 10473 y winner=1, otra vez
+// intactos: es la comprobacion que distingue renombrar de cambiar el juego.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xef0c9a8559d74a4cull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x590561805cf41657ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

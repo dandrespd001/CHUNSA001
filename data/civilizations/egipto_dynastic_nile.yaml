@@ -90,22 +90,22 @@ unit_ids:
   - egipto:nile_forager
   - egipto:work_crew
 building_ids:
+  - egipto:aswan_dam
   - egipto:chariotry_stable
-  - egipto:epoch_06_works
   - egipto:epoch_09_works
   - egipto:epoch_10_works
   - egipto:epoch_11_works
-  - egipto:epoch_12_works
   - egipto:epoch_13_works
-  - egipto:epoch_14_works
   - egipto:epoch_15_works
   - egipto:flint_workshop
   - egipto:foundry
   - egipto:mamluk_khan
   - egipto:merimde_storage
+  - egipto:nilometer
   - egipto:qadan_camp
   - egipto:settlement_center
   - egipto:shena_granary
+  - egipto:suez_canal
   - egipto:tiraz_workshop
 tech_ids:
   - egipto:composite_bow_program

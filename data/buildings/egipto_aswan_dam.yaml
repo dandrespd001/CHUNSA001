@@ -1,0 +1,33 @@
+# Hereda la mecanica de base:epoch14_workshop y SOBRESCRIBE lo que este
+# edificio concreto no comparte. La regla del 1.24 es que el record gana.
+extends: base:epoch14_workshop
+id: egipto:aswan_dam
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.aswan_dam
+description_key: egipto:building.aswan_dam.description
+kind: infrastructure
+dropoff_resources: []
+playable_period_ids:
+  - egipto:epoch_14
+  - egipto:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Aswan High Dam: construida entre 1960 y 1970, se desarrollo «to control flooding, increase water storage for irrigation, and generate hydroelectricity»; monta turbinas «12x175 MW (235,000 hp) Francis-type» con 2100 MW instalados, y al alcanzar su maximo en 1970 suministraba en torno a la mitad de la electricidad de Egipto"
+        locator: "Construction dates, purpose and generating capacity; el lago Nasser cubre 5250 km2"
+        url: "https://en.wikipedia.org/wiki/Aswan_High_Dam"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1960-1970, epoca 14. Cierra el arco que abre el nilometro en la epoca 6: la misma crecida del Nilo, primero MEDIDA para prever la cosecha y ocho epocas despues GOBERNADA para regar y generar electricidad. Ese hilo es exactamente la guia didactica que pidio el Director —que jugando se entienda el como y el porque— y no hubo que inventarlo: estaba en la historia de la civilizacion elegida."
+    reviewed_by:
+      - architect

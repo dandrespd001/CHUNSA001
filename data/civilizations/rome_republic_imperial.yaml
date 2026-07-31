@@ -97,11 +97,9 @@ building_ids:
   - rome:castra_barracks
   - rome:epigravettian_camp
   - rome:epoch_06_works
-  - rome:epoch_08_works
   - rome:epoch_09_works
   - rome:epoch_10_works
   - rome:epoch_11_works
-  - rome:epoch_12_works
   - rome:epoch_14_works
   - rome:epoch_15_works
   - rome:flint_workshop
@@ -110,6 +108,8 @@ building_ids:
   - rome:horreum
   - rome:italic_storehouse
   - rome:lingotto_works
+  - rome:murano_glassworks
+  - rome:pirelli_works
   - rome:remedello_hamlet
   - rome:terramare_workshop
   - rome:venetian_arsenal
