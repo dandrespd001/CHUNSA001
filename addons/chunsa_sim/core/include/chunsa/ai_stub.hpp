@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 6;  // Sprint 1.19: la IA fabrica, ordena atacar y contra-entrena
+inline constexpr uint32_t AI_ALGO_VERSION     = 7;  // Sprint 1.23: la eleccion de edificio entrenador respeta la EPOCA
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -377,12 +377,36 @@ struct AiTrainerTypeV1 {
     UnitId     unit_to_train = INVALID_UNIT_ID;
 };
 
+inline bool ai_epoch_ok(uint8_t player_epoch, uint8_t epoch_min, uint8_t epoch_max) noexcept {
+    return player_epoch >= epoch_min && player_epoch <= epoch_max;
+}
+
+// Sprint 1.23 — `epoch` NO estaba aquí, y esa ausencia era el fallo.
+//
+// Esta función devuelve el PRIMER edificio (orden ascendente de BuildingId,
+// que es el orden bytewise del record_id) de la civilización que entrena una
+// unidad del tipo pedido. Sin filtro de época, para Roma ese primero es
+// `rome:castra_barracks` —época [5,5]— porque "castra" precede a "flint" en
+// bytes. Con la IA en la época 1, quien la llama comprobaba después
+// `ai_epoch_ok(1, 5, 5)`, fallaba, y NO seguía buscando: nunca llegaba a ver
+// `rome:flint_workshop`, que es de época [1,2] y sí podía levantar.
+//
+// Consecuencia medida antes del arreglo: 30000 ticks, época final 1, CERO
+// edificios y CERO unidades. La IA no era lenta, estaba enganchada a un
+// edificio inalcanzable y no miraba ningún otro.
+//
+// El filtro va DENTRO del barrido, no en quien llama, justamente para que el
+// bucle continúe hasta el primer candidato VÁLIDO en vez de rendirse en el
+// primero a secas. `epoch == 0` desactiva el filtro, para los fixtures
+// sintéticos de otros sprints que no tienen épocas.
 inline AiTrainerTypeV1 ai_find_trainer_type(const DataCatalogV1& cat, CivId civ,
-                                            bool citizen_kind) noexcept {
+                                            bool citizen_kind,
+                                            uint8_t epoch = 0u) noexcept {
     AiTrainerTypeV1 r{};
     for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
         const BuildingDefinitionV1& bdef = cat.buildings[bt];
         if (civ != INVALID_CIV_ID && bdef.civ_id != civ) continue;
+        if (epoch != 0u && !ai_epoch_ok(epoch, bdef.epoch_min, bdef.epoch_max)) continue;
         for (uint8_t k = 0; k < bdef.train_count; ++k) {
             const UnitId uid = bdef.trains[k];
             if (uid >= cat.unit_count) continue;
@@ -440,10 +464,6 @@ inline bool ai_afford_epoch(const GameState& g, uint8_t player,
     return g.player_stock[player][0] >= cost0
         && g.player_stock[player][1] >= cost1
         && g.player_stock[player][2] >= cost2;
-}
-
-inline bool ai_epoch_ok(uint8_t player_epoch, uint8_t epoch_min, uint8_t epoch_max) noexcept {
-    return player_epoch >= epoch_min && player_epoch <= epoch_max;
 }
 
 inline bool ai_caps_ok(const GameState& g, uint8_t player, const BuildingDefinitionV1& bdef) noexcept {
@@ -787,7 +807,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         uint32_t econ_building = 0;
         UnitId   econ_unit = INVALID_UNIT_ID;
         if (macro.citizen_count < AI_ECON_TARGET_CITIZENS) {
-            const AiTrainerTypeV1 tt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/true);
+            const AiTrainerTypeV1 tt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/true, epoch);
             if (tt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, tt.building_type);
                 if (own.has_complete) {
@@ -810,7 +830,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         BuildingId build_type = INVALID_BUILDING_ID;
         AiFreeCellV1 build_cell{};
         {
-            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false);
+            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false, epoch);
             if (mt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, mt.building_type);
                 if (!own.any_owned && macro.has_anchor) {
@@ -836,7 +856,7 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         uint32_t mil_building = 0;
         UnitId   mil_unit = INVALID_UNIT_ID;
         {
-            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false);
+            const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, ai_civ, /*citizen_kind=*/false, epoch);
             if (mt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, mt.building_type);
                 if (own.has_complete) {

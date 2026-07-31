@@ -265,3 +265,54 @@ Sin esto, la IA nunca investigaría extracción: no vería para qué sirve.
 7. La regla de oro de §0 se conserva: `ai_execute` sigue siendo función pura de
    `(g, source_tick, runtime_before)`, sin reloj ni entropía.
 8. Dos corridas del mismo escenario producen el **mismo checksum**.
+
+## §12 Política de época (Sprint 1.23)
+
+**`AI_ALGO_VERSION`: 6 → 7.** Cambia el procedimiento de decisión, así que la
+regla de oro del §0 obliga al bump. Va en la cabecera de guardado (offset 20) y
+`save_io` rechaza los guardados de versión distinta: los saves anteriores al
+1.23 dejan de cargar, que es la semántica querida.
+
+### El fallo
+
+`ai_find_trainer_type` devolvía el **primer** edificio de la civilización que
+entrena tropa, en orden ascendente de `BuildingId` —que es el orden bytewise
+del `record_id`— **sin mirar la época**. Para Roma ese primero es
+`rome:castra_barracks`, de época [5,5], porque `castra` precede a `flint` en
+bytes. Quien llamaba comprobaba la época *después*, fallaba, y **no seguía
+buscando**: `rome:flint_workshop`, de época [1,2] y perfectamente construible,
+no se miraba nunca.
+
+### La medida, antes y después
+
+Escenario idéntico, 30000 ticks, IA arrancando en la época 1:
+
+| | Época final | Edificios ép. 1-2 | Unidades ép. 1-2 |
+|---|---|---|---|
+| Sin filtro de época | **1** | **0** | **0** |
+| Con filtro | **3** | 1 | 44 |
+
+La primera subida ocurre en el tick **6012**, justo tras la rampa de
+`EPOCH_MIN_TICKS = 6000`. La IA no era lenta: estaba **enganchada a un edificio
+inalcanzable** y no miraba ningún otro.
+
+### Por qué el arreglo va dentro del barrido
+
+El filtro se pone **en el bucle**, no en quien llama, para que la búsqueda
+continúe hasta el primer candidato *válido* en vez de rendirse en el primero a
+secas. `epoch == 0` lo desactiva, para los fixtures sintéticos de otros sprints
+que no manejan épocas.
+
+### Lo que NO cambió, y es la comprobación que lo respalda
+
+Los baselines de determinismo de la apertura **no se movieron**. En la época 5
+el primer candidato sigue siendo el cuartel, así que el arreglo es **inerte**
+donde ya funcionaba y sólo actúa donde estaba roto. Esa invariancia es la
+prueba de que el cambio es quirúrgico y no una redefinición del comportamiento.
+
+### Lo que queda abierto
+
+La IA alcanza la **época 3** en 30000 ticks, mientras que la rampa del kernel
+permitiría la 5 a los 24000. El límite ya no es el fallo: es la economía y el
+ritmo de construcción. Ajustar eso es trabajo de balance, no de corrección, y
+necesita su propia medición.

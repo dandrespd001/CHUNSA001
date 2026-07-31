@@ -238,6 +238,16 @@ target_compile_definitions(chunsa_test_epoch_playability PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME epoch_playability COMMAND chunsa_test_epoch_playability)
 
+# --- Test Sprint 1.23: politica de epoca de la IA ----------------------------
+# El 1.22 abrio las epocas 1-5 al humano. Este mide si la MAQUINA sabe jugarlas:
+# que suba de epoca y que use el contenido temprano en vez de esperar a la 5.
+add_executable(chunsa_test_ai_epoch_policy tests/unit/test_ai_epoch_policy.cpp)
+target_link_libraries(chunsa_test_ai_epoch_policy PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_test_ai_epoch_policy PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME ai_epoch_policy COMMAND chunsa_test_ai_epoch_policy)
+set_tests_properties(ai_epoch_policy PROPERTIES LABELS "slow")
+
 # --- Test Sprint 1.18: fórmula de daño por tipo (SPEC-004 Parte VI) -----------
 add_executable(chunsa_test_combat_damage tests/unit/test_combat_damage.cpp)
 target_link_libraries(chunsa_test_combat_damage PRIVATE chunsa_sim_core)
