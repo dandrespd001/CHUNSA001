@@ -18,6 +18,24 @@ Consulta con `docs/research/corpus/buscar.sh archive|openlib|doaj "consulta"`.
 
 Asuntos a cubrir: fision, enriquecimiento de uranio, reactor, ciclo del combustible, residuos
 
+## QUÉ SIGNIFICAN NUESTRAS ÉPOCAS — léelo antes de concluir nada
+
+CHUNSA tiene **15 épocas** y **no** coinciden con las de otros juegos ni con
+«antigua / media / industrial». Aproximadamente:
+
+| Épocas | Qué representan |
+|---|---|
+| 1–2 | Prehistoria y Neolítico |
+| 3–4 | Edad del Cobre y del Bronce. **Egipto dinástico juega aquí** |
+| 5–6 | Edad del Hierro y Antigüedad clásica. **Roma juega aquí** |
+| 7–9 | Medievo y primera pólvora |
+| 10–12 | Renacimiento, industrialización, acero |
+| 13–15 | Petroquímica, electrónica, era nuclear y nano |
+
+**No traduzcas «época 5» por «industrial».** Si una técnica es neolítica, va a
+la época 1–2 aunque su documentación moderna sea del siglo XIX. Y si dudas de a
+qué época corresponde algo, **dilo** en vez de asignarla.
+
 ## Qué buscar, según la época que sirva el tema
 
 - **Épocas 1–4** → **arqueología y etnografía**, no ingeniería. Informes de

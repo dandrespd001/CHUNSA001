@@ -1,6 +1,6 @@
 # Plantilla de encargo — poblar un tema del corpus
 
-Sustituye `militar`, `militar.md` y `falange y legion, fortificacion, asedio, polvora y artilleria, tacticas de linea, guerra industrial, logistica militar` y lánzalo.
+Sustituye `aeronautica`, `aeronautica.md` y `globo, planeador, motor de aviacion, helice, ala, reaccion, helicoptero, cohete` y lánzalo.
 
 ---
 
@@ -14,9 +14,9 @@ Consulta con `docs/research/corpus/buscar.sh archive|openlib|doaj "consulta"`.
 `https://archive.org/download/IDENTIFICADOR/IDENTIFICADOR_djvu.txt`
 (la ruta `/stream/` devuelve HTML y no sirve).
 
-## Tema: militar
+## Tema: aeronautica
 
-Asuntos a cubrir: falange y legion, fortificacion, asedio, polvora y artilleria, tacticas de linea, guerra industrial, logistica militar
+Asuntos a cubrir: globo, planeador, motor de aviacion, helice, ala, reaccion, helicoptero, cohete
 
 ## QUÉ SIGNIFICAN NUESTRAS ÉPOCAS — léelo antes de concluir nada
 
@@ -73,4 +73,4 @@ Ejemplo del estándar esperado: `docs/research/corpus/extractos/metalurgia.md`.
 
 ## Salida
 
-`docs/research/corpus/extractos/militar.md`
+`docs/research/corpus/extractos/aeronautica.md`
