@@ -121,8 +121,15 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // murano_glassworks, suez_canal, pirelli_works, aswan_dam) y renombrar
 // reordena el indice igual que anadir. end_tick 10473 y winner=1, otra vez
 // intactos: es la comprobacion que distingue renombrar de cambiar el juego.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xef0c9a8559d74a4cull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x590561805cf41657ull;
+//
+// Y una vez mas en el 1.26 al ascender seis celdas mas (horreum_annonae,
+// wikala, opificio_pietre_dure, pavia_physics_cabinet, misr_spinning,
+// olivetti_works). Tres re-registros seguidos con end_tick 10473 y winner=1
+// invariables: eso ya no es casualidad, es la firma de un cambio que solo
+// toca NOMBRES. Si alguna vez el end_tick se mueve con un renombrado, ahi hay
+// un fallo de verdad que buscar.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x9f05458167aafb12ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x18ea66993f131802ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

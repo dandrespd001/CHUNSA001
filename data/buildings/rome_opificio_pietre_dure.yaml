@@ -1,0 +1,31 @@
+# Hereda de base:epoch9_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch9_workshop
+id: rome:opificio_pietre_dure
+civ_id: rome:republic_imperial
+display_name_key: rome:building.opificio_pietre_dure
+description_key: rome:building.opificio_pietre_dure.description
+playable_period_ids:
+  - rome:epoch_09
+  - rome:epoch_10
+  - rome:epoch_11
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Opificio delle pietre dure: «established in 1588» en Florencia «at the behest of Ferdinando I de Medici»; producia «elaborate, inlaid precious and semi-precious stoneworks» mediante «inlaying thin veneers of semi-precious stones»"
+        locator: "Foundation, patron and production; sus obras se conocen como commesso in pietre dure"
+        url: "https://en.wikipedia.org/wiki/Opificio_delle_pietre_dure"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1588, dentro de la epoca 9. Se elige un taller de LUJO y no una fabrica a proposito: la Italia de la epoca 9 ya no domina la produccion de masa —eso se lo lleva el Atlantico— y su ventaja pasa a ser el trabajo de altisimo valor por unidad. El edificio dice eso sin necesidad de un texto explicativo."
+    reviewed_by:
+      - architect

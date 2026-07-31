@@ -1,0 +1,31 @@
+# Hereda de base:epoch13_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch13_workshop
+id: egipto:misr_spinning
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.misr_spinning
+description_key: egipto:building.misr_spinning.description
+playable_period_ids:
+  - egipto:epoch_13
+  - egipto:epoch_14
+  - egipto:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Misr Spinning and Weaving Company: fundada en 1927 por «a group of Egyptian businessmen in collaboration with the Misr Bank», con Talaat Harb entre ellos, en El-Mahalla El-Kubra; se concentro en producir hilo, tela y ropa para el mercado interior y la exportacion"
+        locator: "Founding, founders and location; llego a ser la mayor operacion industrial de Egipto"
+        url: "https://en.wikipedia.org/wiki/Misr_Spinning_and_Weaving_Company"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1927, epoca 13. Cierra el hilo textil que el juego lleva abierto desde el tiraz fatimi de la epoca 7: el mismo oficio, seis epocas despues, ahora con capital egipcio y a escala industrial. Consume algodon, que el catalogo tiene desde la epoca 3. Es la clase de continuidad que hace que un linaje se entienda jugandolo."
+    reviewed_by:
+      - architect

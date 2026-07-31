@@ -1,0 +1,30 @@
+# Hereda de base:epoch14_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch14_workshop
+id: rome:olivetti_works
+civ_id: rome:republic_imperial
+display_name_key: rome:building.olivetti_works
+description_key: rome:building.olivetti_works.description
+playable_period_ids:
+  - rome:epoch_14
+  - rome:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Programma 101: lanzada en 1965 por Olivetti en Ivrea, «was designed by Olivetti engineer Pier Giorgio Perotto»; el articulo la describe como «one of the first 'all in one' commercial desktop programmable calculators, although not the first», y precisa que «the Mathatronics Mathatron calculator preceded the Programma 101 to market»"
+        locator: "Release, designer and first-of-its-kind claim"
+        url: "https://en.wikipedia.org/wiki/Programma_101"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1965, epoca 14. SEGUNDA NO-AFIRMACION del sprint, y por eso se cita entera: de la Programma 101 suele decirse que fue el primer ordenador de sobremesa, y la fuente dice literalmente «although not the first», que el Mathatron le gano el mercado. Se cita el matiz completo en vez de recortar la frase donde conviene. Sigue siendo el anclaje correcto de la epoca 14 italiana: es donde la peninsula pasa de la industria pesada a la informacion."
+    reviewed_by:
+      - architect

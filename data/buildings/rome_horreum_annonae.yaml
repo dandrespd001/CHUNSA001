@@ -1,0 +1,31 @@
+# Hereda de base:epoch6_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch6_workshop
+id: rome:horreum_annonae
+civ_id: rome:republic_imperial
+display_name_key: rome:building.horreum_annonae
+description_key: rome:building.horreum_annonae.description
+playable_period_ids:
+  - rome:epoch_06
+  - rome:epoch_07
+  - rome:epoch_08
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Horreum: era «a type of public warehouse used during the ancient Roman period», que guardaba «not only the annona publica (public grain supply) but also a great variety of resources like olive oil and foodstuffs»; «Grain horrea had their ground floor raised on pillars to reduce the likelihood of damp getting in and spoiling the goods»; «They were built with ramps, rather than staircases, to provide easy access to the upper floors»; tenian «very thick walls (as much as 1 metre (3 ft) thick) to reduce the danger of fire, and the windows were always narrow and placed high up on the wall to deter theft»"
+        locator: "Definition, contents and construction; a finales del periodo imperial Roma tenia cerca de 300 horrea, y el mayor, el Horrea Galbae, sumaba 140 habitaciones solo en planta baja"
+        url: "https://en.wikipedia.org/wiki/Horreum"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Es el edificio mas DIDACTICO que ha entrado en el catalogo, y por eso se elige. Cada rasgo constructivo que cita la fuente responde a un problema concreto y explicito: suelo elevado sobre pilares contra la humedad, rampas en vez de escaleras para subir carga, muros de hasta un metro contra el fuego, ventanas estrechas y altas contra el robo. Un jugador que lea eso entiende por que un almacen romano es como es, que es exactamente la guia didactica que pidio el Director. Encaja sin tocar nada con la plantilla de la epoca 6, que ya es kind dropoff de comida, madera y piedra."
+    reviewed_by:
+      - architect

@@ -1,0 +1,36 @@
+# Hereda de base:epoch9_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch9_workshop
+id: egipto:wikala
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.wikala
+description_key: egipto:building.wikala.description
+kind: dropoff
+dropoff_resources:
+  - chunsa:food
+  - chunsa:gold
+  - chunsa:salt
+playable_period_ids:
+  - egipto:epoch_09
+  - egipto:epoch_10
+  - egipto:epoch_11
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Wikala of al-Ghuri: construida en 1504-1505 por el sultan al-Ashraf Qansuh al-Ghuri; una wikala era «a building which housed merchants and their goods and served as a center for trade, storage, transactions and other commercial activity», donde «merchants could thus base themselves here to do business in the city»"
+        locator: "Date, patron and function; planta baja para animales y mercancia, segunda para los mercaderes y superiores para residentes permanentes"
+        url: "https://en.wikipedia.org/wiki/Wikala_of_al-Ghuri"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1504-1505 abre la epoca 9 en Egipto. Sobrescribe el kind economic de la plantilla y lo pone en dropoff porque la fuente describe almacenamiento explicito. Es el sucesor del khan mameluco de la epoca 8, y esa continuidad es intencionada: el mismo problema comercial resuelto por dos regimenes seguidos, que es como se ve un linaje sin necesidad de explicarlo."
+    reviewed_by:
+      - architect

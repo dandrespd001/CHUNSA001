@@ -1,0 +1,33 @@
+# Hereda de base:epoch11_workshop; lo que no comparte se sobrescribe aqui.
+extends: base:epoch11_workshop
+id: rome:pavia_physics_cabinet
+civ_id: rome:republic_imperial
+display_name_key: rome:building.pavia_physics_cabinet
+description_key: rome:building.pavia_physics_cabinet.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - rome:epoch_11
+  - rome:epoch_12
+  - rome:epoch_13
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Alessandro Volta: «In 1800, as the result of a professional disagreement over the galvanic response advocated by Galvani, Volta invented the voltaic pile»; ocupo «the chair of experimental physics at the University of Pavia for nearly 40 years». Wikipedia, Voltaic pile: la pila eran «alternating copper (or silver) and zinc discs (electrodes) separated by cloth or cardboard soaked in brine», y fue «the first electrical battery that could continuously provide an electric current to a circuit»"
+        locator: "Invention date, chair at Pavia, and the pile construction and significance"
+        url: "https://en.wikipedia.org/wiki/Voltaic_pile"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1800, de lleno en la epoca 11. Es kind research porque lo que sale de aqui no es un producto sino una CAPACIDAD nueva, y ademas es el mejor ejemplo posible de por que la epoca 11 no es solo el vapor: la corriente continua permitio la electrolisis del agua y el descubrimiento del sodio, el potasio y el calcio. Detalle que engancha con la economia del juego: la pila es cobre y cinc, y el cobre esta en el catalogo desde la epoca 3."
+    reviewed_by:
+      - architect
