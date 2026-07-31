@@ -26,7 +26,7 @@ Su fichero se conserva como lo que es: una lista de hipótesis a cotejar.
 
 ## Lo que SÍ verifiqué, con cita literal
 
-**Actualizado 2026-07-31 (Sprint 1.26): nueve** anclajes cotejados directamente contra la fuente el **2026-07-31**:
+**Actualizado 2026-07-31 (Sprint 1.26): once** anclajes cotejados directamente contra la fuente el **2026-07-31**:
 
 | Época | Linaje | Anclaje | Cita literal |
 |---|---|---|---|
@@ -38,6 +38,8 @@ Su fichero se conserva como lo que es: una lista de hipótesis a cotejar.
 | 8 | Italia | Vidriería de Murano | «A law dated November 8, 1291 confined most of Venice's glassmaking industry to the "island of Murano"»; el cristallo es «a soda glass, created during the 15th century» |
 | 12 | Egipto | Canal de Suez | abrió el «17 November 1869» tras obras iniciadas el 25 de abril de 1859; mide «193.30-kilometre-long» |
 | 12 | Italia | Pirelli | fundada el «January 28, 1872» por «Giovanni Battista Pirelli» en Milán; «initially specialised in rubber and derivative processes» |
+| 11 | Egipto | Imprenta de Bulaq | «established in 1820 and opened officially in the Bulaq neighborhood of Cairo in 1821»; primer libro en 1822, un diccionario árabe-italiano |
+| 10 | Italia | Filatoio de seda | «filatoio driven by overhead shafts that were powered by water» en Bolonia; «1717: John Lombe imported Italian techniques to England» |
 | 14 | Egipto | Presa de Asuán | 1960-1970, «to control flooding, increase water storage for irrigation, and generate hydroelectricity»; «12x175 MW» |
 
 URLs:
@@ -45,6 +47,13 @@ URLs:
 - https://en.wikipedia.org/wiki/Tiraz
 - https://en.wikipedia.org/wiki/Khan_el-Khalili
 - https://en.wikipedia.org/wiki/Lingotto
+- https://en.wikipedia.org/wiki/Nilometer
+- https://en.wikipedia.org/wiki/Murano_glass
+- https://en.wikipedia.org/wiki/Suez_Canal
+- https://en.wikipedia.org/wiki/Pirelli
+- https://en.wikipedia.org/wiki/Aswan_High_Dam
+- https://en.wikipedia.org/wiki/Bulaq_Press
+- https://en.wikipedia.org/wiki/Silk_throwing
 
 Dos de ellos encajan además con mecánicas que ya existen: el **ṭirāz** produce
 lino, lana, algodón y seda —los cuatro textiles del catálogo desde el 1.9C— y el
@@ -68,7 +77,7 @@ historia de la civilización elegida, y sólo había que no estropearlo.
 
 ### Lo que sigue siendo andamiaje
 
-Las **11 celdas restantes** llevan un edificio genérico por época, con
+Las **9 celdas restantes** llevan un edificio genérico por época, con
 `evidence: N` —sin fuentes, sin informe— porque **no afirman nada histórico**.
 Existen por una razón mecánica declarada: `ADVANCE_EPOCH` exige dos edificios
 en la ventana actual, así que sin ellos la civilización queda atrapada y las
@@ -85,7 +94,7 @@ concreta, que sería una afirmación histórica sin cotejar.
 
 ## Trabajo pendiente, nombrado
 
-Cotejar las 11 celdas restantes contra fuente y ascenderlas de andamiaje a
+Cotejar las 9 celdas restantes contra fuente y ascenderlas de andamiaje a
 contenido con nombre propio. La lista de hipótesis del modelo externo es un
 buen punto de partida —los periodos que propone son plausibles y están bien
 elegidos— pero cada una necesita su cita literal antes de entrar.

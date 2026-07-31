@@ -91,10 +91,10 @@ unit_ids:
   - egipto:work_crew
 building_ids:
   - egipto:aswan_dam
+  - egipto:bulaq_press
   - egipto:chariotry_stable
   - egipto:epoch_09_works
   - egipto:epoch_10_works
-  - egipto:epoch_11_works
   - egipto:epoch_13_works
   - egipto:epoch_15_works
   - egipto:flint_workshop

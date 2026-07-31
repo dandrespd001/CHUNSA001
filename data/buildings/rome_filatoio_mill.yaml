@@ -1,0 +1,33 @@
+# Hereda de base:epoch10_workshop y sobrescribe lo que este edificio no comparte.
+extends: base:epoch10_workshop
+id: rome:filatoio_mill
+civ_id: rome:republic_imperial
+display_name_key: rome:building.filatoio_mill
+description_key: rome:building.filatoio_mill.description
+kind: economic
+dropoff_resources: []
+playable_period_ids:
+  - rome:epoch_10
+  - rome:epoch_11
+  - rome:epoch_12
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Silk throwing: «Silk throwing is the industrial process wherein silk that has been reeled into skeins, is cleaned, receives a twist and is wound onto bobbins»; los italianos usaban el «filatoio» y el «torcitoio», y en Bolonia el «filatoio driven by overhead shafts that were powered by water»; «1717: John Lombe imported Italian techniques to England»"
+        locator: "Process, Italian mills and water power; Bolonia y Piamonte fueron los centros de innovacion, con maquinas de accionamiento externo documentadas desde el siglo XIII"
+        url: "https://en.wikipedia.org/wiki/Silk_throwing"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "La epoca 10 es la Manufactura (1700-1760) y el filatoio es el ejemplo exacto: maquina compleja movida por agua, en serie, ANTES de la maquina de vapor. Que en 1717 Lombe se llevara la tecnica italiana a Inglaterra es lo que convierte a este edificio en el anclaje correcto para la epoca: Italia era todavia quien exportaba tecnologia, y la epoca siguiente le dara la vuelta a eso. Consume seda, que el catalogo tiene desde la epoca 5."
+    reviewed_by:
+      - architect

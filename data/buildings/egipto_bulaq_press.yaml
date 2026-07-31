@@ -1,0 +1,33 @@
+# Hereda de base:epoch11_workshop y sobrescribe lo que este edificio no comparte.
+extends: base:epoch11_workshop
+id: egipto:bulaq_press
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.bulaq_press
+description_key: egipto:building.bulaq_press.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - egipto:epoch_11
+  - egipto:epoch_12
+  - egipto:epoch_13
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.26-anclajes-verificados
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Bulaq Press: la imprenta Amiri fue «established in 1820 and opened officially in the Bulaq neighborhood of Cairo in 1821»; «It published its first book in 1822: an Arabic-Italian dictionary prepared by the Syrian priest Anton Zakhur Rafail»; fue «one of the main agencies with which Muhammad Ali Pasha modernized Egypt»"
+        locator: "Founding, location and first publication; Muhammad Ali envio en 1815 una mision a Milan a aprender el oficio y comprar prensas"
+        url: "https://en.wikipedia.org/wiki/Bulaq_Press"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1820, dentro de la epoca 11. Es kind research porque lo que fabrica es difusion de conocimiento, y encaja con lo que la epoca 11 significa para Egipto: la modernizacion dirigida desde el estado por Muhammad Ali. NOTA DE HONESTIDAD, deliberada: la fuente NO dice que fuera la primera imprenta de Egipto, y por eso no se afirma en ningun campo pese a que es lo que suele repetirse. Lo que si sostiene es su papel como una de las agencias principales de esa modernizacion, y eso es lo que se cita. Detalle que vale la pena por si mismo: las prensas se compraron en MILAN, asi que los dos linajes del juego se tocan aqui de verdad."
+    reviewed_by:
+      - architect
