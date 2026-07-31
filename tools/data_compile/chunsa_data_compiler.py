@@ -136,6 +136,88 @@ def _schemas(root):
     registry = Registry().with_resources(resources)
     return {n: Draft202012Validator(loaded[n], registry=registry) for n in names}
 
+def _read_templates(root, errors):
+    """Plantillas de contenido comun (Sprint 1.24).
+
+    Viven en `data/templates/*.yaml` y NO son records: no entran en el blob, no
+    tienen identificador de kind y el kernel no se entera de que existen. Su
+    unica funcion es que dos civilizaciones puedan compartir la MECANICA de un
+    edificio sin copiarla a mano.
+
+    Por que en el compilador y no en el kernel: `BuildingDefinitionV1::civ_id`
+    es UN solo CivId y `Step()` filtra por el. Un record compartido en tiempo de
+    ejecucion obligaria a tocar el formato del blob y la simulacion. Expandirlas
+    aqui deja el kernel, el blob y el determinismo EXACTAMENTE como estaban: la
+    deduplicacion vive en el arbol de fuentes, no en la partida.
+    """
+    out = {}
+    d = Path(root) / "templates"
+    if not d.is_dir():
+        return out
+    for path in sorted((*d.glob("*.yaml"), *d.glob("*.yml")), key=lambda p: _utf8_key(p.name)):
+        try:
+            raw = path.read_bytes()
+        except OSError as e:
+            _err(errors, "E_IO", "template", "", "", str(e)); continue
+        if len(raw) > MAX_FILE:
+            _err(errors, "E_LIMIT", "template", "", "", "file exceeds cap"); continue
+        try:
+            doc = parse_yaml(raw)
+        except CompileError as e:
+            _err(errors, e.code, "template", "", "", e.message); continue
+        if not isinstance(doc, dict) or not isinstance(doc.get("template_id"), str):
+            _err(errors, "E_SCHEMA", "template", "", "/template_id",
+                 "template requires a string template_id"); continue
+        tid = doc["template_id"]
+        if not RECORD_ID.match(tid):
+            _err(errors, "E_SCHEMA", "template", tid, "/template_id",
+                 "template_id is not a valid record id"); continue
+        if tid in out:
+            _err(errors, "E_DUPLICATE", "template", tid, "/template_id",
+                 "duplicate template_id"); continue
+        if "extends" in doc:
+            # Sin cadenas en v1: una plantilla NO extiende a otra. Es la regla
+            # que hace la expansion trivialmente terminante y sin ciclos que
+            # detectar, y con un solo nivel ya se elimina la duplicacion real.
+            _err(errors, "E_SCHEMA", "template", tid, "/extends",
+                 "a template cannot extend another template"); continue
+        out[tid] = doc
+    return out
+
+
+def _merge_template(base, override):
+    """Fusion determinista: el RECORD gana siempre sobre la plantilla.
+
+    Los diccionarios se funden en profundidad; las LISTAS se sustituyen
+    enteras, nunca se concatenan. Concatenar parecia mas util y es una trampa:
+    haria imposible QUITAR un elemento heredado, y el resultado dependeria del
+    orden de escritura. Sustituir es aburrido y predecible, que es lo que se
+    quiere de una regla que decide el contenido del blob.
+    """
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge_template(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _apply_template(doc, templates, kind, errors):
+    if not isinstance(doc, dict) or "extends" not in doc:
+        return doc
+    ident = doc.get("id", "")
+    tid = doc.get("extends")
+    if not isinstance(tid, str) or tid not in templates:
+        _err(errors, "E_REFERENCE", kind, str(ident), "/extends",
+             "extends points to an unknown template")
+        return None
+    base = {k: v for k, v in templates[tid].items() if k != "template_id"}
+    merged = _merge_template(base, doc)
+    merged.pop("extends", None)
+    return merged
+
+
 def _read_sources(root, errors):
     root = Path(root)
     if not root.is_dir(): raise CompileError("E_IO", "source root does not exist")
@@ -152,6 +234,7 @@ def _read_sources(root, errors):
             paths.extend((kind, p) for p in sorted(
                 (*d.glob("*.yaml"), *d.glob("*.yml")), key=lambda p: _utf8_key(p.name)))
     validators = _schemas(root)
+    templates = _read_templates(root, errors)
     for kind, path in paths:
         if not path.exists():
             if kind == "manifest": _err(errors, "E_IO", kind, "", "", "manifest.yaml missing")
@@ -169,6 +252,12 @@ def _read_sources(root, errors):
         if len(raw) > cap: _err(errors, "E_LIMIT", kind, "", "", "file exceeds cap"); continue
         try: doc = parse_yaml(raw)
         except CompileError as e: _err(errors, e.code, kind, "", "", e.message); continue
+        # Sprint 1.24: la herencia se resuelve ANTES de validar, para que el
+        # esquema vea el documento COMPLETO. Asi las plantillas no relajan
+        # ninguna comprobacion: un record que hereda tiene que quedar tan
+        # valido como uno escrito entero a mano.
+        doc = _apply_template(doc, templates, kind, errors)
+        if doc is None: continue
         ident = doc.get("id", doc.get("package_id", "")) if isinstance(doc, dict) else ""
         if isinstance(doc, dict) and "schema_version" in doc and doc["schema_version"] != (2 if kind == "unit" else 1):
             _err(errors, "E_SCHEMA_VERSION", kind, str(ident), "/schema_version", "wrong schema version")

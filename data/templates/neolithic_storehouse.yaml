@@ -1,0 +1,47 @@
+# Plantilla: almacén neolítico (épocas 2-3).
+#
+# Es el salto mecánico de la época 1 a la 2: el campamento paleolítico acopiaba
+# grano SILVESTRE, este almacena la cosecha de domesticados. Por eso es el
+# primero que pide ARCILLA (recurso de época 2, SPEC-007 §14) y el primero con
+# armadura distinta de cero — hay algo dentro que merece la pena defender.
+#
+# Ventana [2,3] para que solape con los graneros de la época 3 y la transición
+# no deje hueco; ese solape es además lo que da a Roma su segundo edificio en
+# la época 3.
+template_id: base:neolithic_storehouse
+schema_version: 1
+epoch_window:
+  - 2
+  - 3
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 350
+  armor:
+    cut: 1
+    pierce: 3
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 40
+  chunsa:clay: 20
+build_time_ticks: 400
+dropoff_resources:
+  - chunsa:food
+  - chunsa:clay
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect

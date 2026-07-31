@@ -1,0 +1,52 @@
+# Plantilla: campamento de cazadores-recolectores (épocas 1-2).
+#
+# POR QUÉ EXISTE ESTA PLANTILLA Y NO DOS FICHEROS. En la época 1 (Paleolítica)
+# no existen ni Egipto ni Roma: hay cazadores-recolectores en el valle del Nilo
+# y cazadores-recolectores en la península itálica, con la misma economía de
+# subsistencia. Darles mecánicas distintas sería inventar una diferencia que la
+# arqueología no sostiene, así que la mecánica se escribe UNA vez.
+#
+# Lo que cada civilización aporta encima: su identificador, sus claves de
+# localización, la tecnología que investiga, sus periodos jugables y —lo más
+# importante— SU CITA. La procedencia nunca se hereda a ciegas: cada
+# civilización responde de la suya.
+#
+# Medido antes de existir esto: los dos campamentos eran idénticos en 37 de 47
+# líneas. Con dos civilizaciones eso es un fichero de más; con seis y quince
+# épocas es el problema de contenido del proyecto.
+template_id: base:paleolithic_camp
+schema_version: 1
+epoch_window:
+  - 1
+  - 2
+kind: dropoff
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 250
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 30
+build_time_ticks: 250
+dropoff_resources:
+  - chunsa:food
+  - chunsa:wood
+  - chunsa:stone
+trains: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect

@@ -352,6 +352,75 @@ class CompilerTests(unittest.TestCase):
                 ],
             )
 
+    def test_templates_expand_to_identical_bytes_and_reject_bad_extends(self):
+        """Sprint 1.24 — plantillas de contenido comun.
+
+        La comprobacion que de verdad importa es la PRIMERA: un record escrito
+        entero a mano y el mismo record expresado con `extends` deben producir
+        el MISMO BLOB, byte a byte. Si eso se cumple, la plantilla es azucar de
+        fuente y no puede cambiar la partida — que es justo lo que hace falta
+        garantizar en un proyecto donde el determinismo es el contrato.
+        """
+        # 1) Referencia: el edificio tal cual, sin plantilla.
+        td, root = self.make_root()
+        with td:
+            reference, _ = self.compile_valid(root)
+            reference_bytes = reference.read_bytes()
+
+        # 2) Lo mismo, partido en plantilla + record que la extiende.
+        td, root = self.make_root()
+        with td:
+            building = self.read(root, "building")
+            heredables = ("footprint", "stats", "build_time_ticks", "kind")
+            plantilla = {"template_id": "base:tpl_edificio",
+                         "schema_version": building["schema_version"]}
+            for key in heredables:
+                if key in building:
+                    plantilla[key] = building.pop(key)
+            building["extends"] = "base:tpl_edificio"
+            (root / "templates").mkdir(parents=True, exist_ok=True)
+            (root / "templates" / "tpl.yaml").write_text(
+                yaml.safe_dump(plantilla, sort_keys=False), encoding="utf-8")
+            self.write(root, "building", building)
+            expandido, _ = self.compile_valid(root)
+            self.assertEqual(expandido.read_bytes(), reference_bytes)
+
+        # 3) El record GANA sobre la plantilla: si ambos declaran el mismo
+        #    campo, manda el record. Sin esta regla no se podria especializar.
+        td, root = self.make_root()
+        with td:
+            building = self.read(root, "building")
+            hp_real = building["stats"]["hp"]
+            plantilla = {"template_id": "base:tpl_edificio",
+                         "stats": {"hp": hp_real + 999}}
+            (root / "templates").mkdir(parents=True, exist_ok=True)
+            (root / "templates" / "tpl.yaml").write_text(
+                yaml.safe_dump(plantilla, sort_keys=False), encoding="utf-8")
+            building["extends"] = "base:tpl_edificio"
+            self.write(root, "building", building)
+            ganador, _ = self.compile_valid(root)
+            self.assertEqual(ganador.read_bytes(), reference_bytes)
+
+        # 4) `extends` a una plantilla inexistente es E_REFERENCE, no un
+        #    record a medias colandose en el blob.
+        td, root = self.make_root()
+        with td:
+            building = self.read(root, "building")
+            building["extends"] = "base:no_existe"
+            self.write(root, "building", building)
+            self.assert_validation_error(root, "E_REFERENCE")
+
+        # 5) Una plantilla NO puede extender a otra: sin cadenas, la expansion
+        #    termina siempre y no hay ciclos que detectar.
+        td, root = self.make_root()
+        with td:
+            (root / "templates").mkdir(parents=True, exist_ok=True)
+            (root / "templates" / "tpl.yaml").write_text(
+                yaml.safe_dump({"template_id": "base:tpl_edificio",
+                                "extends": "base:otra"}, sort_keys=False),
+                encoding="utf-8")
+            self.assert_validation_error(root, "E_SCHEMA")
+
     def test_blob_header_directory_and_file_corruption(self):
         td, root = self.make_root()
         with td:

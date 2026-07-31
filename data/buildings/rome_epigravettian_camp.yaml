@@ -1,47 +1,17 @@
-schema_version: 1
+# Hereda la mecanica de base:paleolithic_camp. Aqui solo va lo que ES de esta
+# civilizacion: identidad, periodos jugables y —sobre todo— su CITA.
+# La procedencia nunca se hereda: cada civilizacion responde de la suya.
+extends: base:paleolithic_camp
 id: rome:epigravettian_camp
 civ_id: rome:republic_imperial
 display_name_key: rome:building.epigravettian_camp
 description_key: rome:building.epigravettian_camp.description
-epoch_window:
-  - 1
-  - 2
-kind: dropoff
-footprint:
-  width_cells: 2
-  height_cells: 2
-  blocks_movement: true
-stats:
-  hp: 250
-  armor:
-    cut: 0
-    pierce: 0
-    impact: 0
-constructible: true
-resource_costs:
-  chunsa:wood: 30
-build_time_ticks: 250
-dropoff_resources:
-  - chunsa:food
-  - chunsa:wood
-  - chunsa:stone
-trains: []
 researches:
   - rome:backed_bladelet
-required_capabilities: []
-grants_capabilities: []
-recipes: []
 playable_period_ids:
   - rome:italic_epigravettian
   - rome:italic_neolithic
-availability_mode: historical
 provenance:
-  status: promoted
-  generator: human
-  task_id: Sprint-1.22-epocas-1-5
-  generated_on: "2026-07-31"
-  reviewed_by:
-    - architect
   historical_claims:
     evidence: H
     verification_reports:

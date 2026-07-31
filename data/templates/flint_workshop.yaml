@@ -1,0 +1,49 @@
+# Plantilla: taller lítico (épocas 1-2).
+#
+# El segundo edificio de la época 1, y no es relleno: ADVANCE_EPOCH exige DOS
+# edificios completos cuya ventana incluya la época actual, así que sin él la
+# civilización quedaría atrapada en la Paleolítica para siempre.
+#
+# Cuesta piedra además de madera porque su materia prima ES la piedra: es el
+# primer edificio del juego que pide un mineral, y enseña que fabricar consume
+# material. HP 200, más frágil que el campamento, porque es un taller a cielo
+# abierto y no un recinto.
+#
+# La talla de sílex es tecnología, no rasgo civilizatorio: lo que distingue al
+# Nilo de Italia es el fósil director —hoja con lustre de sílice frente a
+# hojita de dorso rebajado— y eso vive en la CITA de cada record, no en los
+# números. `trains` se deja a cada civilización: entrena a SU cazador.
+template_id: base:flint_workshop
+schema_version: 1
+epoch_window:
+  - 1
+  - 2
+kind: military
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: true
+stats:
+  hp: 200
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 20
+  chunsa:stone: 30
+build_time_ticks: 300
+dropoff_resources: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.22-epocas-1-5
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect

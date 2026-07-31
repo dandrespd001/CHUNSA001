@@ -1,46 +1,15 @@
-schema_version: 1
+# Hereda la mecanica de base:neolithic_storehouse. Aqui solo va lo que ES de esta
+# civilizacion: identidad, periodos jugables y —sobre todo— su CITA.
+# La procedencia nunca se hereda: cada civilizacion responde de la suya.
+extends: base:neolithic_storehouse
 id: egipto:merimde_storage
 civ_id: egipto:dynastic_nile
 display_name_key: egipto:building.merimde_storage
 description_key: egipto:building.merimde_storage.description
-epoch_window:
-  - 2
-  - 3
-kind: dropoff
-footprint:
-  width_cells: 2
-  height_cells: 2
-  blocks_movement: true
-stats:
-  hp: 350
-  armor:
-    cut: 1
-    pierce: 3
-    impact: 0
-constructible: true
-resource_costs:
-  chunsa:wood: 40
-  chunsa:clay: 20
-build_time_ticks: 400
-dropoff_resources:
-  - chunsa:food
-  - chunsa:clay
-trains: []
-researches: []
-required_capabilities: []
-grants_capabilities: []
-recipes: []
 playable_period_ids:
   - egipto:fayum_neolithic
   - egipto:old_kingdom
-availability_mode: historical
 provenance:
-  status: promoted
-  generator: human
-  task_id: Sprint-1.22-epocas-1-5
-  generated_on: "2026-07-31"
-  reviewed_by:
-    - architect
   historical_claims:
     evidence: H
     verification_reports:

@@ -1,45 +1,17 @@
-schema_version: 1
+# Hereda la mecanica de base:flint_workshop. Aqui solo va lo que ES de esta
+# civilizacion: identidad, periodos jugables y —sobre todo— su CITA.
+# La procedencia nunca se hereda: cada civilizacion responde de la suya.
+extends: base:flint_workshop
 id: rome:flint_workshop
 civ_id: rome:republic_imperial
 display_name_key: rome:building.flint_workshop
 description_key: rome:building.flint_workshop.description
-epoch_window:
-  - 1
-  - 2
-kind: military
-footprint:
-  width_cells: 2
-  height_cells: 2
-  blocks_movement: true
-stats:
-  hp: 200
-  armor:
-    cut: 0
-    pierce: 0
-    impact: 0
-constructible: true
-resource_costs:
-  chunsa:wood: 20
-  chunsa:stone: 30
-build_time_ticks: 300
-dropoff_resources: []
 trains:
   - rome:italic_forager
-researches: []
-required_capabilities: []
-grants_capabilities: []
-recipes: []
 playable_period_ids:
   - rome:italic_epigravettian
   - rome:italic_neolithic
-availability_mode: historical
 provenance:
-  status: promoted
-  generator: human
-  task_id: Sprint-1.22-epocas-1-5
-  generated_on: "2026-07-31"
-  reviewed_by:
-    - architect
   historical_claims:
     evidence: H
     verification_reports:
