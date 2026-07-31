@@ -1,0 +1,26 @@
+  [2m📋 Loaded env from /home/adquiod/.omniroute/.env[0m
+1. **CORRECTA** para los arrays concretos. La API de streaming de XXH3 no introduce separadores ni metadatos entre llamadas a `update`: el digest final depende solo de la concatenación de bytes alimentada y del seed, no de cómo la trocees.  
+   - Cambio 1: `h.bytes(cost_grid, FF_CELLS)` produce exactamente los mismos bytes que `for ... h.u8(...)`.  
+   - Cambio 2: para `int32_t`, `h.i32(v)` escribe los 4 bytes nativos del valor convertido a `uint32_t`. Como `int32_t` no tiene padding y es complemento a dos, `h.array(g.hp, t.capacity)` produce exactamente la misma secuencia de bytes nativos.
+
+2. **Sí, hay tipos problemáticos.** Si por “bucle equivalente” te refieres a `h.bytes(&a[i], sizeof(T))`, entonces `h.array` es equivalente para todo `T` trivially copyable. Pero si te refieres al patrón viejo con `h.i32`/`h.u8`, **no**:
+   - **structs/clases**: `h.array` incluye padding interior y final (`sizeof(T)`), con bytes no inicializados que un bucle miembro-a-miembro no serializa.
+   - **bool**: `h.array` hashea la representación cruda del `bool`, que no está especificada por el estándar; un bucle normalmente hashearía `0/1`.
+   - **enums**: `h.array` hashea la representación del tipo subyacente, que puede ser de 1/2/4/8 bytes y dependiente de la implementación; no es lo mismo que convertir a `i32` y hashear 4 bytes.
+   - **int/long/float/punteros**: solo coincidiría si el helper del bucle emitiera exactamente el mismo ancho y representación que `sizeof(T)`.
+
+   Para `uint8_t` e `int32_t` no hay problema.
+
+3. **No se pierde portabilidad nueva para los tipos usados.** El código viejo ya dependía de la endianness nativa: `h.i32` convertía a `uint32_t` y escribía sus bytes tal como están en memoria. `h.array` escribe los mismos bytes desde el `int32_t` original. Es decir, el checksum ya era dependiente de la plataforma entre máquinas big/little-endian; el cambio no lo empeora.  
+   Si el contrato exige el mismo checksum en máquinas de distinta endianness, el fix es serializar explícitamente en endianness fijo, no usar representación nativa. Además, `h.u32` ya asumía `sizeof(uint32_t) == 4`; en plataformas con `CHAR_BIT != 8` eso ya era UB.
+
+4. **No hay riesgo de leer fuera de límites** en los usos actuales, asumiendo el invariante `t.capacity <= ENTITY_HARD_CAP`. `h.array(g.hp, t.capacity)` lee exactamente `t.capacity * sizeof(int32_t)` bytes desde el prefijo del array, igual que el bucle. Para `cost_grid` lee `FF_CELLS` bytes. Si `t.capacity` estuviera corrupto o excediera el tamaño real, el bucle viejo también habría roto.
+
+5. **Comprobaciones adicionales que recomiendo:**
+   - Test diferencial en la misma build: calcula el digest con el camino viejo (bucles) y con el nuevo (`h.array`/`h.bytes`) sobre estados con longitudes `0`, `1`, `capacity-1`, `capacity`, y compara que sean idénticos.
+   - Golden test independiente: guarda un vector de bytes con el valor esperado calculado con `XXH3_64bits` one-shot, no con este `Hasher`, para no compartir un posible bug del wrapper.
+   - Añade `static_assert(std::is_trivially_copyable_v<T>)` en `h.array` para evitar usos futuros con tipos no triviales o con padding no determinista.
+   - Corre con MemorySanitizer/ASan si piensas usar `h.array` con cualquier tipo que no sea un entero sin padding.
+   - Si el determinismo es multiarquitectura, corre en big-endian o, mejor, serializa a little-endian antes de hashear; el hasher actual no garantiza checksum idéntico entre endiannesses.
+
+[deepseek-v4-flash · 270572ms · 27108 tok]

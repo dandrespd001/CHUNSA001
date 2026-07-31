@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <type_traits>
 
 // chunsa_sim_core — state_checksum_v1 sobre el stream canónico (SPEC-001 §10).
 // Autor: Arquitecto. Algoritmo congelado: XXH3_64bits con seed y prefijo de
@@ -127,7 +128,27 @@ struct Hasher {
     // representacion en memoria igual que esto. No se pierde ninguna garantia,
     // solo se dejan de pagar n llamadas.
     template <typename T>
-    void array(const T* a, uint32_t n) noexcept { bytes(a, size_t(n) * sizeof(T)); }
+    void array(const T* a, uint32_t n) noexcept {
+        // Guarda anadida tras la auditoria externa del 1.27 (DeepSeek V4 Flash
+        // con razonamiento alto). El riesgo que senalo es REAL y mira al
+        // futuro: hoy solo se llama con enteros, pero la plantilla acepta
+        // cualquier T, y con un struct hashearia el PADDING —bytes sin
+        // inicializar, no deterministas— mientras que el bucle miembro a
+        // miembro que sustituye no lo hacia. Seria un fallo de determinismo
+        // silencioso, del peor tipo: intermitente y dificil de atribuir.
+        //
+        // El auditor propuso `is_trivially_copyable_v`. Se usa `is_integral_v`,
+        // que es MAS ESTRICTO y es lo correcto aqui: un struct con padding
+        // TAMBIEN es trivially copyable, asi que aquella comprobacion habria
+        // dejado pasar justo el caso peligroso. `bool` y los enum tambien
+        // quedan fuera, y con motivo: la representacion de bool no la fija el
+        // estandar y el tipo subyacente de un enum sin fijar depende de la
+        // implementacion.
+        static_assert(std::is_integral_v<T>,
+                      "Hasher::array solo admite enteros: cualquier otro tipo "
+                      "podria arrastrar padding no determinista al checksum");
+        bytes(a, size_t(n) * sizeof(T));
+    }
 };
 
 }  // namespace detail

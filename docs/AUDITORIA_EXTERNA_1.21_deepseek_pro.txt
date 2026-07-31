@@ -1,0 +1,12 @@
+  [2m📋 Loaded env from /home/adquiod/.omniroute/.env[0m
+1. **CORRECTA** – la secuencia de bytes entregada a `XXH3_64bits_update` es idéntica (mismos valores, mismo orden, misma representación en memoria) y la API de streaming garantiza que cualquier partición de una misma secuencia produce el mismo digest.
+
+2. Con los tipos actuales (`uint8_t`, `int32_t`) no hay diferencia. Si `T` fuese un tipo con bits de relleno (p. ej. una estructura con padding, `bool`, o un enumerado sin tipo subyacente fijado), `h.array` copiaría la representación bruta incluyendo padding no determinista, mientras que el bucle antiguo serializaba los valores lógicos con `i32`/`u8`; **ahí el digest cambiaría**. El código actual no usa esos tipos, pero la plantilla `array` queda expuesta a ese riesgo futuro.
+
+3. No se pierde ninguna garantía de portabilidad. Ambas versiones dependen del orden de bytes nativo (endianness) al hashear `int32_t`; ya era dependiente de la plataforma y el cambio no lo empeora.
+
+4. No hay riesgo nuevo de lectura fuera de límites. Se lee exactamente `t.capacity` elementos del array, igual que el bucle anterior. Si la invariante `t.capacity <= ENTITY_HARD_CAP` se rompiera, ambas versiones leerían fuera; el cambio no altera esa condición.
+
+5. Una comprobación adicional recomendada: **fuzzing diferencial**. Ejecutar simultáneamente la versión antigua y la nueva sobre millones de estados aleatorios, comparando los checksums finales, y además inyectar un *mock* del hasher que registre la secuencia exacta de bytes pasada a `update` para confirmar que son bit a bit idénticas. Esto cubre cualquier diferencia sutil (alineamiento, reordenación) más allá de “la suite pasa en verde”.
+
+[deepseek-v4-pro · 58101ms · 5974 tok]
