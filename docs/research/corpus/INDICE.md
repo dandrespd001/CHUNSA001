@@ -18,6 +18,38 @@ Un fichero de `extractos/` no vale si le falta algo de esto:
    inferencia nuestra.
 4. **Licencia o estado de dominio público**, si se copia texto extenso.
 
+
+## Estado del corpus (2026-07-31)
+
+**17 de 18 temas poblados** · **612 afirmaciones verificadas** · **148
+declaradas NO VERIFICADO** · **2705 citas literales**.
+
+| Tema | `[V]` | NO VERIF. | Citas | Fuentes principales |
+|---|---:|---:|---:|---|
+| agricultura | 21 | 7 | 118 | Archive, PubMed |
+| alimentacion | 41 | 12 | 196 | Archive, DOI |
+| ancestrales | 32 | 5 | 115 | DOI, OpenEdition, Springer |
+| ceramica_vidrio | 31 | 11 | 146 | Archive, DOAJ |
+| construccion_hidraulica | 40 | 9 | 216 | Archive |
+| economia | 51 | 6 | 194 | Archive |
+| electronica | 44 | 9 | 196 | Archive, Wikipedia |
+| energia | 50 | 7 | 258 | Archive |
+| historia | 23 | 7 | 133 | Archive |
+| medicina | 23 | 8 | 63 | Archive, DOAJ |
+| metalurgia | 39 | 8 | 147 | Archive |
+| militar | 27 | 10 | 120 | Archive |
+| mineria | 48 | 7 | 107 | Archive |
+| nuclear | 34 | 16 | 130 | Archive |
+| quimica | 38 | 7 | 164 | Archive |
+| textiles | 45 | 8 | 265 | Archive |
+| transporte | 25 | 11 | 137 | Archive |
+| **aeronautica** | — | — | — | **pendiente, relanzado** |
+
+**La proporción de NO VERIFICADO importa tanto como la de verificado.** 148
+huecos declarados en vez de rellenados con números creíbles es la señal de que
+el corpus se puede usar. `nuclear` es el que más tiene (16), lo cual es
+coherente: buena parte de sus datos operativos no están en fuentes abiertas.
+
 ## Temas
 
 Ampliado el 2026-07-31 con medicina, aeronáutica, transporte y **técnicas
