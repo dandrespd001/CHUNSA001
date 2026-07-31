@@ -40,6 +40,25 @@ transporte.
 | 11 | Economía | `extractos/economia.md` | 1–15 | pendiente |
 | 12 | Historia, arqueología y religión | `extractos/historia.md` | 1–15 | pendiente |
 
+### Ampliación del 2026-07-31 (segunda ronda)
+
+Salen de **cotejar los temas con los recursos que el juego ya tiene**. No son
+completismo: cada uno cubre un hueco donde hoy hay datos del juego que **ningún
+tema sostiene**.
+
+| # | Tema | Fichero | Épocas | Por qué |
+|---|---|---|---|---|
+| 13 | **Minería y extracción** | `extractos/mineria.md` | 1–15 | **SPEC-007 §14** (reserva y recuperación: sacar más de un yacimiento agotado con tecnología) es un sprint planificado y **no tiene ningún tema que lo alimente** |
+| 14 | **Cerámica, vidrio y no metálicos** | `extractos/ceramica_vidrio.md` | 2–15 | La **arcilla** es recurso desde la época 2 y ningún tema la cubre |
+| 15 | **Alimentación, conservación y ganadería** | `extractos/alimentacion.md` | 1–15 | La **comida** es el único recurso de subsistencia y atraviesa las 15 épocas. Salazón, secado, fermentación, conserva; y domesticación, que además da el caballo |
+| 16 | **Electrónica, computación y comunicaciones** | `extractos/electronica.md` | 12–15 | **Silicio** y **tierras raras** son recursos de las épocas 14–15 y ningún tema explica para qué sirven |
+| 17 | **Nuclear** | `extractos/nuclear.md` | 14–15 | El **uranio** es recurso de la época 14 sin tema propio |
+| 18 | **Textiles y vestido** | `extractos/textiles.md` | 1–15 | **No hay recurso textil todavía.** Es un sector económico enorme —la Revolución Industrial empieza ahí— y la investigación debe decir **si merece un recurso propio** o se queda fuera del alcance |
+
+**El 18 es distinto de los demás**: no documenta algo que ya existe, sino que
+**decide si algo debe existir**. Su entregable incluye una recomendación.
+
+
 ### El tema 1 es el difícil, y conviene decirlo
 
 Los tratados técnicos del Archive son en su abrumadora mayoría **occidentales y
