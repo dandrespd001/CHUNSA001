@@ -253,6 +253,15 @@ add_executable(chunsa_test_ai_craft tests/unit/test_ai_craft.cpp)
 target_link_libraries(chunsa_test_ai_craft PRIVATE chunsa_sim_core)
 add_test(NAME ai_craft COMMAND chunsa_test_ai_craft)
 
+# --- Sprint 1.20: banco de rendimiento (SPEC-008 §2.1) -----------------------
+# NO lleva etiqueta `fast`: el tiempo de pared no es determinista y meterlo en
+# el ciclo de PR lo volveria inestable. Se ejecuta a proposito:
+#     ctest --test-dir build-gcc -L perf
+add_executable(chunsa_bench_step tests/perf/bench_step.cpp)
+target_link_libraries(chunsa_bench_step PRIVATE chunsa_sim_core)
+add_test(NAME bench_step COMMAND chunsa_bench_step)
+set_tests_properties(bench_step PROPERTIES LABELS "perf" TIMEOUT 300)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
