@@ -1,0 +1,32 @@
+# Hereda la mecanica de base:epoch8_workshop. Aqui solo va lo que es de
+# esta civilizacion: identidad, periodos jugables y procedencia.
+extends: base:epoch8_workshop
+id: egipto:mamluk_khan
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.mamluk_khan
+description_key: egipto:building.mamluk_khan.description
+playable_period_ids:
+  - egipto:epoch_08
+  - egipto:epoch_09
+  - egipto:epoch_10
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Khan el-Khalili: «During Barquq's first reign (1382-1389) his Master of the Stables (amir akhur), Jaharkas al-Khalili, demolished the Fatimid mausoleum (Turbat az-Zafaraan) to erect a large khan»; el patio interior era donde los mercaderes «could store their goods»"
+        locator: "Foundation and function; a finales del siglo XV el barrio era «the major center of foreign trade»"
+        url: "https://en.wikipedia.org/wiki/Khan_el-Khalili"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Fundado entre 1382 y 1389, dentro de la epoca 8. Es kind dropoff y no por comodidad: la fuente dice literalmente que los mercaderes ALMACENABAN alli su genero, que es la definicion del punto de acopio del juego. La epoca 8 del mameluco es comercio, no polvora, y el edificio lo dice."
+    reviewed_by:
+      - architect

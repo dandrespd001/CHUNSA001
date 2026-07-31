@@ -1,0 +1,32 @@
+# Hereda la mecanica de base:epoch7_workshop. Aqui solo va lo que es de
+# esta civilizacion: identidad, periodos jugables y procedencia.
+extends: base:epoch7_workshop
+id: egipto:tiraz_workshop
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.tiraz_workshop
+description_key: egipto:building.tiraz_workshop.description
+playable_period_ids:
+  - egipto:epoch_07
+  - egipto:epoch_08
+  - egipto:epoch_09
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Tiraz: «the institution of tiraz flourished in the Islamic world under the patronage of the Abbasid and Fatimid caliphs from the late 9th century to the 13th»; los talleres producian textiles de «linen, wool, cotton, and silk blends» con inscripciones arabes"
+        locator: "State tiraz workshops and production; el taller califal (khassa) era un departamento administrativo"
+        url: "https://en.wikipedia.org/wiki/Tiraz"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "El tiraz fatimi es el taller textil de estado, y encaja en la epoca 7 sin forzar nada: la fuente lo situa «from the late 9th century to the 13th». Se eligio porque su produccion documentada —lino, lana, algodon y seda— son EXACTAMENTE los cuatro textiles que el catalogo tiene desde el 1.9C. No se invento una mecanica para el edificio: se busco un edificio real cuya funcion ya tuviera verbo en el juego."
+    reviewed_by:
+      - architect

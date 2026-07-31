@@ -1,0 +1,27 @@
+# Hereda la mecanica de base:epoch6_workshop. Aqui solo va lo que es de
+# esta civilizacion: identidad, periodos jugables y procedencia.
+extends: base:epoch6_workshop
+id: egipto:epoch_06_works
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.epoch_06_works
+description_key: egipto:building.epoch_06_works.description
+playable_period_ids:
+  - egipto:epoch_06
+  - egipto:epoch_07
+  - egipto:epoch_08
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "ANDAMIAJE DECLARADO, no contenido. Este edificio NO afirma nada historico y por eso lleva evidence N, que el esquema solo admite sin fuentes ni informe: es la marca honesta para algo que existe por una razon mecanica. La razon es esta: ADVANCE_EPOCH exige DOS edificios en la ventana de la epoca actual, asi que sin el la civilizacion queda ATRAPADA en la epoca 6 y las epocas 6-15 vuelven a ser filas de una tabla. Se sustituira por un edificio con nombre propio cuando su anclaje historico este cotejado contra fuente con cita literal; las hipotesis estan en la investigacion delegada y la lista de pendientes en VERIF_LINAJES_6_15. Ponerle ahora un nombre historico sin cotejar habria llenado el catalogo de datos con aspecto de verificados, que es justo lo que este proyecto ya cazo una vez."
+    reviewed_by:
+      - architect

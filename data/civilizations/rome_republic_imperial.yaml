@@ -2,10 +2,10 @@ schema_version: 1
 id: rome:republic_imperial
 historical_window:
   start_year: -19000
-  end_year: 476
+  end_year: 2025
 epoch_window:
   - 1
-  - 5
+  - 15
 region_key: rome:region.mediterranean
 display_name_key: rome:civ.republic_imperial
 description_key: rome:civ.republic_imperial.description
@@ -38,6 +38,46 @@ playable_periods:
     start_year: 117
     end_year: 235
     label_key: rome:period.high_empire
+  - id: rome:epoch_06
+    start_year: 300
+    end_year: 799
+    label_key: rome:period.epoch_06
+  - id: rome:epoch_07
+    start_year: 800
+    end_year: 1299
+    label_key: rome:period.epoch_07
+  - id: rome:epoch_08
+    start_year: 1300
+    end_year: 1499
+    label_key: rome:period.epoch_08
+  - id: rome:epoch_09
+    start_year: 1500
+    end_year: 1699
+    label_key: rome:period.epoch_09
+  - id: rome:epoch_10
+    start_year: 1700
+    end_year: 1759
+    label_key: rome:period.epoch_10
+  - id: rome:epoch_11
+    start_year: 1760
+    end_year: 1839
+    label_key: rome:period.epoch_11
+  - id: rome:epoch_12
+    start_year: 1840
+    end_year: 1899
+    label_key: rome:period.epoch_12
+  - id: rome:epoch_13
+    start_year: 1900
+    end_year: 1944
+    label_key: rome:period.epoch_13
+  - id: rome:epoch_14
+    start_year: 1945
+    end_year: 1979
+    label_key: rome:period.epoch_14
+  - id: rome:epoch_15
+    start_year: 1980
+    end_year: 2025
+    label_key: rome:period.epoch_15
 institutions:
   - id: rome:military_service
     name_key: rome:institution.military_service
@@ -54,15 +94,25 @@ unit_ids:
   - rome:camp_work_crew
   - rome:legionary
 building_ids:
+  - rome:castra_barracks
   - rome:epigravettian_camp
+  - rome:epoch_06_works
+  - rome:epoch_08_works
+  - rome:epoch_09_works
+  - rome:epoch_10_works
+  - rome:epoch_11_works
+  - rome:epoch_12_works
+  - rome:epoch_14_works
+  - rome:epoch_15_works
   - rome:flint_workshop
+  - rome:forum_center
+  - rome:foundry
+  - rome:horreum
   - rome:italic_storehouse
+  - rome:lingotto_works
   - rome:remedello_hamlet
   - rome:terramare_workshop
-  - rome:forum_center
-  - rome:horreum
-  - rome:castra_barracks
-  - rome:foundry
+  - rome:venetian_arsenal
 tech_ids:
   - rome:backed_bladelet
   - rome:marching_drill

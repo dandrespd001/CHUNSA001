@@ -110,8 +110,13 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // cambia es la numeracion interna. Esa es justo la comprobacion que separa
 // "cambio de datos" de "cambio de comportamiento", y por eso el end_tick NO
 // se toca aqui.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x70415ea4b5229cf4ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xdfce17b35331c927ull;
+// Sprint 1.25 (marco de 15 epocas): mismo caso que el 1.22 y por el mismo
+// motivo. El catalogo pasa de 16 a 36 edificios y BuildingId es EL INDICE en
+// orden bytewise de record_id, asi que los identificadores de los edificios
+// que ya existian se reordenan. end_tick sigue en 10473 y winner=1: la partida
+// se juega igual, cambia la numeracion.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x7a4dbfaf97976ba1ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xd40f950f1c9be7e5ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

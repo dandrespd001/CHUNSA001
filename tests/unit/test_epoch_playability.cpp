@@ -51,12 +51,15 @@ using namespace chunsa;
 
 namespace {
 
-// Rango que el Director pidió dejar COMPLETO (2026-07-31). Las épocas 6..15
-// existen en la escala pero todavía no tienen civilización que las alcance;
-// ampliar este tope es lo que convierte «época declarada» en «época jugable»,
-// y esta prueba es la que lo exige.
+// Rango que el Director pidió dejar COMPLETO. El 1.22 lo dejó en 5; el 1.25 lo
+// sube a 15, que es la escala entera de SPEC-007 §2 y el encargo literal: dos
+// civilizaciones jugables de la época 1 a la 15.
+//
+// Subir esta constante es lo que convierte «época declarada» en «época
+// jugable»: mientras valía 5, las épocas 6-15 podían estar vacías sin que nada
+// protestara. Ahora cada casilla civilización×época tiene que sostenerse.
 constexpr uint8_t kEpochFirst = 1;
-constexpr uint8_t kEpochLast  = 5;
+constexpr uint8_t kEpochLast  = 15;
 
 struct Civ {
     const char* record_id;

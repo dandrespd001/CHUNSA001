@@ -5,7 +5,7 @@ display_name_key: egipto:building.settlement_center
 description_key: egipto:building.settlement_center.description
 epoch_window:
   - 1
-  - 5
+  - 15
 kind: civic
 footprint:
   width_cells: 3
@@ -37,6 +37,16 @@ playable_period_ids:
   - egipto:late_period
   - egipto:old_kingdom
   - egipto:new_kingdom
+  - egipto:epoch_06
+  - egipto:epoch_07
+  - egipto:epoch_08
+  - egipto:epoch_09
+  - egipto:epoch_10
+  - egipto:epoch_11
+  - egipto:epoch_12
+  - egipto:epoch_13
+  - egipto:epoch_14
+  - egipto:epoch_15
 availability_mode: historical
 provenance:
   status: promoted

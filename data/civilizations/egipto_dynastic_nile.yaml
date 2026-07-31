@@ -2,10 +2,10 @@ schema_version: 1
 id: egipto:dynastic_nile
 historical_window:
   start_year: -13000
-  end_year: -332
+  end_year: 2025
 epoch_window:
   - 1
-  - 5
+  - 15
 region_key: egipto:region.nile_valley
 display_name_key: egipto:civ.dynastic_nile
 description_key: egipto:civ.dynastic_nile.description
@@ -34,6 +34,46 @@ playable_periods:
     start_year: -664
     end_year: -332
     label_key: egipto:period.late_period
+  - id: egipto:epoch_06
+    start_year: 300
+    end_year: 799
+    label_key: egipto:period.epoch_06
+  - id: egipto:epoch_07
+    start_year: 800
+    end_year: 1299
+    label_key: egipto:period.epoch_07
+  - id: egipto:epoch_08
+    start_year: 1300
+    end_year: 1499
+    label_key: egipto:period.epoch_08
+  - id: egipto:epoch_09
+    start_year: 1500
+    end_year: 1699
+    label_key: egipto:period.epoch_09
+  - id: egipto:epoch_10
+    start_year: 1700
+    end_year: 1759
+    label_key: egipto:period.epoch_10
+  - id: egipto:epoch_11
+    start_year: 1760
+    end_year: 1839
+    label_key: egipto:period.epoch_11
+  - id: egipto:epoch_12
+    start_year: 1840
+    end_year: 1899
+    label_key: egipto:period.epoch_12
+  - id: egipto:epoch_13
+    start_year: 1900
+    end_year: 1944
+    label_key: egipto:period.epoch_13
+  - id: egipto:epoch_14
+    start_year: 1945
+    end_year: 1979
+    label_key: egipto:period.epoch_14
+  - id: egipto:epoch_15
+    start_year: 1980
+    end_year: 2025
+    label_key: egipto:period.epoch_15
 institutions:
   - id: egipto:state_administration
     name_key: egipto:institution.state_administration
@@ -50,13 +90,23 @@ unit_ids:
   - egipto:nile_forager
   - egipto:work_crew
 building_ids:
+  - egipto:chariotry_stable
+  - egipto:epoch_06_works
+  - egipto:epoch_09_works
+  - egipto:epoch_10_works
+  - egipto:epoch_11_works
+  - egipto:epoch_12_works
+  - egipto:epoch_13_works
+  - egipto:epoch_14_works
+  - egipto:epoch_15_works
   - egipto:flint_workshop
+  - egipto:foundry
+  - egipto:mamluk_khan
   - egipto:merimde_storage
   - egipto:qadan_camp
   - egipto:settlement_center
   - egipto:shena_granary
-  - egipto:chariotry_stable
-  - egipto:foundry
+  - egipto:tiraz_workshop
 tech_ids:
   - egipto:composite_bow_program
   - egipto:wild_grain_harvest

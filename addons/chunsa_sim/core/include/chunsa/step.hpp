@@ -44,7 +44,25 @@ inline constexpr uint32_t EPOCH_MIN_TICKS = 6000;
 inline constexpr int32_t EPOCH_COST_A = 200;
 inline constexpr int32_t EPOCH_COST_B = 200;
 inline constexpr int32_t EPOCH_COST_ME = 100;
-inline constexpr uint8_t EPOCH_MAX_V1 = 7;
+// Sprint 1.25: 7 -> 15. El tope era el del "slice v1", cuando el juego llegaba
+// a la Medieval y nada más. La escala de SPEC-007 §2 siempre tuvo QUINCE
+// épocas, y los recursos de las últimas (uranio en la 14, silicio y tierras
+// raras en la 15) llevaban meses declarados en `data/resources/` sin que
+// ninguna partida pudiera alcanzarlos: eran filas de una tabla.
+//
+// AVISO SOBRE REPLAYS ANTIGUOS. Esto relaja una condición de aceptación: un
+// ADVANCE_EPOCH que ANTES se rechazaba en la época 7 ahora se acepta. Un
+// replay grabado con el tope viejo que contuviera ese comando divergiría. En
+// la práctica no existe ninguno —ninguna civilización pasaba de la época 5
+// hasta el 1.22— pero la condición queda dicha en vez de descubierta.
+//
+// LA RAMPA NO SE TOCA, y conviene ver lo que implica: el gate (b) exige
+// `tick >= EPOCH_MIN_TICKS * pasos`, así que llegar a la época 15 desde la 1
+// pide 6000*14 = 84000 ticks, unos 70 minutos a 20 ticks/s. Es una duración
+// de partida coherente para recorrer toda la historia, pero es una decisión de
+// BALANCE que hasta hoy nadie había tenido que tomar porque el tope lo hacía
+// inalcanzable. Queda señalada para el Director, no cambiada por mi cuenta.
+inline constexpr uint8_t EPOCH_MAX_V1 = 15;
 
 // Normalización del tick efectivo de un comando (SPEC-001 §6.2): un comando
 // capturado en el tick `t` no puede surtir efecto antes de `t + delay` (retardo

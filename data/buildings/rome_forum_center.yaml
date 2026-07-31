@@ -5,7 +5,7 @@ display_name_key: rome:building.forum_center
 description_key: rome:building.forum_center.description
 epoch_window:
   - 1
-  - 5
+  - 15
 kind: civic
 footprint:
   width_cells: 3
@@ -38,6 +38,16 @@ playable_period_ids:
   - rome:terramare_bronze
   - rome:republican_expansion
   - rome:high_empire
+  - rome:epoch_06
+  - rome:epoch_07
+  - rome:epoch_08
+  - rome:epoch_09
+  - rome:epoch_10
+  - rome:epoch_11
+  - rome:epoch_12
+  - rome:epoch_13
+  - rome:epoch_14
+  - rome:epoch_15
 availability_mode: historical
 provenance:
   status: promoted

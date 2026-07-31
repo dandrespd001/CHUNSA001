@@ -5,7 +5,7 @@ description_key: rome:unit.camp_work_crew.description
 civ_id: rome:republic_imperial
 epoch_window:
   - 1
-  - 5
+  - 15
 class: citizen
 tags:
   - drop_off_carrier
@@ -29,6 +29,16 @@ playable_period_ids:
   - rome:remedello_copper
   - rome:terramare_bronze
   - rome:high_empire
+  - rome:epoch_06
+  - rome:epoch_07
+  - rome:epoch_08
+  - rome:epoch_09
+  - rome:epoch_10
+  - rome:epoch_11
+  - rome:epoch_12
+  - rome:epoch_13
+  - rome:epoch_14
+  - rome:epoch_15
 availability_mode: historical
 provenance:
   status: promoted

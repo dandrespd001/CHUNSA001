@@ -1,0 +1,32 @@
+# Hereda la mecanica de base:epoch13_workshop. Aqui solo va lo que es de
+# esta civilizacion: identidad, periodos jugables y procedencia.
+extends: base:epoch13_workshop
+id: rome:lingotto_works
+civ_id: rome:republic_imperial
+display_name_key: rome:building.lingotto_works
+description_key: rome:building.lingotto_works.description
+playable_period_ids:
+  - rome:epoch_13
+  - rome:epoch_14
+  - rome:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Lingotto: la fabrica tenia «a 1,500-metre […] long test track» con «spiral concrete access ramps at each end», y los coches se construian «on a line that went up through the building»"
+        locator: "Design and production line; Le Corbusier la llamo «one of the most impressive sights in industry»"
+        url: "https://en.wikipedia.org/wiki/Lingotto"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "La cadena VERTICAL —material abajo, coche terminado en la azotea— es la imagen mas clara de lo que significa la epoca 13 y por eso vale como su edificio caracteristico. Nota de honestidad: la cita confirma la pista de pruebas, las rampas y la cadena ascendente, pero NO el ano de construccion; el 1923 que daba la investigacion delegada queda sin cotejar y por eso no se afirma en ningun campo."
+    reviewed_by:
+      - architect

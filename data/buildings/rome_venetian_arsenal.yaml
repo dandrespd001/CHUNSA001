@@ -1,0 +1,32 @@
+# Hereda la mecanica de base:epoch7_workshop. Aqui solo va lo que es de
+# esta civilizacion: identidad, periodos jugables y procedencia.
+extends: base:epoch7_workshop
+id: rome:venetian_arsenal
+civ_id: rome:republic_imperial
+display_name_key: rome:building.venetian_arsenal
+description_key: rome:building.venetian_arsenal.description
+playable_period_ids:
+  - rome:epoch_07
+  - rome:epoch_08
+  - rome:epoch_09
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Venetian Arsenal: «Construction of the Arsenal began around 1104»; «At the peak of its efficiency in the early 16th century, the Arsenal employed some 16,000 people who apparently were able to produce nearly one ship each day»"
+        locator: "Founding, output and workforce; fabricaba barcos, jarcia, municiones y cuerda con piezas prefabricadas normalizadas"
+        url: "https://en.wikipedia.org/wiki/Venetian_Arsenal"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "1104 cae de lleno en la epoca 7. Es ademas el mejor ejemplo preindustrial de produccion en cadena que existe —16000 personas, casi un barco al dia, piezas normalizadas— asi que como edificio de PRODUCCION de una epoca medieval no hay que estirar nada. Coste alto y obra larga a proposito: es un astillero de estado, no un taller."
+    reviewed_by:
+      - architect

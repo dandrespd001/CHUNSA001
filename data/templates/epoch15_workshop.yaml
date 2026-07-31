@@ -1,0 +1,52 @@
+# Plantilla: taller caracteristico de la epoca 15 (Informacion 1980-hoy).
+#
+# QUE ES Y QUE NO ES. Esto es MECANICA COMPARTIDA, no una afirmacion historica.
+# Fija coste, resistencia y tiempo de obra de la epoca 15; el nombre propio,
+# el periodo y la CITA los pone cada civilizacion en su record, porque el
+# edificio egipcio y el italico de esta epoca son cosas distintas aunque cuesten
+# lo mismo. La plantilla nunca lleva procedencia historica: eso no se hereda.
+#
+# EL ESCALONADO ES BALANCE DECLARADO. HP 950 y 800 ticks de obra siguen una
+# progresion suave a lo largo de las diez epocas, para que avanzar se note sin
+# que una epoca invalide a la anterior de golpe. No sale de ninguna fuente y no
+# pretende salir: es diseno de partida, y queda dicho aqui para que nadie lo lea
+# como un dato.
+#
+# Los materiales SI siguen la tabla de SPEC-007 §2: cada epoca solo puede pedir
+# recursos que ya existan en ella o antes.
+template_id: base:epoch15_workshop
+schema_version: 1
+epoch_window:
+  - 15
+  - 15
+kind: economic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 950
+  armor:
+    cut: 6
+    pierce: 9
+    impact: 6
+constructible: true
+resource_costs:
+  chunsa:stone: 160
+  chunsa:steel: 100
+  chunsa:silicon: 40
+build_time_ticks: 800
+dropoff_resources: []
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.25-marco-15-epocas
+  generated_on: "2026-07-31"
+  reviewed_by:
+    - architect
