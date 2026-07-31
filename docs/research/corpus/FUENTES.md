@@ -7,7 +7,7 @@ ya perdimos tiempo con fuentes cuya portada responde y cuyo contenido da 403.
 
 | Repositorio | Qué tiene | Cómo se consulta | Estado |
 |---|---|---|---|
-| **Internet Archive** | Libros técnicos escaneados, informes DTIC, actas de sociedades de ingeniería. **8252 textos solo de metalurgia** | API JSON: `archive.org/advancedsearch.php?q=...&output=json` | **200, con API** |
+| **Internet Archive** | Libros técnicos escaneados, informes DTIC, actas de sociedades de ingeniería. **8252 textos solo de metalurgia** | API JSON: `archive.org/advancedsearch.php?q=...&output=json`. **Texto completo: `archive.org/download/ID/ID_djvu.txt`** — la ruta `/stream/` devuelve HTML, no sirve | **200, con API y texto** |
 | **Project Gutenberg** | Libros técnicos de dominio público, texto limpio | `gutenberg.org/ebooks/search/?query=` | 200 |
 | **Open Library** | Catálogo de libros, API JSON | `openlibrary.org/search.json?q=` | **200, con API** |
 | **DOAJ** | Revistas de acceso abierto | `doaj.org/api/search/articles/` | **200, con API** |
