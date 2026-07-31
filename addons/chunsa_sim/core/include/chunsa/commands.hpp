@@ -39,6 +39,12 @@ enum class CommandType : uint16_t {
     // COMPLETO cuya lista `recipes` contiene la receta; p.unit_id = RecipeId
     // (mismo patrón de reutilización de campo que RESEARCH_TECH con TechId).
     CRAFT = 14,
+    // Sprint 1.13 (SPEC-004 §24.2). ATTACK: p.handle = unidad propia;
+    // p.unit_id = indice del slot objetivo y p.speed_mtpt = su generacion
+    // (dos campos QUE EL REPLAY YA SERIALIZA, para no subir su formato).
+    // ATTACK_MOVE: p.handle = unidad propia; p.x_raw/p.y_raw = destino.
+    ATTACK = 15,
+    ATTACK_MOVE = 16,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

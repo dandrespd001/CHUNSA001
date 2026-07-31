@@ -303,6 +303,9 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     // Sprint 1.9 (SPEC-007 §12.5): append-only al final del bloque por-entidad.
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.craft_recipe[i]);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.craft_progress[i]);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.attack_target[i].index);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.attack_target[i].generation);
+    for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.order_mode[i]);
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): AL FINAL
     // del stream, tras todo lo v10 (precedente D7: append-only, sin
@@ -593,6 +596,9 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.research_progress[i] = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.craft_recipe[i] = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.craft_progress[i] = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.attack_target[i].index = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.attack_target[i].generation = r.u32();
+    for (uint32_t i = 0; i < cap_e; ++i) g.order_mode[i] = r.u8();
     if (r.fail) return false;
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): mismo

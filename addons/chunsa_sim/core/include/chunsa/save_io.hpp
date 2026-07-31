@@ -74,7 +74,7 @@ inline constexpr uint32_t SAVE_MAGIC = 0x4E554843u;  // "CHUN" LE
 // v14 (Sprint 1.8A, SPEC-007 §9.3/§11): player_stock pasa de 3 a
 // RESOURCE_COUNT entradas por emisor. Envelope/header sin cambios; el bloque
 // económico del payload STATE crece y no hay migración v13→v14.
-inline constexpr uint32_t SAVE_FORMAT_VERSION = 15;  // Sprint 1.9: +craft_recipe/craft_progress
+inline constexpr uint32_t SAVE_FORMAT_VERSION = 16;  // Sprint 1.9: +craft_recipe/craft_progress
 inline constexpr uint32_t SAVE_PROTOCOL_VERSION = 1;
 inline constexpr uint32_t SAVE_KERNEL_VERSION = 1;
 inline constexpr uint32_t SAVE_DATA_SCHEMA_VERSION = 0;   // sin blob de datos en 0.1B

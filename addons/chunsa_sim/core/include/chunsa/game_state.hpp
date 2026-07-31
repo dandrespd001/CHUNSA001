@@ -40,6 +40,12 @@ inline constexpr uint8_t CITIZEN_TASK_MOVE = 1u;
 inline constexpr uint8_t CITIZEN_TASK_GATHER = 2u;
 inline constexpr uint8_t CITIZEN_TASK_BUILD = 3u;
 
+// Sprint 1.13 (SPEC-004 §24.3): modo de orden de una unidad militar.
+inline constexpr uint8_t ORDER_MODE_NONE = 0u;
+inline constexpr uint8_t ORDER_MODE_MOVE = 1u;
+inline constexpr uint8_t ORDER_MODE_ATTACK = 2u;
+inline constexpr uint8_t ORDER_MODE_ATTACK_MOVE = 3u;
+
 // Sprint 1.2 (SPEC-004 §11.2/§12.2): producción, tecnología y épocas.
 inline constexpr uint32_t PROD_QUEUE_CAP = 5;
 inline constexpr uint32_t POP_CAP_V1 = 200;  // constante v1 (brief K2, no re-litigar)
@@ -179,6 +185,11 @@ struct GameState {
     // no se inventa una estructura nueva donde ya hay una que funciona.
     uint32_t craft_recipe[ENTITY_HARD_CAP];    // INVALID_RECIPE_ID = ocioso
     uint32_t craft_progress[ENTITY_HARD_CAP];
+    // Sprint 1.13 (SPEC-004 §24.3): order_mode es a las unidades militares lo
+    // que citizen_task (§22) es a los ciudadanos — la AUTORIDAD UNICA sobre
+    // quien decide su movimiento. El patron ya esta probado y no se reinventa.
+    EntityHandle attack_target[ENTITY_HARD_CAP];
+    uint8_t      order_mode[ENTITY_HARD_CAP];
 
     // Identidad de civilización por jugador (Sprint 1.6B, SPEC-004 §17).
     // ESTADO: serializado + checksummeado. ESCALAR DEL PARTIDO por jugador
@@ -366,6 +377,7 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
         for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g.prod_queue[i][k] = INVALID_UNIT_ID;
         g.research_tech[i] = INVALID_TECH_ID;
         g.craft_recipe[i] = INVALID_RECIPE_ID;
+        g.attack_target[i] = NULL_HANDLE;
     }
     // Sprint 1.4 (SPEC-005 §6): game_over/participants_mask ya quedan en 0
     // por el memset de arriba (correcto: "en curso"/"nadie ha participado

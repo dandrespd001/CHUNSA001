@@ -238,6 +238,11 @@ target_compile_definitions(chunsa_test_tech_effects PRIVATE
     CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
 add_test(NAME tech_effects COMMAND chunsa_test_tech_effects)
 
+# --- Test Sprint 1.13: órdenes de combate (SPEC-004 §24.7) --------------------
+add_executable(chunsa_test_combat_orders tests/unit/test_combat_orders.cpp)
+target_link_libraries(chunsa_test_combat_orders PRIVATE chunsa_sim_core)
+add_test(NAME combat_orders COMMAND chunsa_test_combat_orders)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
@@ -325,7 +330,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view affordability_view
-                     command_panel_view craft civ_start_epoch combat_damage tech_effects data_compile
+                     command_panel_view craft civ_start_epoch combat_damage tech_effects combat_orders data_compile
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---

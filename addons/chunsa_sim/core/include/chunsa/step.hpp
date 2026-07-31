@@ -667,6 +667,39 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.player_epoch[c.emitter] = cur_epoch + 1u;
             return RejectReason::ACCEPTED;
         }
+        case CommandType::ATTACK: {
+            // SPEC-004 §24.2: handle vivo, propio, es unidad, objetivo vivo,
+            // objetivo NO propio. El orden es el del contrato.
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t i = c.p.handle.index;
+            if (g.owner[i] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[i] != 0u) return RejectReason::ILLEGAL_STATE;
+
+            const EntityHandle tgt{c.p.unit_id,
+                                   static_cast<uint32_t>(c.p.speed_mtpt)};
+            if (!et_is_alive(g.entities, tgt)) return RejectReason::INVALID_ENTITY;
+            // Atacar a los tuyos no es una orden valida: es un descuido, y el
+            // juego no debe ejecutarlo en silencio.
+            if (g.owner[tgt.index] == c.emitter) return RejectReason::NOT_OWNER;
+
+            g.attack_target[i] = tgt;
+            g.order_mode[i] = ORDER_MODE_ATTACK;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::ATTACK_MOVE: {
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t i = c.p.handle.index;
+            if (g.owner[i] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[i] != 0u) return RejectReason::ILLEGAL_STATE;
+            const Vec2Fx dest{Fx{c.p.x_raw}, Fx{c.p.y_raw}};
+            if (!world_contains(dest)) return RejectReason::MALFORMED;
+
+            g.tgt_x[i] = c.p.x_raw;
+            g.tgt_y[i] = c.p.y_raw;
+            g.attack_target[i] = NULL_HANDLE;
+            g.order_mode[i] = ORDER_MODE_ATTACK_MOVE;
+            return RejectReason::ACCEPTED;
+        }
         case CommandType::CRAFT: {
             // SPEC-007 §12.4. EL ORDEN DE ESTOS OCHO PASOS ES CONTRACTUAL: la
             // prueba 8 de §12.6 comprueba que un comando que viola varias
@@ -1216,6 +1249,30 @@ inline void combat_system(GameState& g) noexcept {
 // checksum, serialización y versión de guardado intactos. Se ejecuta tras
 // combat_system (hash fresco; los muertos del tick ya están marcados y no se
 // adquieren). Determinismo: orden ascendente de i, lecturas post-movimiento.
+// SPEC-004 §24.4: las ordenes del jugador MANDAN sobre el aggro automatico.
+// Sin esta precedencia, ATTACK seria una sugerencia que el aggro pisa y el
+// jugador lo notaria como que el juego no le obedece.
+//
+// Corre ANTES de aggro_system y persigue al objetivo fijado; si el objetivo
+// muere, la unidad vuelve a NINGUNA y el aggro recupera el mando.
+inline void order_system(GameState& g) noexcept {
+    const EntityTable& t = g.entities;
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.order_mode[i] != ORDER_MODE_ATTACK) continue;
+        const EntityHandle tgt = g.attack_target[i];
+        if (!et_is_alive(g.entities, tgt) || g.hp[tgt.index] <= 0) {
+            // Objetivo muerto: la orden se cumplio y el aggro vuelve a mandar.
+            g.attack_target[i] = NULL_HANDLE;
+            g.order_mode[i] = ORDER_MODE_NONE;
+            continue;
+        }
+        // Perseguir: el destino de movimiento es la posicion del objetivo.
+        g.tgt_x[i] = g.pos_x[tgt.index];
+        g.tgt_y[i] = g.pos_y[tgt.index];
+    }
+}
+
 inline void aggro_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
@@ -1224,6 +1281,9 @@ inline void aggro_system(GameState& g) noexcept {
         if (g.unit_class[i] > 2) continue;   // ciudadanos: no persiguen
         if (g.attack[i] <= 0) continue;      // excluye SPAWN_DEBUG (golden intacto)
         if (g.fleeing[i]) continue;          // huir tiene prioridad
+        // SPEC-004 §24.4: con ATTACK activo el jugador mando, y el aggro NO
+        // reasigna objetivo aunque pase otro enemigo mas cerca.
+        if (g.order_mode[i] == ORDER_MODE_ATTACK) continue;
         if (g.pos_x[i] != g.tgt_x[i] || g.pos_y[i] != g.tgt_y[i]) continue;  // ocupada
 
         const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
@@ -1897,6 +1957,7 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // (5b') Aggro/persecución (Sprint 0.3+): tras el combate (muertos del
         // tick ya marcados), fija tgt de las unidades ociosas hacia el enemigo
         // más cercano en radio de adquisición. Antes de moral y DESTROY.
+        detail::order_system(g);
         detail::aggro_system(g);
 
         // (5c) Moral (Sprint 0.3, doc 07 §7.6): tras el combate del tick,

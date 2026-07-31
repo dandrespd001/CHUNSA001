@@ -714,8 +714,17 @@ quién ataca**, que es la carencia más visible que le queda a la partida.
 
 `CommandType` append-only. Tras `CRAFT = 14`:
 
-- **`ATTACK = 15`** — `p.handle` = unidad propia viva; `p.target_handle` =
-  entidad enemiga viva. La unidad persigue y ataca a **ese** objetivo hasta que
+- **`ATTACK = 15`** — `p.handle` = unidad propia viva; el objetivo va en
+  **`p.unit_id` = índice del slot** y **`p.speed_mtpt` = generación**.
+
+  **Corrección del contrato (2026-07-30, antes de implementar)**: escribí
+  `p.target_handle`, un campo que **no existe** en `CmdPayload`. Añadirlo
+  obligaría a **subir el formato de replay**, porque el replay serializa campo
+  a campo y solo guarda un subconjunto (`handle`, `x_raw`, `y_raw`,
+  `speed_mtpt`, `unit_id`). Reutilizar dos campos **ya serializados** evita ese
+  bump y sigue el idioma que la base de código ya usa a propósito: `GATHER` usa
+  `x_raw/y_raw` para el depósito, `RESEARCH_TECH` usa `unit_id` para el
+  `TechId`, `CRAFT` para el `RecipeId`. La unidad persigue y ataca a **ese** objetivo hasta que
   muere, sale de alcance permanentemente, o llega otra orden.
 - **`ATTACK_MOVE = 16`** — `p.handle` = unidad propia viva; `p.x_raw/y_raw` =
   destino en cota. La unidad avanza hacia el destino y **ataca lo que encuentre
@@ -806,8 +815,20 @@ y checksum.
 12. Dos corridas del mismo escenario de combate producen impactos en los
     **mismos ticks** y el mismo checksum.
 13. Mutar `order_mode` o `n_projectiles` cambia el checksum.
-14. Un escenario **sin** órdenes de combate es **bit-idéntico** al anterior,
-    salvo el bump.
+14. ~~Un escenario **sin** órdenes de combate es **bit-idéntico** al anterior,
+    salvo el bump.~~
+
+    **CRITERIO RETIRADO (2026-07-30, antes de implementar): era imposible.**
+    §24.5 hace que toda unidad con `range_millitiles > 0` dispare proyectiles
+    **con viaje** en vez de daño instantáneo. Eso cambia el momento en que se
+    aplica el daño para **todas** las unidades a distancia, haya órdenes o no,
+    así que ningún escenario con arqueros o artillería puede quedar
+    bit-idéntico. Pedir las dos cosas a la vez es el mismo error de contrato
+    que ya cometí en el 1.7 (identidad bit a bit **y** subida de checksum).
+
+    **Lo sustituye**: la apertura sigue terminando con `winner=1` por debajo de
+    36000 ticks y con las cuatro fases observadas. Las trayectorias se mueven a
+    propósito y los baselines se re-registran con justificación.
 
 ---
 
