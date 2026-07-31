@@ -97,8 +97,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // golden). winner=1, las cuatro fases observadas, fin 9438<36000. Los
 // hashes y el end_tick son los medidos por el gate canónico contra el CHDB
 // recompilado — re-registrados con justificación en docs/RESULT_MINIMAX_1.8D.md.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x4455e3012a9d263bull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xe50dfec2938708e4ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xdd3b0a7d1a5e293bull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x7e838ebc68d2bd14ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

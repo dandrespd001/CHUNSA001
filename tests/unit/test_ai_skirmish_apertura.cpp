@@ -71,7 +71,7 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     // Pre-flight duro del escenario: un estado con otro número de depósitos
     // no es una apertura válida y no debe producir ruido derivado en el resto
     // de asertos.
-    if (g->n_deposits != 16u) return nullptr;
+    if (g->n_deposits != 18u) return nullptr;
     return g;
 }
 
@@ -89,7 +89,7 @@ static bool test_apertura_preflight() {
     auto g = make_apertura_state(store.catalog(), setup, 20260724ull);
     CHECK(g != nullptr);
     if (g == nullptr) {
-        std::printf("apertura pre-flight: se esperaban 16 depósitos reales\n");
+        std::printf("apertura pre-flight: se esperaban 18 depósitos reales\n");
         return false;
     }
     return true;

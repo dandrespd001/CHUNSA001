@@ -45,6 +45,7 @@ recipes:
     input_resource_costs:
       chunsa:iron_ore: 2
       chunsa:charcoal: 2
+      chunsa:limestone: 1
     output_resource_id: chunsa:wrought_iron
     output_amount: 1
     duration_ticks: 300
@@ -70,6 +71,6 @@ provenance:
         accessed_on: "2026-07-30"
   balance_design:
     author: architect
-    rationale: "La proporcion 3 cobre : 1 estano refleja el ~12,5% de estano historico de forma jugable y entera. Salida 2 y 240 ticks son balance del slice, no historia."
+    rationale: "El hierro forjado lleva CALIZA COMO FUNDENTE por Turner, The Metallurgy of Iron, p.103 (corpus: extractos/metalurgia.md): 10 cwt de caliza y 17 cwt de combustible por tonelada de arrabio, de donde sale la proporcion 2 mena : 2 combustible : 1 fundente. La proporcion 3 cobre : 1 estano refleja el ~12,5% de estano historico de forma jugable y entera. Salida 2 y 240 ticks son balance del slice, no historia."
     reviewed_by:
       - architect

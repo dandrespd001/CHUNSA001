@@ -86,6 +86,21 @@ resource_spawns:
     x_millitiles: 231500
     y_millitiles: 116500
     amount: 900
+  # --- Sprint 1.9C: par espejado de CALIZA. Turner documenta que el alto
+  # horno necesita fundente ademas de mena y combustible; sin caliza en el
+  # mapa el hierro vuelve a ser infabricable. Es la TERCERA vez que este
+  # patron aparece (estano, mena de hierro, caliza): anadir una receta sin
+  # comprobar que sus entradas existen en el mapa.
+  - kind: resource
+    id: chunsa:limestone
+    x_millitiles: 32500
+    y_millitiles: 112500
+    amount: 800
+  - kind: resource
+    id: chunsa:limestone
+    x_millitiles: 223500
+    y_millitiles: 112500
+    amount: 800
   # --- Neutros IMPAR (x=128000, y∈[124000, 132000), 4 depósitos disputados) ---
   - kind: resource
     id: chunsa:copper

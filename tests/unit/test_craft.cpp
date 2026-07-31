@@ -320,6 +320,47 @@ int main() {
         }
     }
 
+    // GUARDIAN: toda entrada de receta debe ser OBTENIBLE.
+    //
+    // Este patron ya ha mordido TRES VECES —estaño en el 1.9, mena de hierro en
+    // el 1.9B, caliza en el 1.9C—: se anade una receta y sus entradas no
+    // existen en el mapa, asi que el producto es infabricable y nadie se entera
+    // hasta que alguien intenta jugarlo. Tres veces es un patron, no un
+    // descuido, y se cierra con estructura en vez de con cuidado.
+    //
+    // Un recurso es obtenible si esta en el mapa (recolectado) o si alguna
+    // receta lo produce. Lo segundo permite las cadenas de hasta 5 pasos que
+    // SPEC-007 §12.1 autoriza desde el 2026-07-31.
+    {
+        DataCatalogStorageV1 store;
+        const auto code = catalog_load_file_v1(CHUNSA_GOLDEN_CHDB_PATH,
+                                               CatalogLoadProfile::Verified, store);
+        CHECK(code == CatalogLoadCode::Ok);
+        if (code == CatalogLoadCode::Ok && store.valid()) {
+            const DataCatalogV1& rc = store.catalog();
+            bool obtenible[RESOURCE_COUNT] = {};
+            for (uint32_t k = 0; k < rc.map_resource_spawn_count; ++k) {
+                const uint8_t idx = rc.map_resource_spawns[k].resource_idx;
+                if (idx < RESOURCE_COUNT) obtenible[idx] = true;
+            }
+            for (uint32_t k = 0; k < rc.recipe_count; ++k) {
+                const uint8_t out = rc.recipes[k].output_index;
+                if (out < RESOURCE_COUNT) obtenible[out] = true;
+            }
+            for (uint32_t k = 0; k < rc.recipe_count; ++k) {
+                for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) {
+                    if (rc.recipes[k].input[r] <= 0) continue;
+                    if (!obtenible[r]) {
+                        std::printf("RECETA %u pide el recurso %u y NO es obtenible: "
+                                    "no esta en el mapa y ninguna receta lo produce\n",
+                                    k, r);
+                        ++g_fails;
+                    }
+                }
+            }
+        }
+    }
+
     if (g_fails == 0) {
         std::printf("craft OK\n");
         return 0;
