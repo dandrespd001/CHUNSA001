@@ -274,8 +274,11 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         h.u64(static_cast<uint64_t>(p.vel_y));
         h.u32(p.target.index);
         h.u32(p.target.generation);
+        h.u64(static_cast<uint64_t>(p.aim_x));
+        h.u64(static_cast<uint64_t>(p.aim_y));
         h.u32(static_cast<uint32_t>(p.damage));
         h.u8(p.owner);
+        h.u8(p.guided);
     }
     // Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7): AL FINAL, tras todo lo
     // v5. Escalares del partido (no por-slot): un único u8/u8/u16.

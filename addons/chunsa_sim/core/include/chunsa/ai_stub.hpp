@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 3;
+inline constexpr uint32_t AI_ALGO_VERSION     = 4;  // Sprint 1.19: la IA fabrica
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -886,17 +886,54 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         }
         const bool tech_ok = research_ok || epoch_up_try;
 
+        // Candidato FABRICAR (Sprint 1.19, auditoria del 2026-07-30): el
+        // primer edificio propio COMPLETO y OCIOSO con una receta que el
+        // jugador puede pagar. Antes de esto la IA no fabricaba nunca, asi que
+        // el bronce y todo lo que dependa de el eran exclusivos del humano.
+        //
+        // Recorrido ascendente por slot y por receta: determinista, desempate
+        // por indice bajo, como todo lo demas de esta funcion.
+        bool     craft_ok = false;
+        uint32_t craft_building = 0;
+        uint32_t craft_recipe_id = 0;
+        if (cat.recipes != nullptr) {
+            for (uint32_t bi = 0; bi < g.entities.capacity && !craft_ok; ++bi) {
+                if (!g.entities.alive[bi]) continue;
+                if (g.owner[bi] != ai_player) continue;
+                if (g.entity_kind[bi] != 1u) continue;
+                if (g.building_id[bi] >= cat.building_count) continue;
+                const BuildingDefinitionV1& bd = cat.buildings[g.building_id[bi]];
+                if (g.build_progress[bi] < bd.build_time_ticks) continue;
+                // Ocupada: el kernel lo rechazaria (§12.4 paso 7) y emitir un
+                // comando condenado es ruido en el mailbox.
+                if (g.craft_recipe[bi] != INVALID_RECIPE_ID) continue;
+                if (bd.epoch_min > epoch) continue;
+                for (uint8_t k = 0; k < bd.recipe_count && !craft_ok; ++k) {
+                    const RecipeId rid = bd.recipes[k];
+                    if (rid >= cat.recipe_count) continue;
+                    if (!ai_afford(g, ai_player, cat.recipes[rid].input)) continue;
+                    craft_ok = true;
+                    craft_building = bi;
+                    craft_recipe_id = rid;
+                }
+            }
+        }
+
         // ---- utilidad entera (bp), empate -> menor índice de intención ----
         const int32_t u_econ  = econ_ok  ? profile.economy_focus_bp  : 0;
         const int32_t u_build = build_ok ? profile.military_focus_bp : 0;
         const int32_t u_mil   = mil_ok   ? profile.military_focus_bp : 0;
         const int32_t u_tech  = tech_ok  ? profile.tech_focus_bp     : 0;
+        // Fabricar es economia: convierte materia prima en material util, que
+        // es lo mismo que hace recolectar un tick despues.
+        const int32_t u_craft = craft_ok ? profile.economy_focus_bp   : 0;
 
         int32_t best_u = u_econ;
         int32_t best_idx = 0;
         if (u_build > best_u) { best_u = u_build; best_idx = 1; }
         if (u_mil   > best_u) { best_u = u_mil;   best_idx = 2; }
         if (u_tech  > best_u) { best_u = u_tech;  best_idx = 3; }
+        if (u_craft > best_u) { best_u = u_craft; best_idx = 4; }
 
         if (best_u > 0) {
             if (best_idx == 0) {
@@ -911,6 +948,12 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 emit(CommandType::TRAIN_UNIT,
                      EntityHandle{mil_building, g.entities.generation[mil_building]},
                      0, 0, mil_unit);
+            } else if (best_idx == 4) {
+                // CRAFT reutiliza unit_id para el RecipeId, igual que
+                // RESEARCH_TECH hace con el TechId.
+                emit(CommandType::CRAFT,
+                     EntityHandle{craft_building, g.entities.generation[craft_building]},
+                     0, 0, craft_recipe_id);
             } else {  // best_idx == 3
                 if (research_ok) {
                     emit(CommandType::RESEARCH_TECH,

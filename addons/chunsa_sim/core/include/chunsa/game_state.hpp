@@ -61,9 +61,16 @@ inline constexpr int64_t PROJECTILE_SPEED_RAW = 2 * 65536;
 struct Projectile {
     int64_t x_raw, y_raw;
     int64_t vel_x, vel_y;
+    // Punto de impacto PREDICHO al disparar. La flecha vuela hacia ahi y no
+    // corrige: si el objetivo se aparta, FALLA. Es como funciona AoE2 y es lo
+    // que hace que moverse sirva de algo contra los tiradores.
+    int64_t aim_x, aim_y;
     EntityHandle target;
     int32_t damage;
     uint8_t owner;
+    // Reservado para las edades tardias: un misil o un dron SI corrigen rumbo.
+    // Cuando existan, bastara con ponerlo a 1 desde los datos del arma.
+    uint8_t guided;
 };
 
 // Sprint 1.2 (SPEC-004 §11.2/§12.2): producción, tecnología y épocas.

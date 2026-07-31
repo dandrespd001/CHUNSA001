@@ -1114,21 +1114,15 @@ inline void projectile_system(GameState& g) noexcept {
             continue;
         }
 
-        // El proyectil PERSIGUE: recalcula el rumbo hacia la posicion ACTUAL
-        // del objetivo en cada tick.
+        // SIN PERSECUCION (correccion del Director, 2026-07-31): la flecha vuela
+        // hacia el punto PREDICHO al disparar y no corrige. Si el objetivo se
+        // aparta, falla — que es lo que hace que moverse sirva de algo contra
+        // los tiradores, y como funciona AoE2.
         //
-        // La primera version volaba en linea recta con la velocidad fijada al
-        // disparar, y contra un objetivo en movimiento NO IMPACTABA NUNCA: los
-        // proyectiles se acumulaban, nadie moria y el escenario de aggro
-        // terminaba 12 contra 12 intactos. Lo caza la prueba de aggro, no el
-        // razonamiento.
-        //
-        // Es ademas lo que dice el contrato (§24.5): la condicion de impacto es
-        // la distancia AL OBJETIVO, y el proyectil se descarta si el objetivo
-        // muere — las dos cosas describen algo que sigue a una entidad, no a un
-        // punto del suelo. Con velocidad 2 tiles/tick contra unidades mucho mas
-        // lentas, la convergencia esta garantizada.
-        {
+        // Solo los proyectiles GUIADOS corrigen rumbo. Hoy ninguno lo es; el
+        // campo existe para que un misil o un dron de las edades tardias solo
+        // tengan que ponerlo a 1 desde datos.
+        if (p.guided != 0u) {
             const int64_t ddx = g.pos_x[p.target.index] - p.x_raw;
             const int64_t ddy = g.pos_y[p.target.index] - p.y_raw;
             const int64_t addx = ddx < 0 ? -ddx : ddx;
@@ -1139,33 +1133,65 @@ inline void projectile_system(GameState& g) noexcept {
                                                                     : PROJECTILE_SPEED_RAW;
                 p.vel_x = ddx * step_raw / dom;
                 p.vel_y = ddy * step_raw / dom;
-            } else {
-                p.vel_x = 0;
-                p.vel_y = 0;
             }
         }
         p.x_raw += p.vel_x;
         p.y_raw += p.vel_y;
 
-        const int64_t dx = g.pos_x[p.target.index] - p.x_raw;
-        const int64_t dy = g.pos_y[p.target.index] - p.y_raw;
-        FatalReason local_fatal = FatalReason::NONE;
-        const uint64_t d2 = dist_sq_raw(Vec2Fx{Fx{p.x_raw}, Fx{p.y_raw}},
-                                        Vec2Fx{Fx{g.pos_x[p.target.index]},
-                                               Fx{g.pos_y[p.target.index]}},
-                                        local_fatal);
-        (void)dx; (void)dy;
-        const uint64_t hit_sq = static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW) *
-                                static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW);
-        if (d2 <= hit_sq) {
-            g.hp[p.target.index] -= p.damage;
-            if (g.hp[p.target.index] <= 0 && g.entities.alive[p.target.index]) {
-                et_mark_dead(g.entities, p.target.index);
-                if (g.destroy_count < PENDING_CAP) {
-                    g.destroy_batch[g.destroy_count++] = p.target.index;
+        // RESOLUCION EN EL PUNTO DE IMPACTO, no contra el objetivo en vuelo.
+        //
+        // La version anterior comprobaba en cada tick si el proyectil estaba
+        // encima del objetivo, y con 2 tiles por tick y medio tile de radio la
+        // flecha SALTABA POR ENCIMA sin tocarlo nunca: nadie moria. El paso
+        // discreto no admite una comprobacion continua barata.
+        //
+        // Asi que la flecha CAE DONDE SE APUNTO y ahi se resuelve: si el
+        // objetivo sigue en el radio, impacta; si se aparto, falla. Es la
+        // semantica de AoE2 y es la que hace que moverse valga de algo.
+        const int64_t to_aim_x = p.aim_x - p.x_raw;
+        const int64_t to_aim_y = p.aim_y - p.y_raw;
+        const uint64_t to_aim2 =
+                static_cast<uint64_t>(to_aim_x < 0 ? -to_aim_x : to_aim_x) *
+                static_cast<uint64_t>(to_aim_x < 0 ? -to_aim_x : to_aim_x) +
+                static_cast<uint64_t>(to_aim_y < 0 ? -to_aim_y : to_aim_y) *
+                static_cast<uint64_t>(to_aim_y < 0 ? -to_aim_y : to_aim_y);
+        const uint64_t one_step = static_cast<uint64_t>(PROJECTILE_SPEED_RAW) *
+                                  static_cast<uint64_t>(PROJECTILE_SPEED_RAW);
+
+        const bool guided = p.guided != 0u;
+        bool resolve = false;
+        if (guided) {
+            // Guiado (misil, dron): se resuelve al alcanzar al objetivo.
+            FatalReason gf = FatalReason::NONE;
+            const uint64_t d2g = dist_sq_raw(Vec2Fx{Fx{p.x_raw}, Fx{p.y_raw}},
+                                             Vec2Fx{Fx{g.pos_x[p.target.index]},
+                                                    Fx{g.pos_y[p.target.index]}}, gf);
+            resolve = d2g <= static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW) *
+                              static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW);
+        } else {
+            // ESTRICTO, no <=: con la distancia justa de dos pasos, un <=
+            // resolvia UN TICK ANTES de llegar y el dano se adelantaba. Con <
+            // la flecha da el ultimo paso y cae exactamente donde se apunto.
+            resolve = to_aim2 < one_step;
+        }
+
+        if (resolve) {
+            FatalReason lf = FatalReason::NONE;
+            const uint64_t d2 = dist_sq_raw(Vec2Fx{Fx{p.aim_x}, Fx{p.aim_y}},
+                                            Vec2Fx{Fx{g.pos_x[p.target.index]},
+                                                   Fx{g.pos_y[p.target.index]}}, lf);
+            const uint64_t hit_sq = static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW) *
+                                    static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW);
+            if (guided || d2 <= hit_sq) {
+                g.hp[p.target.index] -= p.damage;
+                if (g.hp[p.target.index] <= 0 && g.entities.alive[p.target.index]) {
+                    et_mark_dead(g.entities, p.target.index);
+                    if (g.destroy_count < PENDING_CAP) {
+                        g.destroy_batch[g.destroy_count++] = p.target.index;
+                    }
                 }
             }
-            continue;  // impacto: fuera del array
+            continue;   // impacte o falle, la flecha desaparece
         }
         g.projectiles[write++] = p;
     }
@@ -1309,10 +1335,21 @@ inline void combat_system(GameState& g) noexcept {
                     p.target = EntityHandle{best, g.entities.generation[best]};
                     p.damage = dmg;
                     p.owner = g.owner[i];
-                    // Velocidad entera hacia el objetivo, normalizada por el
-                    // eje dominante: sin raiz cuadrada y sin float.
-                    const int64_t dx = g.pos_x[best] - p.x_raw;
-                    const int64_t dy = g.pos_y[best] - p.y_raw;
+                    // PREDICCION DE TIRO: se apunta a donde ESTARA el objetivo,
+                    // no a donde esta. Tiempo de vuelo estimado = distancia
+                    // dominante / velocidad, y se adelanta la posicion con la
+                    // velocidad actual del objetivo. Todo entero.
+                    const int64_t raw_dx = g.pos_x[best] - p.x_raw;
+                    const int64_t raw_dy = g.pos_y[best] - p.y_raw;
+                    const int64_t araw_dx = raw_dx < 0 ? -raw_dx : raw_dx;
+                    const int64_t araw_dy = raw_dy < 0 ? -raw_dy : raw_dy;
+                    const int64_t rough = araw_dx > araw_dy ? araw_dx : araw_dy;
+                    const int64_t flight = rough / PROJECTILE_SPEED_RAW;
+                    p.aim_x = g.pos_x[best] + g.vel_x[best] * flight;
+                    p.aim_y = g.pos_y[best] + g.vel_y[best] * flight;
+                    p.guided = 0u;
+                    const int64_t dx = p.aim_x - p.x_raw;
+                    const int64_t dy = p.aim_y - p.y_raw;
                     const int64_t adx = dx < 0 ? -dx : dx;
                     const int64_t ady = dy < 0 ? -dy : dy;
                     const int64_t dom = adx > ady ? adx : ady;

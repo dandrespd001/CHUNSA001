@@ -782,6 +782,33 @@ uint32_t n_projectiles;
 
 - Movimiento entero por tick, misma aritmética que `movement_v1`. **Sin
   balística, sin gravedad, sin float.**
+
+**CORRECCIÓN DEL DIRECTOR (2026-07-31): los proyectiles NO persiguen.**
+
+Mi primera implementación los hacía perseguir al objetivo, y era un atajo, no
+un diseño. En AoE2 la flecha vuela **al punto donde se predijo que estaría el
+objetivo** y **falla** si éste se aparta — por eso moverse sirve de algo contra
+los tiradores, y por eso existe una estadística de *precisión*.
+
+Cómo queda:
+
+1. Al disparar se estima el **tiempo de vuelo** (distancia dominante ÷
+   velocidad) y se apunta a `posición + velocidad × vuelo` del objetivo. Todo
+   entero.
+2. La flecha **no corrige rumbo**. Cae donde se apuntó.
+3. **Se resuelve en el punto de impacto**, no contra el objetivo en vuelo. Con
+   paso discreto de 2 tiles/tick y radio de medio tile, una comprobación
+   continua hacía que la flecha **saltara por encima** sin tocar nunca — nadie
+   moría. Cae, y ahí se mira si el objetivo sigue en el radio.
+4. Campo `guided` reservado: un **misil o un dron** de las edades tardías SÍ
+   corrigen. Cuando existan, basta con ponerlo a 1 desde los datos del arma; la
+   rama ya está escrita.
+
+**Progresión por edades — pendiente de diseño.** El Director apunta a **Empire
+Earth** como referencia, y es la buena: cubre de la prehistoria a la era nano,
+que es exactamente nuestro problema de 15 edades, mientras que AoE2 solo tiene
+cuatro. Falta decidir cómo evolucionan **precisión, velocidad de proyectil y
+guiado** con la tecnología. Se investiga antes de implementarlo.
 - Impacto cuando la distancia al objetivo `<= PROJECTILE_HIT_RADIUS_RAW`.
 - Si el objetivo muere antes del impacto, el proyectil **se descarta**; no
   redirige ni cae al suelo.

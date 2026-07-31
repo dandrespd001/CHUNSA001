@@ -311,7 +311,8 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         const Projectile& p = g.projectiles[k];
         w.i64(p.x_raw); w.i64(p.y_raw); w.i64(p.vel_x); w.i64(p.vel_y);
         w.u32(p.target.index); w.u32(p.target.generation);
-        w.i32(p.damage); w.u8(p.owner);
+        w.i64(p.aim_x); w.i64(p.aim_y);
+        w.i32(p.damage); w.u8(p.owner); w.u8(p.guided);
     }
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): AL FINAL
@@ -612,7 +613,8 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         Projectile& p = g.projectiles[k];
         p.x_raw = r.i64(); p.y_raw = r.i64(); p.vel_x = r.i64(); p.vel_y = r.i64();
         p.target.index = r.u32(); p.target.generation = r.u32();
-        p.damage = r.i32(); p.owner = r.u8();
+        p.aim_x = r.i64(); p.aim_y = r.i64();
+        p.damage = r.i32(); p.owner = r.u8(); p.guided = r.u8();
     }
     if (r.fail) return false;
 
