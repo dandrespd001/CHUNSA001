@@ -46,6 +46,26 @@ inline constexpr uint8_t ORDER_MODE_MOVE = 1u;
 inline constexpr uint8_t ORDER_MODE_ATTACK = 2u;
 inline constexpr uint8_t ORDER_MODE_ATTACK_MOVE = 3u;
 
+// Sprint 1.13 (SPEC-004 §24.5): proyectiles con VIAJE. Sin balistica, sin
+// gravedad, sin float — misma aritmetica entera que movement_v1.
+inline constexpr uint32_t PROJECTILE_HARD_CAP = 256;
+// Radio de impacto: medio tile. Con velocidad entera por tick, un proyectil
+// puede pasarse de largo del punto exacto, asi que el impacto es un DISCO y no
+// una igualdad; sin esto habria disparos que orbitan para siempre.
+inline constexpr int64_t PROJECTILE_HIT_RADIUS_RAW = 32768;  // 0.5 tile en Q47.16
+// Velocidad del proyectil por tick, en raw. 2 tiles/tick: lo bastante rapido
+// para que no se vea lento y lo bastante lento para que el VIAJE se note, que
+// es el punto de tenerlos.
+inline constexpr int64_t PROJECTILE_SPEED_RAW = 2 * 65536;
+
+struct Projectile {
+    int64_t x_raw, y_raw;
+    int64_t vel_x, vel_y;
+    EntityHandle target;
+    int32_t damage;
+    uint8_t owner;
+};
+
 // Sprint 1.2 (SPEC-004 §11.2/§12.2): producción, tecnología y épocas.
 inline constexpr uint32_t PROD_QUEUE_CAP = 5;
 inline constexpr uint32_t POP_CAP_V1 = 200;  // constante v1 (brief K2, no re-litigar)
@@ -190,6 +210,9 @@ struct GameState {
     // quien decide su movimiento. El patron ya esta probado y no se reinventa.
     EntityHandle attack_target[ENTITY_HARD_CAP];
     uint8_t      order_mode[ENTITY_HARD_CAP];
+    // Sprint 1.13 (SPEC-004 §24.5). Escalares del partido, no por-entidad.
+    Projectile projectiles[PROJECTILE_HARD_CAP];
+    uint32_t   n_projectiles;
 
     // Identidad de civilización por jugador (Sprint 1.6B, SPEC-004 §17).
     // ESTADO: serializado + checksummeado. ESCALAR DEL PARTIDO por jugador
@@ -386,6 +409,7 @@ inline void gs_init(GameState& g, const MatchConfig01A& cfg) noexcept {
     // propio INVALID_* explícito más arriba en esta función.
     g.game_over = 0;
     g.winner = 0xFFu;
+    g.n_projectiles = 0;
     // Sprint 1.6B (SPEC-004 §17): player_civ, mismo motivo que winner arriba
     // — memset ya dejó 0, que bajo la semántica de CivId significaría "civ 0
     // asignada", no "sin asignar"; forzar el centinela explícito. El host

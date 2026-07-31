@@ -243,6 +243,11 @@ add_executable(chunsa_test_combat_orders tests/unit/test_combat_orders.cpp)
 target_link_libraries(chunsa_test_combat_orders PRIVATE chunsa_sim_core)
 add_test(NAME combat_orders COMMAND chunsa_test_combat_orders)
 
+# --- Test Sprint 1.13 fase B: proyectiles (SPEC-004 §24.5) -------------------
+add_executable(chunsa_test_projectiles tests/unit/test_projectiles.cpp)
+target_link_libraries(chunsa_test_projectiles PRIVATE chunsa_sim_core)
+add_test(NAME projectiles COMMAND chunsa_test_projectiles)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
@@ -330,7 +335,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view affordability_view
-                     command_panel_view craft civ_start_epoch combat_damage tech_effects combat_orders data_compile
+                     command_panel_view craft civ_start_epoch combat_damage tech_effects combat_orders projectiles data_compile
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---

@@ -306,6 +306,13 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.attack_target[i].index);
     for (uint32_t i = 0; i < cap_e; ++i) w.u32(g.attack_target[i].generation);
     for (uint32_t i = 0; i < cap_e; ++i) w.u8(g.order_mode[i]);
+    w.u32(g.n_projectiles);
+    for (uint32_t k = 0; k < g.n_projectiles && k < PROJECTILE_HARD_CAP; ++k) {
+        const Projectile& p = g.projectiles[k];
+        w.i64(p.x_raw); w.i64(p.y_raw); w.i64(p.vel_x); w.i64(p.vel_y);
+        w.u32(p.target.index); w.u32(p.target.generation);
+        w.i32(p.damage); w.u8(p.owner);
+    }
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): AL FINAL
     // del stream, tras todo lo v10 (precedente D7: append-only, sin
@@ -599,6 +606,14 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
     for (uint32_t i = 0; i < cap_e; ++i) g.attack_target[i].index = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.attack_target[i].generation = r.u32();
     for (uint32_t i = 0; i < cap_e; ++i) g.order_mode[i] = r.u8();
+    g.n_projectiles = r.u32();
+    if (g.n_projectiles > PROJECTILE_HARD_CAP) return false;
+    for (uint32_t k = 0; k < g.n_projectiles; ++k) {
+        Projectile& p = g.projectiles[k];
+        p.x_raw = r.i64(); p.y_raw = r.i64(); p.vel_x = r.i64(); p.vel_y = r.i64();
+        p.target.index = r.u32(); p.target.generation = r.u32();
+        p.damage = r.i32(); p.owner = r.u8();
+    }
     if (r.fail) return false;
 
     // (n) Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7 — save v11): mismo

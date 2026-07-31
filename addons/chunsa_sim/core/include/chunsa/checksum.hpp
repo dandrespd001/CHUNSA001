@@ -262,6 +262,21 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.attack_target[i].index);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u32(g.attack_target[i].generation);
     for (uint32_t i = 0; i < t.capacity; ++i) h.u8(g.order_mode[i]);
+    // Proyectiles: SOLO los vivos, en orden. Hashear el array entero metería
+    // basura de slots retirados y haría el checksum dependiente de la historia
+    // en vez del estado.
+    h.u32(g.n_projectiles);
+    for (uint32_t k = 0; k < g.n_projectiles && k < PROJECTILE_HARD_CAP; ++k) {
+        const Projectile& p = g.projectiles[k];
+        h.u64(static_cast<uint64_t>(p.x_raw));
+        h.u64(static_cast<uint64_t>(p.y_raw));
+        h.u64(static_cast<uint64_t>(p.vel_x));
+        h.u64(static_cast<uint64_t>(p.vel_y));
+        h.u32(p.target.index);
+        h.u32(p.target.generation);
+        h.u32(static_cast<uint32_t>(p.damage));
+        h.u8(p.owner);
+    }
     // Victoria/derrota (Sprint 1.4, SPEC-005 §6/§7): AL FINAL, tras todo lo
     // v5. Escalares del partido (no por-slot): un único u8/u8/u16.
     h.u8(g.game_over);

@@ -1097,6 +1097,81 @@ inline int32_t rps_mult_vs_citizen_bp(uint8_t atk_class) noexcept {
     return 10000;
 }
 
+// SPEC-004 §24.5: los proyectiles VIAJAN. Movimiento entero por tick, misma
+// aritmetica que movement_v1: sin balistica, sin gravedad, sin float.
+//
+// Compactacion DETERMINISTA: al retirar uno se desplazan los siguientes, en
+// orden ascendente. Un "swap con el ultimo" seria mas rapido y cambiaria el
+// orden segun que se retire, que es exactamente como se rompe el determinismo.
+inline void projectile_system(GameState& g) noexcept {
+    uint32_t write = 0;
+    for (uint32_t k = 0; k < g.n_projectiles; ++k) {
+        Projectile p = g.projectiles[k];
+
+        // Objetivo muerto en vuelo: el proyectil SE DESCARTA. No redirige ni
+        // cae al suelo; la flecha no busca otra victima.
+        if (!et_is_alive(g.entities, p.target) || g.hp[p.target.index] <= 0) {
+            continue;
+        }
+
+        // El proyectil PERSIGUE: recalcula el rumbo hacia la posicion ACTUAL
+        // del objetivo en cada tick.
+        //
+        // La primera version volaba en linea recta con la velocidad fijada al
+        // disparar, y contra un objetivo en movimiento NO IMPACTABA NUNCA: los
+        // proyectiles se acumulaban, nadie moria y el escenario de aggro
+        // terminaba 12 contra 12 intactos. Lo caza la prueba de aggro, no el
+        // razonamiento.
+        //
+        // Es ademas lo que dice el contrato (§24.5): la condicion de impacto es
+        // la distancia AL OBJETIVO, y el proyectil se descarta si el objetivo
+        // muere — las dos cosas describen algo que sigue a una entidad, no a un
+        // punto del suelo. Con velocidad 2 tiles/tick contra unidades mucho mas
+        // lentas, la convergencia esta garantizada.
+        {
+            const int64_t ddx = g.pos_x[p.target.index] - p.x_raw;
+            const int64_t ddy = g.pos_y[p.target.index] - p.y_raw;
+            const int64_t addx = ddx < 0 ? -ddx : ddx;
+            const int64_t addy = ddy < 0 ? -ddy : ddy;
+            const int64_t dom = addx > addy ? addx : addy;
+            if (dom > 0) {
+                const int64_t step_raw = dom < PROJECTILE_SPEED_RAW ? dom
+                                                                    : PROJECTILE_SPEED_RAW;
+                p.vel_x = ddx * step_raw / dom;
+                p.vel_y = ddy * step_raw / dom;
+            } else {
+                p.vel_x = 0;
+                p.vel_y = 0;
+            }
+        }
+        p.x_raw += p.vel_x;
+        p.y_raw += p.vel_y;
+
+        const int64_t dx = g.pos_x[p.target.index] - p.x_raw;
+        const int64_t dy = g.pos_y[p.target.index] - p.y_raw;
+        FatalReason local_fatal = FatalReason::NONE;
+        const uint64_t d2 = dist_sq_raw(Vec2Fx{Fx{p.x_raw}, Fx{p.y_raw}},
+                                        Vec2Fx{Fx{g.pos_x[p.target.index]},
+                                               Fx{g.pos_y[p.target.index]}},
+                                        local_fatal);
+        (void)dx; (void)dy;
+        const uint64_t hit_sq = static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW) *
+                                static_cast<uint64_t>(PROJECTILE_HIT_RADIUS_RAW);
+        if (d2 <= hit_sq) {
+            g.hp[p.target.index] -= p.damage;
+            if (g.hp[p.target.index] <= 0 && g.entities.alive[p.target.index]) {
+                et_mark_dead(g.entities, p.target.index);
+                if (g.destroy_count < PENDING_CAP) {
+                    g.destroy_batch[g.destroy_count++] = p.target.index;
+                }
+            }
+            continue;  // impacto: fuera del array
+        }
+        g.projectiles[write++] = p;
+    }
+    g.n_projectiles = write;
+}
+
 // Sistema de combate (Sprint 0.3/1.6A). Cada tick, período 1: cada unidad viva
 // en orden ascendente busca al enemigo más cercano en rango, le inflige daño
 // RPS y entra en cooldown. La consulta recorre todas las celdas que intersectan
@@ -1222,8 +1297,40 @@ inline void combat_system(GameState& g) noexcept {
                 }
             }
             const int32_t dmg = compute_damage(eff_attack, armor_of_type, bonus_bp);
-            g.hp[best] -= dmg;
-            if (g.hp[best] <= 0 && t.alive[best]) {
+
+            // SPEC-004 §24.5: con alcance, el dano NO es instantaneo — sale un
+            // proyectil y llega cuando llega. Cuerpo a cuerpo sigue siendo
+            // inmediato, que es lo que distingue a las dos formas de pelear.
+            if (g.range_mt[i] > 0) {
+                if (g.n_projectiles < PROJECTILE_HARD_CAP) {
+                    Projectile p{};
+                    p.x_raw = g.pos_x[i];
+                    p.y_raw = g.pos_y[i];
+                    p.target = EntityHandle{best, g.entities.generation[best]};
+                    p.damage = dmg;
+                    p.owner = g.owner[i];
+                    // Velocidad entera hacia el objetivo, normalizada por el
+                    // eje dominante: sin raiz cuadrada y sin float.
+                    const int64_t dx = g.pos_x[best] - p.x_raw;
+                    const int64_t dy = g.pos_y[best] - p.y_raw;
+                    const int64_t adx = dx < 0 ? -dx : dx;
+                    const int64_t ady = dy < 0 ? -dy : dy;
+                    const int64_t dom = adx > ady ? adx : ady;
+                    const int64_t speed = PROJECTILE_SPEED_RAW;
+                    if (dom > 0) {
+                        p.vel_x = dx * speed / dom;
+                        p.vel_y = dy * speed / dom;
+                    }
+                    g.projectiles[g.n_projectiles++] = p;
+                }
+                // Si el array esta lleno, el disparo NO se crea. Cota dura,
+                // determinista y documentada: nunca desbordamiento.
+            } else {
+                g.hp[best] -= dmg;
+            }
+            // La muerte por golpe cuerpo a cuerpo se resuelve aqui; la de un
+            // proyectil la resuelve projectile_system al impactar.
+            if (g.range_mt[i] == 0 && g.hp[best] <= 0 && t.alive[best]) {
                 et_mark_dead(g.entities, best);
                 if (g.destroy_count < PENDING_CAP) {
                     g.destroy_batch[g.destroy_count++] = best;
@@ -1959,6 +2066,9 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
         // más cercano en radio de adquisición. Antes de moral y DESTROY.
         detail::order_system(g);
         detail::aggro_system(g);
+        // Los proyectiles se mueven DESPUES del combate del tick: el que
+        // sale ahora vuela a partir del tick siguiente, no impacta el mismo.
+        detail::projectile_system(g);
 
         // (5c) Moral (Sprint 0.3, doc 07 §7.6): tras el combate del tick,
         // para reaccionar a lo que pasó. Antes de DESTROY.
