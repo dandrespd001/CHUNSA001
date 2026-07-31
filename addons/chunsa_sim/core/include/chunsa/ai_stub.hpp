@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 5;  // Sprint 1.19: la IA fabrica y ordena atacar
+inline constexpr uint32_t AI_ALGO_VERSION     = 6;  // Sprint 1.19: la IA fabrica, ordena atacar y contra-entrena
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -516,6 +516,53 @@ struct AiTargetV1 {
     int64_t y = 0;
 };
 
+// Sprint 1.19 fase C (SPEC-005): clase de unidad DOMINANTE del enemigo, para
+// que la IA entrene contadores en vez de coger siempre la primera unidad que
+// el edificio sepa hacer. Con bonus_vs_bp vivo desde el 1.18, ignorarlo era
+// desperdiciar el sistema entero: el humano contra-entrena y la IA no.
+//
+// Recorrido ascendente y desempate por CLASE MAS BAJA: determinista.
+// 0xFF = no hay enemigos visibles, y entonces se conserva la eleccion previa.
+inline uint8_t ai_dominant_enemy_class(const GameState& g, uint8_t ai_player) noexcept {
+    uint32_t counts[6] = {0, 0, 0, 0, 0, 0};
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] == ai_player) continue;
+        if (g.entity_kind[i] != 0u) continue;
+        const uint8_t c = g.unit_class[i];
+        if (c < 6u) ++counts[c];
+    }
+    uint8_t best = 0xFFu;
+    uint32_t best_n = 0;
+    for (uint8_t c = 0; c < 6u; ++c) {
+        if (counts[c] > best_n) { best_n = counts[c]; best = c; }
+    }
+    return best;
+}
+
+// De entre las unidades que un edificio sabe entrenar, la que mejor contrarresta
+// a `enemy_class`. Empate -> menor UnitId, como todo lo demas de esta capa.
+inline UnitId ai_best_counter_unit(const DataCatalogV1& cat,
+                                   const BuildingDefinitionV1& bdef,
+                                   uint8_t enemy_class,
+                                   bool citizen_kind) noexcept {
+    UnitId best = INVALID_UNIT_ID;
+    int32_t best_bonus = 0;
+    for (uint8_t k = 0; k < bdef.train_count; ++k) {
+        const UnitId uid = bdef.trains[k];
+        if (uid >= cat.unit_count) continue;
+        const UnitDefinitionV1& ud = cat.units[uid];
+        const bool is_citizen = (ud.unit_class == UnitClassV1::Citizen);
+        if (is_citizen != citizen_kind) continue;
+        const int32_t bonus = (enemy_class < 6u) ? ud.bonus_vs_bp[enemy_class] : 0;
+        if (best == INVALID_UNIT_ID || bonus > best_bonus) {
+            best = uid;
+            best_bonus = bonus;
+        }
+    }
+    return best;
+}
+
 inline AiTargetV1 ai_find_attack_target(const GameState& g, uint8_t ai_player,
                                         int64_t center_x, int64_t center_y) noexcept {
     const Vec2Fx center{Fx{center_x}, Fx{center_y}};
@@ -793,14 +840,25 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             if (mt.found) {
                 const AiOwnedBuildingV1 own = ai_find_owned_building_of_type(g, ai_player, mt.building_type);
                 if (own.has_complete) {
-                    const UnitDefinitionV1& udef = cat.units[mt.unit_to_train];
+                    // Sprint 1.19 fase C: entrenar el CONTADOR de la clase
+                    // dominante del enemigo, no la primera unidad de la lista.
+                    // Si no hay enemigos visibles, se conserva la eleccion de
+                    // siempre: sin informacion no se inventa una preferencia.
+                    const uint8_t enemy_class = ai_dominant_enemy_class(g, ai_player);
+                    UnitId chosen = mt.unit_to_train;
+                    if (enemy_class < 6u) {
+                        const BuildingDefinitionV1& tdef = cat.buildings[mt.building_type];
+                        const UnitId counter = ai_best_counter_unit(cat, tdef, enemy_class, false);
+                        if (counter != INVALID_UNIT_ID) chosen = counter;
+                    }
+                    const UnitDefinitionV1& udef = cat.units[chosen];
                     if (ai_epoch_ok(epoch, udef.epoch_min, udef.epoch_max)
                         && ai_afford(g, ai_player, udef.cost)
                         && g.pop_used[ai_player] + udef.pop_cost <= static_cast<int32_t>(POP_CAP_V1)
                         && g.prod_count[own.complete_index] < PROD_QUEUE_CAP) {
                         mil_ok = true;
                         mil_building = own.complete_index;
-                        mil_unit = mt.unit_to_train;
+                        mil_unit = chosen;
                     }
                 }
             }

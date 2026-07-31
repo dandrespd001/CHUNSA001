@@ -8,8 +8,9 @@
 // adversario difícil: es uno que se supera por acumulación.
 //
 // Fase A: que la IA FABRIQUE.
-// Fase B: que ATAQUE CON ÓRDENES en vez de caminar y esperar al enganche
-//         automático. Elegir mirando contadores va en una fase siguiente.
+// Fase B: que ATAQUE CON ÓRDENES en vez de caminar y esperar al enganche.
+// Fase C: que ELIJA QUÉ ENTRENAR mirando al enemigo, en vez de coger siempre
+//         la primera unidad que el edificio sepa hacer.
 
 #include <cstdint>
 #include <cstdio>
@@ -31,7 +32,8 @@ namespace {
 constexpr uint8_t R_COPPER = 3, R_TIN = 4, R_BRONZE = 5;
 
 RecipeV1 g_recipes[1];
-BuildingDefinitionV1 g_buildings[1];
+BuildingDefinitionV1 g_buildings[2];
+UnitDefinitionV1 g_units[2];
 AiProfileV1 g_profiles[1];
 
 DataCatalogV1 make_catalog() {
@@ -63,8 +65,41 @@ DataCatalogV1 make_catalog() {
     g_profiles[0].decision_period_ticks = 1;
     g_profiles[0].reaction_latency_ticks = 0;
 
+    // Dos unidades entrenables: la 0 es mala contra caballeria y la 1 es su
+    // contador. La IA debe preferir la 1 cuando el enemigo es caballeria.
+    std::memset(g_units, 0, sizeof(g_units));
+    for (uint32_t u = 0; u < 2u; ++u) {
+        g_units[u].id = u;
+        g_units[u].unit_class = UnitClassV1::Infantry;
+        g_units[u].hp = 60; g_units[u].attack = 10;
+        g_units[u].range_millitiles = 0;
+        g_units[u].speed_millitile_tick = 200;
+        g_units[u].morale = 100;
+        g_units[u].build_time_ticks = 5;
+        g_units[u].pop_cost = 1;
+        g_units[u].epoch_min = 1; g_units[u].epoch_max = 15;
+        g_units[u].civ_id = INVALID_CIV_ID;
+        g_units[u].attack_type = DamageTypeV1::Cut;
+    }
+    g_units[0].bonus_vs_bp[1] = 0;      // indiferente ante caballeria
+    g_units[1].bonus_vs_bp[1] = 5000;   // +50% contra caballeria: el contador
+
+    // buildings[1] = cuartel que entrena las dos.
+    BuildingDefinitionV1& q = g_buildings[1];
+    q.id = 1; q.hp = 400; q.footprint_w = 2; q.footprint_h = 2;
+    q.epoch_min = 1; q.epoch_max = 15;
+    for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) q.trains[k] = INVALID_UNIT_ID;
+    for (uint32_t k = 0; k < PROD_TECHS_MAX; ++k) q.researches[k] = INVALID_TECH_ID;
+    for (uint32_t k = 0; k < BUILDING_REQCAP_MAX; ++k) {
+        q.required_capabilities[k] = INVALID_CAPABILITY_ID;
+    }
+    for (uint32_t k = 0; k < RECIPES_PER_BUILDING_MAX; ++k) q.recipes[k] = INVALID_RECIPE_ID;
+    q.trains[0] = 0; q.trains[1] = 1; q.train_count = 2;
+    q.civ_id = INVALID_CIV_ID;
+
     DataCatalogV1 c{};
-    c.building_count = 1; c.buildings = g_buildings;
+    c.building_count = 2; c.buildings = g_buildings;
+    c.unit_count = 2; c.units = g_units;
     c.recipe_count = 1;   c.recipes = g_recipes;
     // Sin tabla de NOMBRES de perfil, catalog_find_ai_profile desreferencia
     // nullptr. Se deja el catalogo sin perfiles y la IA cae en
@@ -267,6 +302,50 @@ int main() {
             if (box.result[k].type == CommandType::ATTACK_MOVE) ++n_amove;
         }
         CHECK(n_amove > 0u);
+    }
+
+    // --- Fase C: elegir QUÉ entrenar mirando al enemigo -------------------
+    //
+    // Hasta ahora la IA cogía la PRIMERA unidad que el edificio supiera hacer.
+    // Con `bonus_vs_bp` ya vivo desde el 1.18, ignorar los contadores es
+    // desperdiciar el sistema entero: el humano contra-entrena y la IA no.
+    {
+        auto g = std::make_unique<GameState>();
+        gs_init(*g, cfg_of());
+        g->catalog = &cat;
+        for (uint32_t p = 0; p < 8u; ++p) g->player_epoch[p] = 4u;
+        // Cuartel propio (buildings[1]) completo.
+        {
+            const EntityHandle h = et_spawn(g->entities);
+            const uint32_t i = h.index;
+            zero_components(*g, i);
+            g->owner[i] = 1u; g->entity_kind[i] = 1u; g->building_id[i] = 1u;
+            g->build_progress[i] = 0; g->hp[i] = 400; g->max_hp[i] = 400;
+            g->pos_x[i] = 40 * FX_ONE_RAW; g->pos_y[i] = 40 * FX_ONE_RAW;
+            g->bld_anchor_tx[i] = 40; g->bld_anchor_ty[i] = 40;
+        }
+        // Enemigo: CABALLERÍA en mayoría.
+        for (uint32_t k = 0; k < 4u; ++k) {
+            const uint32_t e = put_soldier(*g, 0, 120 + static_cast<int64_t>(k), 120);
+            g->unit_class[e] = 1u;   // cavalry
+        }
+        g->player_stock[1][0] = 1000;
+        g->player_stock[1][1] = 1000;
+        g->player_stock[1][2] = 1000;
+
+        AiJobBox box; ai_box_init(box, 1);
+        AiRuntimeV1 rt{0, 0};
+        ai_dispatch(box, 0u, rt);
+        ai_execute(box, *g);
+
+        bool entrena_contador = false;
+        for (uint32_t k = 0; k < box.result_count; ++k) {
+            if (box.result[k].type != CommandType::TRAIN_UNIT) continue;
+            if (box.result[k].p.unit_id == 1u) entrena_contador = true;
+        }
+        // La unidad 1 es la que tiene +50% contra caballería. Elegir la 0
+        // teniendo la 1 disponible es tirar el sistema de contadores.
+        CHECK(entrena_contador);
     }
 
     if (g_fails == 0) {
