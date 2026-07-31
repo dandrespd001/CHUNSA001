@@ -1504,6 +1504,69 @@ faraón con tanques.
   propio. **Es el mayor riesgo de alcance de todo el proyecto**: 15 épocas × N
   civilizaciones es una superficie de contenido enorme.
 
+## §22.2 Propuesta concreta: el periodo como unidad de contenido
+
+**La pieza que hacía falta ya existe en los datos y no la estábamos usando**:
+`playable_periods`. Egipto ya declara Reino Antiguo y Reino Nuevo; Roma,
+República tardía y Alto Imperio. Hoy son etiquetas descriptivas. La propuesta es
+convertirlas en **la unidad de contenido**.
+
+### Qué cambia
+
+1. **`epoch_window` de la civilización deja de ser un techo** y pasa a ser
+   `epoch_start`: dónde empieza su identidad. Sin tope superior.
+2. **Cada periodo cubre un tramo de épocas** y aporta **sus** unidades,
+   edificios y tecnologías. La civilización es la **suma de sus periodos**.
+3. **El hilo se continúa hasta hoy**, como pidió el Director. Egipto:
+   Reino Antiguo → Reino Nuevo → **ptolemaico → Egipto romano → islámico →
+   otomano → moderno**. Roma: República → Imperio → **Bizancio → Italia
+   medieval → moderna**.
+4. **La validación cambia de sitio**: hoy el compilador exige que el
+   `epoch_window` de un edificio solape con el de su civilización. Pasaría a
+   exigir que solape con **algún periodo** de esa civilización.
+
+### Por qué esto resuelve el bloqueo real
+
+Ahora mismo hay **pólvora, cal viva y cemento investigados y con cita** —
+proporciones y temperaturas incluidas — que **no se pueden meter en el juego**
+porque son de las épocas 8 y 13 y ninguna civilización pasa de la 5. El corpus
+produce más rápido de lo que el juego absorbe, y el cuello es exactamente éste.
+
+### Lo que aporta la investigación de Empire Earth
+
+`docs/research/EMPIRE_EARTH_PROYECTILES.md` documentó cómo evita EE que 14
+épocas de contenido sean inmanejables: **reemplazo con conversión**. Avanzar de
+época *habilita* la mejora; el jugador la investiga y **todas las unidades
+viejas de esa línea se convierten**. No ocurre solo por pasar de edad.
+
+Aplicado aquí: al entrar en un periodo nuevo, el roster anterior **no se
+duplica**, se **reemplaza mediante investigación**. Eso mantiene acotado lo que
+el jugador ve en pantalla aunque el catálogo crezca a 15 épocas.
+
+### El riesgo, dicho sin adornos
+
+**15 épocas × N civilizaciones es la mayor superficie de contenido del
+proyecto.** Con 4–6 civilizaciones son 60–90 tramos de contenido con unidades,
+edificios y tecnologías propias. Eso **no cabe en el alcance de la 1.0** y no
+debe fingirse que sí.
+
+Mitigación propuesta: **contenido compartido por defecto, diferenciado por
+excepción**. Un fondo común de unidades y edificios por época que todas las
+civilizaciones usan, y sobre él **unas pocas piezas propias por periodo** —las
+que dan identidad—. Es lo que hace AoE2: casi todas las civilizaciones comparten
+el árbol y se distinguen por unidad única, bonificaciones y qué les falta.
+
+Sin eso, cada civilización nueva cuesta 15 épocas de trabajo y el juego no
+termina nunca.
+
+### Qué falta decidir, y es del Director
+
+- Si el fondo común compartido es aceptable, o cada civilización debe tener
+  contenido propio en todas las épocas.
+- Cuántos periodos por civilización para la 1.0.
+- Si una civilización puede **perder** acceso a algo al cambiar de periodo
+  (históricamente correcto, jugablemente frustrante).
+
 **Recordatorio del alcance de la 1.0 (ADR-012)**: 4–6 civilizaciones y las
 épocas del slice, no las 15. Esta directriz describe el juego completo; el plan
 sigue construyendo el slice.
