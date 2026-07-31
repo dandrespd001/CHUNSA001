@@ -351,13 +351,42 @@ rechaza sin revisar el código.
 | **1.8D** ✅ | SPEC-007 §9.2 · §9.4 | **Contenido**: depósitos del mapa escalonados por edad y costes reales | Entregado. Simetría exacta, 12 depósitos, ≤3 recursos por coste, comida ×3 (500→1500). Apertura 9317→**9438** < 36000 con `winner=1`: **primer sprint que mueve trayectorias a propósito**. Pendiente heredado: **nada cuesta aún cobre/oro/arcilla/sal**, así que los 4 depósitos del centro no dan motivo para pelear → se cierra en el 1.9 |
 | **1.8F** ✅ | SPEC-008 §4 | **Legibilidad del resultado + primera prueba de política del adaptador** (`outcome_view.hpp`). Salió del test de juego: `winner=0` es victoria del jugador 0 y se leía como «nadie» | Consola en palabras · defecto real cazado en rojo: el panel cableaba 2 jugadores y con 8 habría anunciado EMPATE a un derrotado · verificado en Godot real |
 | **1.8E** ⏳ | **SPEC-006 Parte IV** | **El HUD expone lo que el kernel ya puede**: costes visibles antes de actuar · asignación automática de constructores y progreso de obra · edificios construibles **del catálogo, filtrados por civ y época** | Ningún precio se aprende por rechazo · una obra sin constructor lo dice · en época 3–4 salen **dos** edificios y en la 5 los otros dos (no son cuatro simultáneos) · la asequibilidad va en cabecera pura **con pruebas** |
-| **1.8H** ⏳ | **SPEC-006 Parte V** | **Panel de comandos al estilo AoE2**: rejilla de botones con icono abajo a la derecha, coste en **tooltip al pasar el ratón** (no fijo en pantalla), un renglón por recurso con icono y número · **construir, entrenar e investigar** con la misma forma — hoy entrenar e investigar **no muestran coste ninguno** · barra de progreso sobre la obra en vez de texto | Los 12 criterios de §29 · `panel_items_for` y `button_state` en cabecera pura **con fase roja** · captura real mirada · **absorbe el 1.8G**: quitar texto fijo del mapa es lo que arregla el solapamiento |
-| **1.8G** (absorbido por 1.8H) | SPEC-006 Parte III | **Descolisión de etiquetas en el mundo**: hasta cinco textos se amontonan en el centro del mapa (edificios, depósitos, línea de obra) y el resultado es ilegible. Deuda anterior al 1.8E, que la **empeora** al añadir una línea por obra | Descartar la etiqueta que caiga a < N px de otra ya dibujada en ese frame, con prioridad **estable** (selección > obra > edificio > depósito) para que no parpadee · verificado en captura mirada |
-| **1.9** ⏸ **EN PAUSA** | **SPEC-007 §12** | *Brief escrito para `gpt-5.6-sol`, que queda suspendido esta semana por orden del Director (2026-07-30). Hay que reasignar antes de lanzarlo.* Recetas, `CRAFT=14`, fundición por civ y **solo la cadena del bronce** (`cobre + estaño → bronce`). Incluye **depósitos de estaño en el mapa**: sin ellos el bronce es infabricable y el mecanismo no se puede ejercitar jugando | Se fabrica bronce **jugando** · las 11 pruebas de §12.6 · cadenas de profundidad **1** · save 14→15, checksum 9→10 · el brief **autoriza explícitamente** tocar `tests/` para el hash golden y los baselines: prohibirlo con datos nuevos es un contrato imposible, y ya lo escribí una vez |
+| **1.8H** ✅ | **SPEC-006 Parte V** | **Panel de comandos al estilo AoE2**: rejilla de botones con icono abajo a la IZQUIERDA (verificado contra la fuente oficial de AoE2), coste en **tooltip al pasar el ratón** (no fijo en pantalla), un renglón por recurso con icono y número · **construir, entrenar e investigar** con la misma forma — hoy entrenar e investigar **no muestran coste ninguno** · barra de progreso sobre la obra en vez de texto | Los 12 criterios de §29 · `panel_items_for` y `button_state` en cabecera pura **con fase roja** · captura real mirada · **absorbe el 1.8G**: quitar texto fijo del mapa es lo que arregla el solapamiento | · **PENDIENTE: la paginación (§29.14)**, sin ejercitar mientras haya 2 edificios
+| ~~**1.8G**~~ ✅ | — | *Absorbido y entregado dentro del 1.8H: descolisión de etiquetas con reserva por fotograma y prioridad estable (los edificios reservan antes que los depósitos).* | — |
+| **1.9** ✅ | **SPEC-007 §12** | Recetas, `CRAFT=14`, fundición por civ y la cadena del bronce. **Lo hizo el Arquitecto** al quedar GPT suspendido | Entregado. Desviación registrada: **sin sección nueva de blob** —la receta viaja dentro del edificio, que ya la declaraba— así que el compilador de Python no se tocó. Save 14→15, checksum 9→10. Apertura 9438→9411, `winner=1`. **Dejó un guardián nuevo**: `test_civ_start_epoch`, tras descubrir que un `epoch_min` mal puesto bajaba la época inicial de Roma y apagaba la partida |
 | **1.9B** | SPEC-007 §12 (datos) | Carbón vegetal y hierro forjado + sus depósitos (mena de hierro). **Cal viva NO**: es de época 8 y no hay nada de época 8 todavía | Extiende el mecanismo ya cerrado en el 1.9, sin tocar kernel |
 | **1.10** | **SPEC-007 §13 + §20** | **Fuerza motriz por edad**: radio que crece con la época (adyacente al río → manzana de vapor → red eléctrica) + upkeep de comida. Rueda hidráulica exige terreno en `PLACE_BUILDING` | El vapor **libera del río** y se nota jugando · las 18 pruebas de §13.6+§20.6 · escenario anterior a la edad 4 bit-idéntico |
 | **1.11** | **SPEC-007 §14** | `reserve_total`/`extracted` + techs de extracción (40→60→75→90) | Se reabre una mina agotada investigando · las 9 pruebas de §14.4 · tope 90 verificado |
 | **1.12** | **SPEC-007 §15** | **Fuentes construidas**: granjas (comida) y plantaciones forestales (madera, edad 7+) · fuentes naturales del mapa | Comida sostenible · las 20 pruebas de §15.6+§16.5 · **100+ granjas** sin fallo · fuente nueva **solo por datos** |
+#### Aviso de alcance (auditoría 2026-07-30): SPEC-007 describe un juego MAYOR que la 1.0
+
+Conviene que esté escrito y no que alguien lo descubra tarde:
+
+- **30 recursos definidos · 8 presentes en algún mapa.** Los 22 restantes no
+  existen en la partida por ninguna vía. El bronce es la excepción util: es
+  **producido**, y desde el 1.9 se fabrica.
+- **Cinco sistemas de SPEC-007 con cero lineas escritas**: energía por edad,
+  upkeep, reserva y recuperación de yacimientos, granjas y reforestación.
+  Medido por ocurrencias en `step.hpp`: 0 en los seis términos.
+- **15 épocas declaradas · contenido real para las épocas 3–5**, que son las
+  ventanas de las dos civilizaciones existentes.
+
+Nada de esto contradice ADR-012 —el alcance de la 1.0 son 4–6 civilizaciones y
+las épocas del slice, no las 15— pero **la distancia entre el SPEC y el alcance
+debe ser explícita**. SPEC-007 es horizonte de diseño; el plan es lo que se
+construye.
+
+#### Orden recomendado tras la auditoría del 2026-07-30
+
+`docs/AUDITORIA_2026-07-30.md`. Los tres primeros salen directamente de sus
+hallazgos y **cambian el orden que tenía este plan**:
+
+| Sprint | Contrato | Entrega | DoD |
+|---|---|---|---|
+| **1.13** ⬅ **SIGUIENTE** | **SPEC-004 §24** | `ATTACK`, `ATTACK_MOVE`, proyectiles con viaje | **CIERRE MECÁNICO DE FASE 1**, que sigue abierto desde el replan del 2026-07-28 y mantiene **arte y audio bloqueados**. Es además la carencia más visible jugando: acabamos de dar al combate armadura, tipos y contadores y el jugador **todavía no puede decir a quién atacar** · las 14 pruebas de §24.7 |
+| **1.19** (nuevo) | SPEC-005 | **La IA se pone al día**: que fabrique con recetas y que elija qué entrenar mirando armadura y contadores | **Hallazgo principal de la auditoría**: la IA tiene **cero** ocurrencias de `CRAFT`, recetas, armadura y efectos de tecnología. El oponente nunca fabricará bronce ni entenderá un contador, así que toda la profundidad del 1.9 y el 1.18 es **exclusiva del humano**. Va justo tras el 1.13 para que aprenda a la vez a atacar y a usar lo que tiene · corregir de paso `ai_afford_epoch`, que cablea 3 recursos |
+| **1.20** (nuevo, pequeño) | **SPEC-008** | **Banco de rendimiento**: medir `Step()` y `state_checksum_v1` en el escenario de §, y fallar ante regresión respecto a una referencia registrada | `tests/perf/` está **VACÍO**: SPEC-008 fija presupuestos duros (`Step()` ≤ 2,0 ms) y **nadie los mide**. Sin el hardware de referencia no se valida el objetivo absoluto, pero **sí se detectan regresiones**, que es el grueso del valor. Ya hay una acechando: `player_tech_bonus` es O(tecnologías) por golpe |
+
 | **1.13** | **SPEC-004 §24** | `ATTACK`, `ATTACK_MOVE`, proyectiles con viaje | **CIERRE MECÁNICO DE FASE 1** · las 14 pruebas de §24.7 · partida completa desde aldeanos hasta victoria sin comandos de debug |
 
 #### Divergencias de jugabilidad frente a AoE2 (investigación propia, 2026-07-30)
@@ -371,7 +400,7 @@ idea que AoE2. Lo que se aleja, por impacto:
 
 | Sprint | Divergencia | Entrega | DoD |
 |---|---|---|---|
-| **1.18** | **SPEC-004 Parte VI** | **Estadísticas de unidad y daño por tipo**: tres tipos de daño (corte, perforación, impacto), armadura plana por tipo en unidad y edificio, bonos contra clase que la armadura **no** frena, y tecnologías que suben el valor **efectivo** sin mutar el catálogo. Hoy **no existe armadura ninguna** y el daño es un multiplicador opaco por clase | Los 10 criterios de §30 · daño **nunca < 1** · `bonus_vs_bp` deja de ser dato muerto —hoy se carga y **no se usa en `step.hpp`**— · apertura sigue con `winner=1` bajo 36000 ticks: las trayectorias cambian a propósito, el resultado no |
+| **1.18** ✅ | **SPEC-004 Parte VI** | Armadura plana por tipo de daño, contadores movidos de una tabla cableada a **datos** (`bonus_vs_bp`, que era dato muerto), y tecnologías que suben el valor **efectivo** sin mutar el catálogo | Entregado en 4 fases, la segunda deliberadamente **neutra** para separar el fontanero del interruptor. Apertura 9411→9542, `winner=1`. `test_combat` cambió de significado y se dice por qué: su escenario usa el camino de depuración, sin catálogo, luego sin ventaja de datos |
 | **1.14** | **Población fija de 200 sin casas.** En AoE2 se sube de 25 en 25 construyendo casas, y es una tarea constante que compite por madera y castiga el descuido. Es lo que más cambia el ritmo de partida | Tope de población derivado de edificios que lo otorgan, por datos (no una constante) | Quedarse sin población **bloquea entrenar** y se ve por qué · `POP_CAP_V1` deja de ser constante · escenario anterior bit-idéntico si nadie construye casas |
 | **1.15** | **Sin botón de aldeano ocioso.** En AoE2 es de las ayudas más usadas — y **nuestro HUD ya cuenta los ociosos**, solo falta saltar a ellos | Botón y tecla que seleccionan y centran en el siguiente ocioso, cíclico | Presentación pura, cero kernel · orden **determinista** (índice ascendente) para que no salte al azar |
 | **1.16** | **Sin saturación por campamento.** AoE2 satura en torno a 8 aldeanos por campamento; hoy nada desincentiva amontonarlos | Rendimiento decreciente por depósito | Amontonar deja de ser óptimo y se nota jugando |
