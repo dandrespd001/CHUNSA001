@@ -804,11 +804,40 @@ Cómo queda:
    corrigen. Cuando existan, basta con ponerlo a 1 desde los datos del arma; la
    rama ya está escrita.
 
-**Progresión por edades — pendiente de diseño.** El Director apunta a **Empire
-Earth** como referencia, y es la buena: cubre de la prehistoria a la era nano,
-que es exactamente nuestro problema de 15 edades, mientras que AoE2 solo tiene
-cuatro. Falta decidir cómo evolucionan **precisión, velocidad de proyectil y
-guiado** con la tecnología. Se investiga antes de implementarlo.
+### §24.5.1 Progresión por edades — investigado (Empire Earth)
+
+`docs/research/EMPIRE_EARTH_PROYECTILES.md`, con **12 marcas explícitas de NO
+VERIFICADO** y citas a páginas concretas del manual. Cambia el plan que yo
+tenía:
+
+**1. NO existe una estadística de precisión, y no la vamos a inventar.** La
+tabla oficial de atributos de EE enumera `Hit Points`, `Attack`, `Range`,
+`Speed`, `Area Effect`, **cinco armaduras**, `Flight Time`, `Cargo` y `Power`
+— y **no** enumera `Accuracy`, `Hit Chance` ni `Evasion` (manual pp. 103–104).
+Yo había supuesto que la precisión mejoraría con tecnología; **no hay apoyo
+para eso**. Nuestro fallo ya emerge de la predicción de tiro, que es
+suficiente y no necesita una estadística nueva.
+
+**2. El hallazgo aprovechable: la ARMADURA es por TIPO DE ARMA y cambia con la
+edad.** EE separa `Arrow Armour`, `Gun Armour` y `Laser Armour`, así que
+**cambiar de arma altera la matriz de contadores**, no solo el número de
+ataque. Encaja exactamente con nuestros tres tipos de daño del §27, y sugiere
+que la progresión de 15 edades debe expresarse **añadiendo tipos de daño**
+(flecha → pólvora → láser) en vez de subiendo números.
+
+**3. Cómo evita EE que 15 edades de armas sean inmanejables**, que era la
+preocupación de fondo: **por reemplazo con conversión**. Avanzar de época
+*habilita* el reemplazo; el jugador investiga la mejora en el edificio y **todas
+las unidades viejas de esa línea se convierten**. No ocurre solo por pasar de
+edad. Es el patrón a copiar.
+
+**4. Guiado**: el misil verificado más temprano es de la época **XII**
+(Atomic–Modern) y el láser de la **XIII**. Que el motor haga *homing* de verdad
+es **NO VERIFICADO** en la fuente, así que nuestro campo `guided` se queda como
+decisión propia, no como copia.
+
+**Pendiente**: `Flight Time` es un atributo real de EE y aún no tenemos
+equivalente; hoy la velocidad de proyectil es una constante global.
 - Impacto cuando la distancia al objetivo `<= PROJECTILE_HIT_RADIUS_RAW`.
 - Si el objetivo muere antes del impacto, el proyectil **se descarta**; no
   redirige ni cae al suelo.
