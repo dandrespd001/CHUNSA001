@@ -15,3 +15,4 @@ third_party_build/
 
 # Estado de herramientas de agentes (worktrees, cache). No es del proyecto.
 .claude/
+build-godot/

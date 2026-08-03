@@ -211,6 +211,17 @@ target_include_directories(chunsa_test_command_panel_view PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
 add_test(NAME command_panel_view COMMAND chunsa_test_command_panel_view)
 
+# --- Test Sprint 1.15: politica pura de aldeano ocioso -------------------------
+# Un aldeano ANDANDO no es ocioso, y el contador anterior lo daba por tal
+# porque solo miraba tarea/obra/deposito/carga. El movimiento se detecta
+# comparando con el snapshot anterior, que el adaptador ya guarda para
+# interpolar: sin tocar el kernel ni ampliar el snapshot.
+add_executable(chunsa_test_idle_view tests/unit/test_idle_view.cpp)
+target_link_libraries(chunsa_test_idle_view PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_idle_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
+add_test(NAME idle_view COMMAND chunsa_test_idle_view)
+
 # --- Test Sprint 1.9: recetas y CRAFT (SPEC-007 §12.6) -------------------------
 add_executable(chunsa_test_craft tests/unit/test_craft.cpp)
 target_link_libraries(chunsa_test_craft PRIVATE chunsa_sim_core)

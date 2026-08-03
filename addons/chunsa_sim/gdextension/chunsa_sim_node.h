@@ -195,6 +195,10 @@ private:
     int32_t last_group_number = -1;
     std::chrono::steady_clock::time_point last_group_activation{};
     bool dragging = false;
+    // Sprint 1.15: ranura del ultimo aldeano ocioso al que salto la tecla
+    // PUNTO. Es lo que hace que pulsar repetidamente RECORRA los ociosos en
+    // vez de volver siempre al primero.
+    uint32_t last_idle_slot = 0;
     bool camera_dragging = false;
     godot::Vector2 camera_drag_start;
     float camera_drag_origin_px = MAP_PX / 2.0f;

@@ -3,6 +3,7 @@
 #include "fog_view.hpp"
 #include "outcome_view.hpp"
 #include "command_panel_view.hpp"
+#include "idle_view.hpp"
 
 // chunsa_sim — ChunsaSimNode (Sprint 1.4, skirmish jugable: humano contra IA,
 // combate + moral + economía visibles). El kernel avanza a 20 Hz en un hilo;
@@ -218,6 +219,35 @@ void append_epoch_detail(godot::String& details, uint8_t epoch_min,
     detail += U(" (estás en ") +
             godot::String::num_int64(static_cast<int64_t>(player_epoch)) + ")";
     append_rejection_detail(details, detail);
+}
+
+}  // namespace
+
+namespace {
+
+// Sprint 1.15: puente entre el snapshot de presentacion y la politica pura de
+// `idle_view.hpp`. Existe para que el criterio de "ocioso" viva en UN solo
+// sitio: antes estaba duplicado en dos bucles de dibujo y bastaba tocar uno
+// para que el contador y el boton discreparan.
+template <typename Snap>
+chunsa_view::IdleInputs idle_inputs_of(const Snap& cur, const Snap& prev, uint32_t i,
+                                       uint32_t prev_cap) noexcept {
+    chunsa_view::IdleInputs in{};
+    in.is_own_citizen = (cur.alive[i] != 0u) && (cur.owner[i] == 0u)
+                     && (cur.entity_kind[i] == 0u) && (cur.unit_class[i] == 3u);
+    in.citizen_task = cur.citizen_task[i];
+    in.has_build_target = (cur.build_target[i] != chunsa::BUILD_NO_TARGET);
+    in.has_deposit = (cur.eco_assigned_deposit[i] != chunsa::ECO_NO_DEPOSIT);
+    in.carry = cur.eco_carry[i];
+    in.x_raw = cur.x_raw[i];
+    in.y_raw = cur.y_raw[i];
+    // Solo vale la muestra anterior si es LA MISMA entidad: un slot reciclado
+    // tendria posicion de otra unidad y el salto se leeria como movimiento.
+    in.had_previous_sample = (i < prev_cap) && (prev.alive[i] != 0u)
+                          && (prev.generation[i] == cur.generation[i]);
+    in.prev_x_raw = in.had_previous_sample ? prev.x_raw[i] : 0;
+    in.prev_y_raw = in.had_previous_sample ? prev.y_raw[i] : 0;
+    return in;
 }
 
 }  // namespace
@@ -808,6 +838,37 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
                 }
                 break;  // sin hueco ahi: que la tecla siga su camino
             }
+        }
+        // Sprint 1.15 — PUNTO: ir al siguiente aldeano ocioso, como en AoE2.
+        //
+        // Es la tecla que convierte el contador en algo util: saber que tienes
+        // tres ociosos no sirve de nada si luego hay que buscarlos por el mapa.
+        // El recorrido es circular y por indice ascendente (`next_idle_from`),
+        // asi que pulsar repetidamente los visita TODOS y vuelve al principio.
+        //
+        // No mueve la seleccion si no hay ninguno: la politica devuelve `count`
+        // justamente para poder distinguir "no hay" de "el de la ranura 0".
+        if (code == godot::KEY_PERIOD) {
+            const uint32_t cap_k = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+            const uint32_t pcap_k = snap_prev.capacity < 1024u ? snap_prev.capacity : 1024u;
+            const uint32_t elegido = chunsa_view::next_idle_from(
+                last_idle_slot, cap_k, [&](uint32_t i) {
+                    return chunsa_view::is_idle_citizen(
+                        idle_inputs_of(snap_curr, snap_prev, i, pcap_k));
+                });
+            if (elegido < cap_k) {
+                for (uint32_t i = 0; i < cap_k; ++i) is_selected[i] = false;
+                is_selected[elegido] = true;
+                selection_generation[elegido] = snap_curr.generation[elegido];
+                last_idle_slot = elegido;
+                // Centrar la camara en el, o encontrarlo seguiria siendo tarea
+                // del jugador y la tecla no habria resuelto nada.
+                set_camera_center(snap_curr.x[elegido] * 4.0f, snap_curr.y[elegido] * 4.0f);
+                queue_redraw();
+            } else {
+                godot::UtilityFunctions::print(U("CHUNSA no hay aldeanos ociosos"));
+            }
+            return;
         }
         if (code == godot::KEY_ESCAPE) {
             placement_mode = false;
@@ -2028,15 +2089,16 @@ void ChunsaSimNode::draw_resource_hud(const godot::Ref<godot::Font>& font,
     // derecha de la barra de AoE2.
     uint32_t idle = 0;
     const uint32_t cap_i = snap_curr.capacity < 1024u ? snap_curr.capacity : 1024u;
+    const uint32_t pcap_idle = snap_prev.capacity < 1024u ? snap_prev.capacity : 1024u;
     for (uint32_t i = 0; i < cap_i; ++i) {
         if (snap_curr.alive[i] == 0u || snap_curr.owner[i] != 0u) continue;
         if (snap_curr.entity_kind[i] != 0u || snap_curr.unit_class[i] != 3u) continue;
-        // Ocioso es QUIETO SIN HACER NADA. Un aldeano andando hacia un sitio
-        // no lo esta: antes se contaban como ociosos y el numero enganaba.
-        if (snap_curr.citizen_task[i] == chunsa::CITIZEN_TASK_IDLE &&
-            snap_curr.build_target[i] == chunsa::BUILD_NO_TARGET &&
-            snap_curr.eco_assigned_deposit[i] == chunsa::ECO_NO_DEPOSIT &&
-            snap_curr.eco_carry[i] == 0) {
+        // Sprint 1.15: el criterio vive en `idle_view.hpp` y se prueba aparte.
+        // Lo que aqui cambia es que ANDAR cuenta como ocupado — las cuatro
+        // condiciones que habia (tarea, obra, deposito, carga) no detectaban a
+        // un aldeano con una simple orden de moverse, y andaba por el mapa
+        // contado como ocioso.
+        if (chunsa_view::is_idle_citizen(idle_inputs_of(snap_curr, snap_prev, i, pcap_idle))) {
             ++idle;
         }
     }
