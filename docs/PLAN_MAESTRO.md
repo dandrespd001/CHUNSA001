@@ -101,7 +101,7 @@ Consecuencias, para que nadie las descubra por sorpresa:
 | **SPEC-005** | IA oponente de tres capas sobre mailbox determinista + perfil data-driven + partida completa | APPROVED+ejecutada | Sprint 1.4 | Arquitecto |
 | **SPEC-006** | UI/HUD: cámara/minimapa/selección/grupos (I) + fog de presentación y política anti-fugas (II) | APPROVED+ejecutada (Partes I–II) | 1.3 + 1.5A | Arquitecto |
 | **SPEC-003** | Pipeline de assets/render/audio: formatos, presupuesto, atlas/batching sobre ADR-009 y QA | DIFERIDA hasta cierre mecánico + presupuesto | Post-1.7 | Arquitecto |
-| **SPEC-TRAYECTORIA** | Contrato final de ADR-016: sucesión/legado de módulos históricos, IDs namespaced, reglas de era | POR ESCRIBIR | Fase 2 (antes de integrar la 3ª civ) | Arquitecto |
+| **SPEC-TRAYECTORIA** | Contrato final de ADR-016: linajes, herencia entre periodos, fondo común y espacios de nombres | **ESCRITA 2026-08-03**, pendiente de aprobación · `docs/specs/SPEC-TRAYECTORIA.md` | Antes de la 3ª civ | Arquitecto |
 | **SPEC-007** | **Recursos y edades**: 15 edades, 17 recolectados + 8 producidos + energía streaming, upkeep, reserva/recuperación, granjas | **APROBADA** (2026-07-28) | 1.8A–1.12 | Arquitecto |
 | **SPEC-008** | **Rendimiento, fiabilidad y escalabilidad**: presupuestos medibles, degradación, límites de escala | PROPUESTA (2026-07-28) | 1.8A (aplicación §6) | Arquitecto |
 | **SPEC-009** | Campaña y escenarios: YAML de misión (doc 08), triggers deterministas como Commands, árbol de decisiones, saves de campaña | POR ESCRIBIR | Fase 3 | Arquitecto |
