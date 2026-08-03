@@ -142,6 +142,16 @@ struct EcoCitizenIn {
     int32_t  carry;
     uint8_t  carry_resource_idx;
     int32_t  speed_mtpt;
+    // --- Sprint 1.29: tecnologia y herramientas suben la produccion ---------
+    // Entran como DATOS del jugador, no como constantes, para que una tech o
+    // una herramienta mejor se note al recolectar. Con los valores por defecto
+    // —los de las constantes— el comportamiento es EXACTAMENTE el anterior.
+    int32_t  harvest_per_tick;   // 0 = usar ECO_HARVEST_PER_TICK
+    int32_t  carry_cap;          // 0 = usar ECO_CARRY_CAP
+    // Factor de RECUPERACION en puntos basicos. Es "cuanto material util sacas
+    // de la misma roca", que es literalmente lo que mejoro la flotacion: el
+    // jugador gana mas de lo que el yacimiento pierde.
+    int32_t  recovery_bp;        // 0 = sin bonificacion
 };
 
 struct EcoCitizenOut {
@@ -152,7 +162,11 @@ struct EcoCitizenOut {
     int32_t  carry;
     uint8_t  carry_resource_idx;
     bool     did_harvest;
-    int32_t  harvested_amount;
+    int32_t  harvested_amount;   // lo que GANA el jugador
+    // Sprint 1.29: lo que PIERDE el yacimiento, que ya no tiene por que ser lo
+    // mismo. Con recuperacion, de la misma roca sale mas material util; el
+    // agujero en el suelo es el mismo.
+    int32_t  deposit_decrement;
     bool     did_dropoff;
     int32_t  dropoff_amount;
     uint8_t  dropoff_resource_idx;
@@ -330,18 +344,36 @@ inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
             break;
         }
         const EcoDeposit& dep = deposits[in.assigned_deposit];
-        int32_t room = ECO_CARRY_CAP - out.carry;
+        // Sprint 1.29: los tres vienen del jugador; 0 significa "el de siempre".
+        const int32_t cap_carga = in.carry_cap > 0 ? in.carry_cap : ECO_CARRY_CAP;
+        const int32_t por_tick  = in.harvest_per_tick > 0 ? in.harvest_per_tick
+                                                          : ECO_HARVEST_PER_TICK;
+        int32_t room = cap_carga - out.carry;
         if (room < 0) room = 0;
-        int32_t amount = ECO_HARVEST_PER_TICK;
-        if (dep.remaining < amount) amount = dep.remaining;
-        if (room < amount) amount = room;
-        if (amount > 0) {
+        // `extraido` es lo que sale del suelo. `ganado` es lo que llega al
+        // almacen, y con recuperacion es mas. Se acota por el hueco de carga
+        // sobre lo GANADO, que es lo que ocupa sitio en el cesto.
+        int32_t extraido = por_tick;
+        if (dep.remaining < extraido) extraido = dep.remaining;
+        if (extraido < 0) extraido = 0;
+        int64_t ganado = static_cast<int64_t>(extraido);
+        if (in.recovery_bp > 0) {
+            ganado = (ganado * (10000 + static_cast<int64_t>(in.recovery_bp))) / 10000;
+        }
+        if (ganado > room) {
+            // No cabe: se extrae solo lo que quepa, para no tirar material.
+            ganado = room;
+            const int64_t div = 10000 + (in.recovery_bp > 0 ? in.recovery_bp : 0);
+            extraido = static_cast<int32_t>((ganado * 10000) / div);
+        }
+        if (ganado > 0) {
             out.did_harvest = true;
-            out.harvested_amount = amount;
-            out.carry += amount;
+            out.harvested_amount = static_cast<int32_t>(ganado);
+            out.deposit_decrement = extraido;
+            out.carry += static_cast<int32_t>(ganado);
             out.carry_resource_idx = dep.resource_idx;
         }
-        if (out.carry >= ECO_CARRY_CAP) {
+        if (out.carry >= cap_carga) {
             out.state = EcoState::RETURN;
         }
         out.vel_x = 0;

@@ -118,6 +118,7 @@ building_ids:
   - rome:venetian_arsenal
 tech_ids:
   - rome:backed_bladelet
+  - rome:copper_tools
   - rome:froth_flotation
   - rome:marching_drill
   - rome:road_engineering

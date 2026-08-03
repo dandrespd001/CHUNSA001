@@ -219,6 +219,83 @@ int main() {
         CHECK(eco_available_for(d, (1ull << 5)) == 0);
     }
 
+
+    // ========================================================================
+    // PRODUCCION POR TECNOLOGIA Y HERRAMIENTAS (Director, 2026-08-03)
+    //
+    // «Tanto la tecnología como las herramientas deben permitir aumentar la
+    // producción y aumentar la cantidad de recurso.» Son dos cosas distintas y
+    // por eso hay tres efectos: trabajar más rápido (harvest_rate), llevar más
+    // por viaje (carry_cap) y sacar más material útil de la MISMA roca
+    // (recovery). El tercero es el que cumple «aumentar la cantidad», y es
+    // exactamente lo que hizo la flotación.
+    // ========================================================================
+
+    FatalReason fatal = FatalReason::NONE;
+
+    // 13) Sin bonificación, el comportamiento es el de siempre: 5 por tick.
+    {
+        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+        EcoCitizenIn in{};
+        in.state = EcoState::HARVEST; in.assigned_deposit = 0; in.carry = 0;
+        const EcoCitizenOut out = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(out.harvested_amount == ECO_HARVEST_PER_TICK);
+        CHECK(out.deposit_decrement == ECO_HARVEST_PER_TICK);
+    }
+
+    // 14) Con MAS RITMO se saca más por tick, y el yacimiento pierde lo mismo
+    //     que se saca: trabajar rápido no crea materia de la nada.
+    {
+        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+        EcoCitizenIn in{};
+        in.state = EcoState::HARVEST; in.assigned_deposit = 0; in.carry = 0;
+        in.harvest_per_tick = 12;
+        const EcoCitizenOut out = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(out.harvested_amount == 12);
+        CHECK(out.deposit_decrement == 12);
+    }
+
+    // 15) LA RECUPERACIÓN es lo que de verdad «aumenta la cantidad de
+    //     recurso»: el jugador gana MÁS de lo que el yacimiento pierde. Es la
+    //     flotación hecha número — la misma roca, más metal útil.
+    {
+        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+        EcoCitizenIn in{};
+        in.state = EcoState::HARVEST; in.assigned_deposit = 0; in.carry = 0;
+        in.recovery_bp = 4000;    // +40 %
+        const EcoCitizenOut out = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(out.harvested_amount == 7);      // 5 * 1,4
+        CHECK(out.deposit_decrement == 5);     // el agujero es el mismo
+    }
+
+    // 16) MÁS CARGA significa más viajes útiles: con el cesto por defecto el
+    //     aldeano vuelve al llegar a 50; con uno mayor, no.
+    {
+        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+        EcoCitizenIn in{};
+        in.state = EcoState::HARVEST; in.assigned_deposit = 0;
+        in.carry = ECO_CARRY_CAP - 2;
+        const EcoCitizenOut sin_mejora = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(sin_mejora.state == EcoState::RETURN);
+        in.carry_cap = ECO_CARRY_CAP + 30;
+        const EcoCitizenOut con_mejora = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(con_mejora.state == EcoState::HARVEST);
+    }
+
+    // 17) El hueco de carga acota lo GANADO, no lo extraído. Si sólo caben 3 y
+    //     la recuperación es del 100 %, se sacan 1 o 2 de la roca — nunca se
+    //     tira material extraído por no tener sitio.
+    {
+        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+        EcoCitizenIn in{};
+        in.state = EcoState::HARVEST; in.assigned_deposit = 0;
+        in.carry = ECO_CARRY_CAP - 3;
+        in.recovery_bp = 10000;   // +100 %
+        const EcoCitizenOut out = eco_step_citizen(in, &dep, 1, ECO_ALL_DEPOSITS_MASK, 0, 0, fatal);
+        CHECK(out.harvested_amount <= 3);
+        CHECK(out.deposit_decrement <= out.harvested_amount);
+    }
+
     if (g_fails == 0) {
         std::printf("farms OK\n");
         return 0;

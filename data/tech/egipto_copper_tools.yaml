@@ -1,0 +1,55 @@
+schema_version: 1
+id: egipto:copper_tools
+display_name_key: egipto:tech.copper_tools
+description_key: egipto:tech.copper_tools.description
+available_to:
+  - egipto:dynastic_nile
+epoch: 3
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 80
+  chunsa:copper: 40
+required_capabilities: []
+research_time_ticks: 600
+prerequisites: []
+required_buildings:
+  - egipto:merimde_storage
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities: []
+stat_effects:
+  - stat: harvest_rate
+    amount: 3
+    applies_to:
+      - citizen
+  - stat: carry_cap
+    amount: 15
+    applies_to:
+      - citizen
+playable_period_ids:
+  - egipto:old_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.29-produccion
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Remedello culture: las tumbas contienen «arrows, stone daggers and polished stone axes, with a few tombs having axes and daggers or ornaments made of copper», y la cultura produce «objects in copper and arsenical silver»"
+        locator: "Grave goods — cobre y piedra conviven en el mismo ajuar, que es la transicion tecnologica de la epoca 3"
+        url: "https://en.wikipedia.org/wiki/Remedello_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "HERRAMIENTAS DE COBRE. Es la respuesta directa al encargo del Director: la tecnologia y las herramientas deben aumentar la produccion Y la cantidad de recurso, y esta hace las dos cosas. +3 de ritmo sobre los 5 base es un 60 por ciento mas rapido —una herramienta de metal corta lo que una de piedra machaca— y +15 de carga son cestos y correas mejores. NO toca la recuperacion: el cobre corta mejor, no saca mas metal de la misma roca; eso llega con la flotacion en la epoca 12. Epoca 3 porque es la Calcolitica y la fuente muestra cobre y piedra en el mismo ajuar."
+    reviewed_by:
+      - architect

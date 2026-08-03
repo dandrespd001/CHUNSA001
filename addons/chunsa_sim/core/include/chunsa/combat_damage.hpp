@@ -55,6 +55,15 @@ enum class StatEffectV1 : uint8_t {
     ArmorCut = 1,
     ArmorPierce = 2,
     ArmorImpact = 3,
+    // Sprint 1.29 — APPEND-ONLY, nunca se reordenan: el valor numerico viaja
+    // en el catalogo compilado y renumerar invalidaria los datos existentes.
+    //
+    // "Tanto la tecnologia como las herramientas deben permitir aumentar la
+    // produccion y aumentar la cantidad de recurso" (Director, 2026-08-03).
+    // Son dos cosas distintas y por eso son tres efectos:
+    HarvestRate = 4,   // mas por tick: se trabaja mas rapido
+    CarryCap = 5,      // mas por viaje: mejores cestos, carros, cuerdas
+    Recovery = 6,      // mas material util de la MISMA roca (puntos basicos)
 };
 inline constexpr uint32_t TECH_EFFECTS_MAX = 4;
 

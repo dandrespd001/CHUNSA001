@@ -112,6 +112,7 @@ building_ids:
   - egipto:wikala
 tech_ids:
   - egipto:composite_bow_program
+  - egipto:copper_tools
   - egipto:corvee_logistics
   - egipto:froth_flotation
   - egipto:wild_grain_harvest

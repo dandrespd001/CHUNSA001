@@ -147,7 +147,10 @@
               "attack",
               "armor_cut",
               "armor_pierce",
-              "armor_impact"
+              "armor_impact",
+              "harvest_rate",
+              "carry_cap",
+              "recovery"
             ]
           },
           "amount": {

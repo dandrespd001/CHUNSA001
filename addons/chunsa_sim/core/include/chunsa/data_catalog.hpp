@@ -852,6 +852,10 @@ inline void parse_stat_effects(const CveValue& obj,
         else if (st->s == "armor_cut") e.stat = StatEffectV1::ArmorCut;
         else if (st->s == "armor_pierce") e.stat = StatEffectV1::ArmorPierce;
         else if (st->s == "armor_impact") e.stat = StatEffectV1::ArmorImpact;
+        // Sprint 1.29: tecnologia y herramientas suben la produccion.
+        else if (st->s == "harvest_rate") e.stat = StatEffectV1::HarvestRate;
+        else if (st->s == "carry_cap")    e.stat = StatEffectV1::CarryCap;
+        else if (st->s == "recovery")     e.stat = StatEffectV1::Recovery;
         else fail(range_fail);
         const CveValue* am = item.find("amount");
         if (!am || !am->is_int()) fail(CatalogLoadCode::SchemaMismatch);

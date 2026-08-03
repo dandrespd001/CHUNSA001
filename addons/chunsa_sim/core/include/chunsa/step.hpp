@@ -1741,6 +1741,22 @@ inline void economy_system(GameState& g) noexcept {
         in.carry = g.eco_carry[i];
         in.carry_resource_idx = g.eco_carry_resource[i];
         in.speed_mtpt = g.speed_mtpt[i];
+        // Sprint 1.29: la tecnologia y las herramientas del JUGADOR entran
+        // aqui. `unit_class` 3 es Citizen, que es quien recolecta; una tech de
+        // herramientas de minero no debe mejorar a la caballeria.
+        //
+        // Se suman a la constante base en vez de sustituirla: una tech que
+        // diera un valor absoluto haria que investigar dos veces empeorara.
+        {
+            const uint8_t o = g.owner[i];
+            if (o < MAX_EMITTERS) {
+            const int32_t d_rate = player_tech_bonus(g, o, StatEffectV1::HarvestRate, 3u);
+            const int32_t d_cap  = player_tech_bonus(g, o, StatEffectV1::CarryCap, 3u);
+            in.harvest_per_tick = d_rate > 0 ? ECO_HARVEST_PER_TICK + d_rate : 0;
+            in.carry_cap        = d_cap  > 0 ? ECO_CARRY_CAP + d_cap : 0;
+            in.recovery_bp      = player_tech_bonus(g, o, StatEffectV1::Recovery, 3u);
+            }
+        }
 
         const uint8_t owner_i = g.owner[i];
         // Dropoff resuelto (Sprint 1.1, SPEC-004 §6): edificio propio completo
@@ -1780,7 +1796,10 @@ inline void economy_system(GameState& g) noexcept {
         }
 
         if (out.did_harvest && out.assigned_deposit < g.n_deposits) {
-            g.deposits[out.assigned_deposit].remaining -= out.harvested_amount;
+            // Sprint 1.29: el yacimiento pierde lo EXTRAIDO, no lo ganado. Con
+            // recuperacion no son lo mismo, y ahi esta la ventaja de la
+            // tecnologia: de la misma roca sale mas material util.
+            g.deposits[out.assigned_deposit].remaining -= out.deposit_decrement;
         }
         if (out.did_dropoff && out.dropoff_resource_idx < RESOURCE_COUNT) {
             g.player_stock[owner_i][out.dropoff_resource_idx] += out.dropoff_amount;

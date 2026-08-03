@@ -1,0 +1,55 @@
+schema_version: 1
+id: rome:copper_tools
+display_name_key: rome:tech.copper_tools
+description_key: rome:tech.copper_tools.description
+available_to:
+  - rome:republic_imperial
+epoch: 3
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 80
+  chunsa:copper: 40
+required_capabilities: []
+research_time_ticks: 600
+prerequisites: []
+required_buildings:
+  - rome:italic_storehouse
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities: []
+stat_effects:
+  - stat: harvest_rate
+    amount: 3
+    applies_to:
+      - citizen
+  - stat: carry_cap
+    amount: 15
+    applies_to:
+      - citizen
+playable_period_ids:
+  - rome:remedello_copper
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.29-produccion
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Remedello culture: fechada en «3400-2400 BCE», produce «objects in copper and arsenical silver (arms, pins, pectorals, bracelets)» y sus tumbas mezclan «stone daggers and polished stone axes» con piezas de cobre"
+        locator: "Dates and metallurgy; el valle del Po es donde esa transicion esta mejor documentada"
+        url: "https://en.wikipedia.org/wiki/Remedello_culture"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "HERRAMIENTAS DE COBRE, gemela de la egipcia y con la misma cita: la Remedello es el yacimiento que mejor documenta cobre y piedra conviviendo. +3 de ritmo y +15 de carga. No toca recuperacion, que es cosa de la flotacion."
+    reviewed_by:
+      - architect

@@ -158,8 +158,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // hubiera disparado, habria significado que la IA se atasca esperando
 // poblacion — y eso si habria sido un fallo que corregir, no un baseline que
 // re-registrar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x3ea29cdf823f884cull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x41be0cca5957ee00ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x4ce8c45c967a1de0ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xfc8269f8117848ccull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines
