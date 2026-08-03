@@ -1,0 +1,32 @@
+# Hereda de base:epoch12_workshop. Identidad, cita y particularidades propias.
+extends: base:epoch12_workshop
+id: china:jiangnan_arsenal
+civ_id: china:yellow_river
+display_name_key: china:building.jiangnan_arsenal
+description_key: china:building.jiangnan_arsenal.description
+kind: military
+dropoff_resources: []
+playable_period_ids:
+  - china:epoch_12
+  - china:epoch_13
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.31-anclajes-chinos
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Jiangnan Shipyard: el Arsenal de Kiangnan se establecio en Shanghai en 1865 bajo Zeng Guofan y Li Hongzhang, como parte del Movimiento de Auto-Fortalecimiento; «During the Tongzhi era, the Arsenal was the largest weapons factory in East Asia»; producia armas y buques, y logro «the first domestically produced steam boat (the Huiji) in 1868 and the first domestically produced steel in 1891»"
+        locator: "Founding, Self-Strengthening Movement and production milestones"
+        url: "https://en.wikipedia.org/wiki/Jiangnan_Shipyard"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Arsenal de Jiangnan, epoca 12. 1865, dentro de la epoca. Se elige frente a otras fabricas del periodo por lo que la fuente documenta: fue la mayor fabrica de armas de Asia oriental y produjo el primer barco de vapor chino en 1868 y el primer acero chino en 1891. Ademas incluia escuela de idiomas, casa de traduccion y escuela tecnica, asi que es kind military pero con alma de investigacion: el Auto-Fortalecimiento no era solo comprar canones, era aprender a hacerlos. Consume acero, que el catalogo tiene desde la epoca 12."
+    reviewed_by:
+      - architect

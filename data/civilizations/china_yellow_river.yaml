@@ -89,24 +89,24 @@ unit_ids:
   - china:work_crew
 building_ids:
   - china:dwelling
-  - china:epoch_06_works
-  - china:epoch_07_works
-  - china:epoch_08_works
   - china:epoch_09_works
   - china:epoch_10_works
   - china:epoch_11_works
-  - china:epoch_12_works
   - china:epoch_13_works
   - china:epoch_14_works
   - china:epoch_15_works
   - china:farm
   - china:flint_workshop
   - china:han_blast_furnace
+  - china:jiangnan_arsenal
+  - china:jingdezhen_kilns
   - china:longshan_workshop
+  - china:movable_type_workshop
   - china:paleolithic_camp
   - china:planted_grove
   - china:settlement_center
   - china:shang_foundry
+  - china:woodblock_workshop
   - china:yangshao_granary
 tech_ids:
   - china:millet_cultivation

@@ -1,0 +1,32 @@
+# Hereda de base:epoch7_workshop. Identidad, cita y particularidades propias.
+extends: base:epoch7_workshop
+id: china:movable_type_workshop
+civ_id: china:yellow_river
+display_name_key: china:building.movable_type_workshop
+description_key: china:building.movable_type_workshop.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - china:epoch_07
+  - china:epoch_08
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.31-anclajes-chinos
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, History of printing in East Asia: Bi Sheng (990-1051) creo el primer sistema conocido de tipos moviles «around 1040 CE» en ceramica; Shen Kuo lo documento describiendo «an iron frame» con tipos sueltos que podian «arranged with paper labels» y reutilizarse en varios trabajos"
+        locator: "Bi Sheng and movable type; Corea imprimio con tipos metalicos en 1377, «over 60 years before Gutenberg»"
+        url: "https://en.wikipedia.org/wiki/History_of_printing_in_East_Asia"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Taller de tipos moviles, epoca 7. Hacia 1040, cuatro siglos antes que Gutenberg. Es contenido propio por la misma razon que el anterior: la ventaja no es un numero, es la fecha. El detalle que la fuente da y merece llegar al juego es el marco de HIERRO con tipos sueltos reutilizables, que es lo que separa el tipo movil de la xilografia: uno se talla entero y sirve para una pagina, el otro se recompone. Kind research."
+    reviewed_by:
+      - architect

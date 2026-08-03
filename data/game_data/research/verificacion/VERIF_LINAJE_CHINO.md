@@ -70,9 +70,52 @@ plantado, por otra vía**.
 
 Es la mejor justificación posible para que China no sea un reskin.
 
+### `[V]` Época 6 — La xilografía es TANG, siglo VII
+
+> «A type of printing called mechanical woodblock printing on paper started in
+> China during the 7th century in the Tang dynasty» · el ejemplar confirmado más
+> antiguo es de **650-670 d.C.** · en Europa, «mechanical printing presses were
+> invented in Renaissance Europe by Johannes Gutenberg in the 15th century».
+
+https://en.wikipedia.org/wiki/History_of_printing_in_East_Asia
+
+**Unos ochocientos años** de diferencia, y la comparación la hace la propia
+fuente.
+
+### `[V]` Época 7 — Tipos móviles de Bi Sheng, hacia 1040
+
+> Bi Sheng (990-1051) creó el primer sistema conocido de tipos móviles «around
+> 1040 CE» en cerámica · Shen Kuo lo documentó describiendo «an iron frame» con
+> tipos sueltos que podían «arranged with paper labels» y reutilizarse.
+
+Mismo artículo. Cuatro siglos antes que Gutenberg. El detalle del **marco de
+hierro con tipos recomponibles** es lo que separa el tipo móvil de la
+xilografía, y por eso son dos edificios distintos y no uno mejorado.
+
+### `[V]` Época 8 — Hornos imperiales de Jingdezhen
+
+> «By the 14th century it had become the largest centre of production of
+> Chinese porcelain» · «The Imperial Kiln Factory was officially established in
+> 1369 during the Hongwu reign of the Ming dynasty» · «In 1433 a single order
+> from the palace was for **443,500 pieces** of porcelain».
+
+https://en.wikipedia.org/wiki/Jingdezhen_porcelain
+
+Esa cifra es la que justifica tratarlo como industria y no como taller.
+
+### `[V]` Época 12 — Arsenal de Jiangnan, 1865
+
+> Establecido en Shanghai en 1865 bajo Zeng Guofan y Li Hongzhang · «During the
+> Tongzhi era, the Arsenal was the largest weapons factory in East Asia» ·
+> produjo «the first domestically produced steam boat (the Huiji) in 1868 and
+> the first domestically produced steel in 1891» · incluía «a language school, a
+> translation house and a technical school».
+
+https://en.wikipedia.org/wiki/Jiangnan_Shipyard
+
 ## Lo que NO está verificado todavía
 
-Las épocas **1, 3, 8-15** están encargadas a MiniMax y llegarán como
+Las épocas **1, 3, 9, 10, 11, 13, 14 y 15** siguen encargadas a MiniMax y llegarán como
 **hipótesis**, no como procedencia: la investigación delegada anterior declaró
 —correctamente— que sin navegación web no puede transcribir literalmente.
 

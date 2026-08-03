@@ -1,0 +1,33 @@
+# Hereda de base:epoch8_workshop. Identidad, cita y particularidades propias.
+extends: base:epoch8_workshop
+id: china:jingdezhen_kilns
+civ_id: china:yellow_river
+display_name_key: china:building.jingdezhen_kilns
+description_key: china:building.jingdezhen_kilns.description
+kind: economic
+dropoff_resources:
+  - chunsa:clay
+playable_period_ids:
+  - china:epoch_08
+  - china:epoch_09
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.31-anclajes-chinos
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Jingdezhen porcelain: «By the 14th century it had become the largest centre of production of Chinese porcelain»; «The Imperial Kiln Factory was officially established in 1369 during the Hongwu reign of the Ming dynasty»; y «In 1433 a single order from the palace was for 443,500 pieces of porcelain, all with dragon and phoenix designs»"
+        locator: "Imperial Kiln Factory, dates and production scale"
+        url: "https://en.wikipedia.org/wiki/Jingdezhen_porcelain"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Hornos imperiales de Jingdezhen, epoca 8. La fabrica imperial es de 1369, dentro de la epoca. La cifra que justifica que sea un edificio de PRODUCCION a escala y no un taller: un solo pedido de palacio, en 1433, fue de 443.500 piezas. Eso no es artesania, es industria de estado cuatro siglos antes de las fabricas. Consume arcilla, que el catalogo tiene desde la epoca 2, y es kind economic."
+    reviewed_by:
+      - architect

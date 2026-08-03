@@ -1,0 +1,32 @@
+# Hereda de base:epoch6_workshop. Identidad, cita y particularidades propias.
+extends: base:epoch6_workshop
+id: china:woodblock_workshop
+civ_id: china:yellow_river
+display_name_key: china:building.woodblock_workshop
+description_key: china:building.woodblock_workshop.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - china:epoch_06
+  - china:epoch_07
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.31-anclajes-chinos
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, History of printing in East Asia: «A type of printing called mechanical woodblock printing on paper started in China during the 7th century in the Tang dynasty», y el ejemplar confirmado mas antiguo se fecha en 650-670 d.C.; en Europa «mechanical printing presses were invented in Renaissance Europe by Johannes Gutenberg in the 15th century»"
+        locator: "Woodblock printing dates and the comparison with Gutenberg"
+        url: "https://en.wikipedia.org/wiki/History_of_printing_in_East_Asia"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Taller de xilografia, epoca 6. Es contenido propio y no plantilla porque la cita sostiene una ventaja de CALENDARIO, que es la sena de China en este juego: imprimir en el siglo VII frente a Gutenberg en el XV son unos OCHOCIENTOS anos. Kind research porque lo que produce es difusion de conocimiento, no un bien. Se coloca en la epoca 6 (300-800) y el ejemplar mas antiguo confirmado es de 650-670: cae dentro sin estirar la fecha."
+    reviewed_by:
+      - architect
