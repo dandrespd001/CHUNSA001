@@ -1741,6 +1741,21 @@ inline void economy_system(GameState& g) noexcept {
         in.carry = g.eco_carry[i];
         in.carry_resource_idx = g.eco_carry_resource[i];
         in.speed_mtpt = g.speed_mtpt[i];
+        // Sprint 1.32: cuantos trabajan ESTE deposito. Barrido ascendente por
+        // indice, como todo lo demas. Se cuentan TODOS los duenos, no solo los
+        // propios: un filon no distingue de quien es la pala, y disputar un
+        // yacimiento saturado debe ser malo para los dos.
+        {
+            int32_t cuantos = 0;
+            const uint32_t d = g.eco_assigned_deposit[i];
+            if (d != ECO_NO_DEPOSIT) {
+                for (uint32_t k = 0; k < g.entities.capacity; ++k) {
+                    if (!g.entities.alive[k]) continue;
+                    if (g.eco_assigned_deposit[k] == d) ++cuantos;
+                }
+            }
+            in.gatherers_here = cuantos;
+        }
         // Sprint 1.29: la tecnologia y las herramientas del JUGADOR entran
         // aqui. `unit_class` 3 es Citizen, que es quien recolecta; una tech de
         // herramientas de minero no debe mejorar a la caballeria.

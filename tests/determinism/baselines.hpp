@@ -44,9 +44,9 @@ inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x3bc185983c7b2362ull;
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x066c40e3afcff1d8ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0xe247578297646fccull;
-inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x973809a41cdefd34ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x402adbbcf695c729ull;
+inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales
@@ -133,6 +133,15 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // invariables: eso ya no es casualidad, es la firma de un cambio que solo
 // toca NOMBRES. Si alguna vez el end_tick se mueve con un renombrado, ahi hay
 // un fallo de verdad que buscar.
+//
+// Sprint 1.32 — ESTE re-registro SI es un cambio de comportamiento, y conviene
+// distinguirlo de todos los anteriores. La saturacion por deposito hace que
+// amontonar aldeanos rinda menos por cabeza, asi que el escenario de economia
+// tarda mas: end_tick 1108 -> 1123. Quince ticks. Winner sigue siendo 1.
+//
+// Los renombrados movian el hash y dejaban el end_tick quieto. Este mueve los
+// dos, y eso es exactamente lo que debe pasar cuando entra una REGLA NUEVA. Si
+// no se hubiera movido, habria que preguntarse si la regla hace algo.
 //
 // Sprint 1.28 — re-registro por CAMBIO DE DOMINIO, no por renombrado. Suben
 // SAVE_FORMAT_VERSION (17->18) y CHECKSUM_ALGO_VERSION (12->13) porque

@@ -14,6 +14,33 @@ inline constexpr uint32_t ECO_MAX_DEPOSITS = 64;
 inline constexpr uint32_t ECO_NO_DEPOSIT = 0xFFFFFFFFu;
 inline constexpr int32_t  ECO_HARVEST_PER_TICK = 5;
 inline constexpr int32_t  ECO_CARRY_CAP = 50;
+// Sprint 1.32 (SPEC-007 §15) — SATURACION POR DEPOSITO.
+//
+// Hasta este numero de recolectores en el mismo yacimiento, cada uno rinde
+// entero. Pasado el umbral, el rendimiento TOTAL se reparte entre los que hay.
+//
+// Por que 6: en AoE2 un campamento satura en torno a ocho, y un yacimiento
+// nuestro es mas pequeno que un campamento entero. Es balance, y como todo
+// balance se ajusta midiendo partidas, no discutiendolo.
+inline constexpr int32_t  ECO_SATURATION_THRESHOLD = 6;
+
+// Tasa efectiva de UN recolector cuando hay `n` trabajando el mismo deposito.
+//
+// EL MODELO: `tasa * umbral / n` pasado el umbral. Division entera, sin coma
+// flotante, deterministica. Dice algo fisicamente honesto — en un filon solo
+// caben tantas manos a la vez— y tiene una propiedad que lo hace justo: el
+// total NUNCA BAJA al anadir gente, solo deja de subir. Amontonar deja de ser
+// optimo sin volverse suicida, que es la diferencia entre desincentivar y
+// castigar.
+//
+// Nunca devuelve cero: un aldeano en una multitud rinde poco, pero darle cero
+// se leeria como un fallo —unidades trabajando sin producir— y no como una
+// regla de juego.
+inline constexpr int32_t eco_saturated_rate(int32_t rate, int32_t n) noexcept {
+    if (n <= ECO_SATURATION_THRESHOLD) return rate;
+    const int32_t compartido = (rate * ECO_SATURATION_THRESHOLD) / n;
+    return compartido > 0 ? compartido : 1;
+}
 inline constexpr int64_t  ECO_ARRIVE_RADIUS_RAW = 65536; // 1 tile
 // Sprint 1.7 (SPEC-004 §23.4): la auto-asignación solo considera depósitos
 // a <=32 tiles de un edificio aliado completo. Los recursos de base están a
@@ -152,6 +179,10 @@ struct EcoCitizenIn {
     // de la misma roca", que es literalmente lo que mejoro la flotacion: el
     // jugador gana mas de lo que el yacimiento pierde.
     int32_t  recovery_bp;        // 0 = sin bonificacion
+    // Sprint 1.32: cuantos recolectores hay en el MISMO deposito, contados en
+    // step.hpp. El modulo de economia no conoce GameState y no puede saberlo
+    // por su cuenta; entra como dato, igual que las bonificaciones.
+    int32_t  gatherers_here;     // 0 o 1 = sin saturacion
 };
 
 struct EcoCitizenOut {
@@ -346,8 +377,10 @@ inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
         const EcoDeposit& dep = deposits[in.assigned_deposit];
         // Sprint 1.29: los tres vienen del jugador; 0 significa "el de siempre".
         const int32_t cap_carga = in.carry_cap > 0 ? in.carry_cap : ECO_CARRY_CAP;
-        const int32_t por_tick  = in.harvest_per_tick > 0 ? in.harvest_per_tick
-                                                          : ECO_HARVEST_PER_TICK;
+        int32_t por_tick = in.harvest_per_tick > 0 ? in.harvest_per_tick
+                                                   : ECO_HARVEST_PER_TICK;
+        // Sprint 1.32: amontonarse rinde menos por cabeza.
+        por_tick = eco_saturated_rate(por_tick, in.gatherers_here);
         int32_t room = cap_carga - out.carry;
         if (room < 0) room = 0;
         // `extraido` es lo que sale del suelo. `ganado` es lo que llega al

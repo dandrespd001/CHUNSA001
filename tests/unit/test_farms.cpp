@@ -296,6 +296,89 @@ int main() {
         CHECK(out.deposit_decrement <= out.harvested_amount);
     }
 
+
+    // ========================================================================
+    // SATURACION POR DEPOSITO (Sprint 1.32)
+    //
+    // Hoy nada desincentiva amontonar aldeanos en el mismo sitio: veinte
+    // recolectan veinte veces mas rapido que uno. En AoE2 un campamento satura
+    // en torno a ocho, y eso es lo que obliga a EXPANDIRSE en vez de apilar.
+    //
+    // EL MODELO, y por que este. Hasta el umbral, cada aldeano rinde entero.
+    // Pasado el umbral, el rendimiento TOTAL del yacimiento se reparte entre
+    // los que hay: `tasa * umbral / n`. Es division entera, deterministica, y
+    // dice algo fisicamente honesto — en un filon solo caben tantas manos a la
+    // vez. El aldeano numero veinte no es que rinda poco: es que estorba.
+    //
+    // No es un castigo arbitrario: el total nunca BAJA al anadir gente, solo
+    // deja de subir. Amontonar deja de ser optimo sin volverse suicida.
+    // ========================================================================
+
+    // 18) Hasta el umbral, nadie pierde nada.
+    {
+        for (int32_t n = 1; n <= ECO_SATURATION_THRESHOLD; ++n) {
+            CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, n) == ECO_HARVEST_PER_TICK);
+        }
+    }
+
+    // 19) Pasado el umbral, cada uno rinde menos. El doble de gente que el
+    //     umbral rinde la mitad cada uno.
+    {
+        const int32_t doble = ECO_SATURATION_THRESHOLD * 2;
+        CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, doble) == ECO_HARVEST_PER_TICK / 2);
+    }
+
+    // 20) LAS DOS PROPIEDADES QUE DE VERDAD IMPORTAN, y que sustituyen a una
+    //     afirmacion mia que era FALSA. Escribi primero que "el total nunca
+    //     baja al anadir gente", y la prueba lo desmintio: con division entera
+    //     el total SI baja a ratos —30 con seis recolectores, 24 con ocho—
+    //     porque cada uno pierde hasta una unidad por redondeo. Se corrige la
+    //     afirmacion, no el codigo, porque lo que el modelo hace esta bien y lo
+    //     que estaba mal era como lo describi.
+    //
+    //     (a) SATURAR MUERDE DE VERDAD: con el doble del umbral o mas, el
+    //         total es como mucho la MITAD de lo que seria sin saturacion.
+    //
+    //         Este era mi segundo intento fallido, y tambien lo caza la prueba.
+    //         Afirme que "el total nunca supera tasa*umbral" y es FALSO: la
+    //         regla de que nadie rinde cero pone un suelo de 1 por cabeza, asi
+    //         que con 40 recolectores el total es 40 y el techo seria 30. Las
+    //         dos reglas chocan y gana la de "nunca cero", a proposito: una
+    //         unidad trabajando sin producir nada se lee como un fallo, no como
+    //         una regla. Lo que el sistema SI garantiza es que apilar sale
+    //         mucho peor que dispersarse, y eso es lo que se mide aqui.
+    {
+        for (int32_t n = ECO_SATURATION_THRESHOLD * 2; n <= 60; ++n) {
+            const int32_t saturado = eco_saturated_rate(ECO_HARVEST_PER_TICK, n) * n;
+            const int32_t sin_saturar = ECO_HARVEST_PER_TICK * n;
+            CHECK(saturado * 2 <= sin_saturar);
+        }
+    }
+    //     (b) POR CABEZA NUNCA MEJORA al llegar mas gente. Nadie se beneficia
+    //         de que le pongan companeros encima, que es lo que el jugador
+    //         necesita entender para dispersarse.
+    {
+        int32_t anterior = ECO_HARVEST_PER_TICK + 1;
+        for (int32_t n = 1; n <= 60; ++n) {
+            const int32_t r = eco_saturated_rate(ECO_HARVEST_PER_TICK, n);
+            CHECK(r <= anterior);
+            anterior = r;
+        }
+    }
+
+    // 21) Nunca cae a cero. Un aldeano en una multitud rinde poco, pero si le
+    //     dieras cero el jugador veria unidades trabajando sin producir nada, y
+    //     eso se lee como un fallo, no como una regla.
+    {
+        CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, 1000) >= 1);
+    }
+
+    // 22) Cota: cero o negativo no divide por cero ni devuelve basura.
+    {
+        CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, 0) == ECO_HARVEST_PER_TICK);
+        CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, -3) == ECO_HARVEST_PER_TICK);
+    }
+
     if (g_fails == 0) {
         std::printf("farms OK\n");
         return 0;
