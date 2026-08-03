@@ -89,7 +89,6 @@ unit_ids:
   - china:work_crew
 building_ids:
   - china:dwelling
-  - china:epoch_09_works
   - china:epoch_10_works
   - china:epoch_11_works
   - china:epoch_13_works
@@ -100,6 +99,7 @@ building_ids:
   - china:han_blast_furnace
   - china:jiangnan_arsenal
   - china:jingdezhen_kilns
+  - china:longjiang_shipyard
   - china:longshan_workshop
   - china:market
   - china:movable_type_workshop

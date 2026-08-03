@@ -1,9 +1,11 @@
-# Hereda de base:neolithic_storehouse.
+# Hereda de base:neolithic_storehouse. Taller Longshan ascendido a nombre propio.
 extends: base:neolithic_storehouse
 id: china:longshan_workshop
 civ_id: china:yellow_river
 display_name_key: china:building.longshan_workshop
 description_key: china:building.longshan_workshop.description
+kind: economic
+dropoff_resources: []
 playable_period_ids:
   - china:longshan_chalcolithic
   - china:shang_bronze
@@ -15,11 +17,16 @@ provenance:
   reviewed_by:
     - architect
   historical_claims:
-    evidence: N
-    verification_reports: []
-    sources: []
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Longshan culture: fechada «c. 3000 - c. 1900 BC» en «the middle and lower Yellow River valley areas of northern China»; destaca por «its highly polished black pottery (or egg-shell pottery)» y por «the use of pottery wheels, producing thin-walled and polished black pottery»; y en su fase tardia hay «increasingly widespread and skilled manufacturing of copper tools, rings and bells, alongside a few bronze and brass objects»"
+        locator: "Dates, location, black pottery and late copper working"
+        url: "https://en.wikipedia.org/wiki/Longshan_culture"
+        accessed_on: "2026-08-03"
   balance_design:
     author: architect
-    rationale: "Andamiaje declarado del linaje chino. No afirma nada historico y existe por la razon mecanica de siempre: ADVANCE_EPOCH exige dos edificios en la ventana actual. Las hipotesis para ascenderlo con nombre propio estan en linaje_chino_PISTAS.md y cada una necesita cita literal antes de entrar."
+    rationale: "Taller Longshan, epoca 3. La epoca 3 del juego es la CALCOLITICA, y la fuente documenta cobre Y ceramica de cascara de huevo EN EL MISMO periodo: la cultura Longshan (c. 3000 - c. 1900 BC, dentro del periodo longshan_chalcolithic del juego) produce «highly polished black pottery (or egg-shell pottery)» con «the use of pottery wheels» y en su fase tardia ya tiene «increasingly widespread and skilled manufacturing of copper tools, rings and bells». Es la transicion exacta que la epoca 3 representa — ceramica pulida neolitica conviviendo con los primeros objetos de cobre —, no una aproximacion: ambos rasgos estan documentados en la misma ventana de la fuente."
     reviewed_by:
       - architect

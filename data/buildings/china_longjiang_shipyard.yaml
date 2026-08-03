@@ -1,0 +1,36 @@
+# Hereda de base:epoch8_workshop y sobrescribe ventana y papel: astillero militar.
+extends: base:epoch8_workshop
+id: china:longjiang_shipyard
+civ_id: china:yellow_river
+display_name_key: china:building.longjiang_shipyard
+description_key: china:building.longjiang_shipyard.description
+kind: military
+dropoff_resources: []
+epoch_window:
+  - 8
+  - 10
+playable_period_ids:
+  - china:epoch_08
+  - china:epoch_09
+  - china:epoch_10
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Chinese treasure ship: los barcos se construyeron en los «Longjiang shipyards, Ming dynasty», y el unico relato contemporaneo situa la construccion en «the Ministry of Works in Nanjing» el 14 de febrero de 1408; Zheng He mando siete viajes entre 1405 y 1433, y «the fourth voyage consisted of 63 treasure ships crewed by 27,670 men»"
+        locator: "Longjiang shipyards and the scale of the voyages"
+        url: "https://en.wikipedia.org/wiki/Chinese_treasure_ship"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Astillero Longjiang, epoca 8. La cifra que justifica que sea un edificio MILITAR de escala: 63 barcos y 27.670 hombres en un solo viaje —«the fourth voyage consisted of 63 treasure ships crewed by 27,670 men»—. Eso no es artesania naval, es armada de estado. Y la ventana se declara sin suavizar: la cita sostiene 1405-1433, que es la epoca 8, NO la 9; la ventana [8,10] la extiendo yo como decision de diseño para que cubra tambien la epoca 9, y queda dicho que la fuente NO documenta su actividad entre 1500 y 1700."
+    reviewed_by:
+      - architect

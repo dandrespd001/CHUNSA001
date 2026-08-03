@@ -113,9 +113,45 @@ Esa cifra es la que justifica tratarlo como industria y no como taller.
 
 https://en.wikipedia.org/wiki/Jiangnan_Shipyard
 
+### `[V]` Época 3 — Longshan, y responde la duda de diseño
+
+> «c. 3000 - c. 1900 BC» en «the middle and lower Yellow River valley areas of
+> northern China» · destaca por «its highly polished black pottery (or
+> egg-shell pottery)» y por «the use of pottery wheels» · y en su fase tardía
+> hay «increasingly widespread and skilled manufacturing of copper tools, rings
+> and bells, alongside a few bronze and brass objects».
+
+https://en.wikipedia.org/wiki/Longshan_culture
+
+La investigación preguntaba si la época 3 china estaría mejor caracterizada por
+el jade o la cerámica que por el cobre. **La fuente responde que por las dos**:
+cobre y cerámica de cáscara de huevo en la misma ventana. Es la transición
+exacta que la época 3 representa, no una aproximación.
+
+### `[V]` Época 8-10 — Astillero Longjiang y los barcos del Tesoro
+
+> Los barcos se construyeron en los «Longjiang shipyards, Ming dynasty» · el
+> único relato contemporáneo sitúa la construcción en «the Ministry of Works in
+> Nanjing» el 14 de febrero de 1408 · Zheng He mandó siete viajes entre 1405 y
+> 1433 · «the fourth voyage consisted of 63 treasure ships crewed by 27,670
+> men».
+
+https://en.wikipedia.org/wiki/Chinese_treasure_ship
+
+**Aviso de alcance, declarado y no disimulado**: la cita sostiene 1405-1433,
+que es la **época 8**. Su ventana `[8,10]` la extiende el Arquitecto como
+decisión de diseño; la fuente **no** documenta la actividad del astillero entre
+1500 y 1700.
+
 ## Lo que NO está verificado todavía
 
-Las épocas **1, 3, 9, 10, 11, 13, 14 y 15** siguen encargadas a MiniMax y llegarán como
+**Época 1 — sin anclaje verificable, y no por falta de intentos.** El artículo
+`Zhoukoudian` es del municipio, no del yacimiento; `Upper Cave Man` sólo tiene
+una nota de redirección sin contenido. Es la misma situación que tuvieron las
+celdas de época 15 antes de encontrar la Biblioteca de Alejandría: existe el
+tema, no existe el artículo con cuerpo. Se queda como andamiaje declarado.
+
+Las épocas **10, 11, 13, 14 y 15** siguen encargadas a MiniMax y llegarán como
 **hipótesis**, no como procedencia: la investigación delegada anterior declaró
 —correctamente— que sin navegación web no puede transcribir literalmente.
 
