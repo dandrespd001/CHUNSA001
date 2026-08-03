@@ -278,6 +278,14 @@ struct BuildingDefinitionV1 {
     // building.schema.json desde el 1.1 y ninguna parte del kernel lo miraba;
     // este campo es lo que le da consecuencia.
     int32_t population_provided;
+    // Sprint 1.33 (SPEC-010): 1 = este edificio permite comerciar. Campo
+    // OPCIONAL con defecto 0, mismo patron que population_provided.
+    //
+    // Es un campo propio y no se deduce del `kind` del esquema porque el kernel
+    // NO carga `kind`: es informacion de presentacion y de validacion, no de
+    // simulacion. Anadirlo entero por esto habria metido en el blob una docena
+    // de valores que Step() no mira.
+    uint8_t can_trade;
     // Sprint 1.9 (SPEC-007 §12): recetas que ejecuta este edificio, como
     // RecipeId hacia la tabla plana del catalogo.
     RecipeId recipes[RECIPES_PER_BUILDING_MAX];
@@ -1264,6 +1272,12 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         creates_cap = static_cast<int32_t>(cc_v->i);
     }
 
+    uint8_t can_trade = 0;
+    if (const CveValue* ctv = obj.find("can_trade")) {
+        if (!(ctv->tag == 0x01u || ctv->tag == 0x02u)) fail(CatalogLoadCode::SchemaMismatch);
+        can_trade = static_cast<uint8_t>(ctv->tag == 0x02u ? 1u : 0u);
+    }
+
     const CveValue* btv = obj.find("build_time_ticks");
     if (!btv || !btv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
     // Enmienda del Arquitecto 2026-07-23 (SPEC-004 §4.1.2/§4.3): >= 0, no >= 1.
@@ -1348,6 +1362,7 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
     def.population_provided = population_provided;
+    def.can_trade = can_trade;
     def.creates_resource_idx = creates_resource_idx;
     def.creates_amount = creates_amount;
     def.creates_regen_per_tick = creates_regen_per_tick;

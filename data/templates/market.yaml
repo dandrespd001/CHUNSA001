@@ -1,0 +1,51 @@
+# Plantilla: mercado.
+#
+# POR QUE HACE FALTA, y por que mas que en AoE2: el catalogo tiene 36 recursos.
+# Quedarse sin uno concreto —el estano para el bronce, la caliza para el
+# hierro— es MAS probable que en un juego de cuatro, no menos. Sin mercado eso
+# es un callejon sin salida: la partida no se pierde, se atasca.
+#
+# LA HORQUILLA ES ALTA (30 %) A PROPOSITO. El mercado es una SALIDA DE
+# EMERGENCIA para desatascar, no una estrategia economica que compita con
+# recolectar. Si comerciar rindiera como minar, el juego dejaria de ir de
+# gestionar territorio.
+#
+# Epoca 3 porque es cuando aparece el oro en la escala de SPEC-007 §2, y sin
+# oro no hay con que comerciar.
+template_id: base:market
+schema_version: 1
+epoch_window:
+  - 3
+  - 15
+kind: economic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 400
+  armor:
+    cut: 1
+    pierce: 3
+    impact: 0
+constructible: true
+can_trade: true
+resource_costs:
+  chunsa:wood: 90
+  chunsa:stone: 50
+build_time_ticks: 500
+dropoff_resources:
+  - chunsa:gold
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.33-mercado
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect

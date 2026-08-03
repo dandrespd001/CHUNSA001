@@ -195,6 +195,16 @@ struct GameState {
     int64_t  rally_y[ENTITY_HARD_CAP];         // raw; rally_set=0 ⇒ sin rally
     uint8_t  rally_set[ENTITY_HARD_CAP];
     int32_t  pop_used[MAX_EMITTERS];           // pop_cap fijo v1: POP_CAP_V1
+    // Sprint 1.33 (SPEC-010): precio de mercado POR JUGADOR y por recurso, en
+    // puntos basicos. Por jugador y no global a proposito: si fuera comun, el
+    // enemigo notaria tus ventas sin verlas, que es informacion que el juego no
+    // deberia regalar. Ademas hace que hundir tu propio mercado sea problema
+    // tuyo y no un arma contra el otro.
+    //
+    // 0 significa "sin inicializar": el kernel lo trata como MARKET_BASE_BP,
+    // asi que un estado viejo o un fixture sin tocar se comportan al precio
+    // base sin necesidad de inicializacion explicita.
+    int32_t  market_price_bp[MAX_EMITTERS][RESOURCE_COUNT];
 
     // Tecnología y épocas (Sprint 1.2, SPEC-004 §12.2, ADR-015). ESTADO:
     // serializado + checksummeado. `epoch_initial` (deviación documentada en

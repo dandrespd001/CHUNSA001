@@ -59,8 +59,8 @@ std::unique_ptr<GameState> make_state() {
 
 void test_named_capacity_and_versions() {
     CHECK_EQ(RESOURCE_COUNT, 64u);
-    CHECK_EQ(SAVE_FORMAT_VERSION, 18u);
-    CHECK_EQ(CHECKSUM_ALGO_VERSION, 13u);
+    CHECK_EQ(SAVE_FORMAT_VERSION, 19u);
+    CHECK_EQ(CHECKSUM_ALGO_VERSION, 14u);
 }
 
 void test_player_stock_index_31_round_trip_in_memory() {

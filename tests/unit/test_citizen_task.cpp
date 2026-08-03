@@ -394,8 +394,8 @@ void test_no_deposit_transitions_to_idle() {
 void test_save_load_replay_and_checksum_preserve_task() {
     const char* save_path = "test_citizen_task_v14.sav";
     const char* replay_path = "test_citizen_task_v3.curp";
-    CHECK(SAVE_FORMAT_VERSION == 18u);   // 1.28: ECO_MAX_DEPOSITS 32->64
-    CHECK(CHECKSUM_ALGO_VERSION == 13u); // 1.28: +5 campos en EcoDeposit
+    CHECK(SAVE_FORMAT_VERSION == 19u);   // 1.28: ECO_MAX_DEPOSITS 32->64
+    CHECK(CHECKSUM_ALGO_VERSION == 14u); // 1.28: +5 campos en EcoDeposit
 
     auto direct = make_state();
     const EntityHandle citizen = add_citizen(*direct, 10 * TILE, 10 * TILE);

@@ -101,7 +101,7 @@ namespace chunsa {
 // estado con 3..31 en cero usa CHUNSA_STATE_V9; no hay rutas condicionales por
 // contenido. La trayectoria sigue intacta y todos los baselines cambian solo
 // por este nuevo dominio.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 13;  // Sprint 1.28: 64 depositos y campos de granja/reserva  // Sprint 1.9C: RESOURCE_COUNT 32->64
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 14;  // Sprint 1.33: precios de mercado  // Sprint 1.28: 64 depositos y campos de granja/reserva  // Sprint 1.9C: RESOURCE_COUNT 32->64
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -214,6 +214,12 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         for (uint32_t wgt = 0; wgt < VIS_WORDS; ++wgt) {
             h.u64(g.vision.explored[p][wgt]);
         }
+    }
+    // Sprint 1.33: precios de mercado. Son ESTADO —cambian con cada operacion
+    // y condicionan las siguientes— asi que entran al dominio. Sin esto, dos
+    // partidas con mercados en distinto punto darian el mismo hash.
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        h.array(g.market_price_bp[e], RESOURCE_COUNT);
     }
     // Flujo de navegación: cost_grid + flow_mode + goal. `flow` es derivada
     // (excluida) y `flow_dirty` es transitorio de cómputo (excluido).

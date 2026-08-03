@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include "chunsa/game_state.hpp"
+#include "chunsa/market.hpp"
 #include "chunsa/checksum.hpp"
 
 namespace chunsa { inline constexpr uint32_t VIS_RADIUS_TILES = 8; }  // [DEFAULT] radio de visión v1
@@ -747,6 +748,65 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.tgt_y[i] = c.p.y_raw;
             g.attack_target[i] = NULL_HANDLE;
             g.order_mode[i] = ORDER_MODE_ATTACK_MOVE;
+            return RejectReason::ACCEPTED;
+        }
+        case CommandType::TRADE: {
+            // Sprint 1.33 (SPEC-010) — mercado. El orden de los rechazos es
+            // contractual, como en CRAFT: el jugador debe recibir el motivo
+            // MAS ESPECIFICO primero.
+            //
+            // 1) El handle debe ser un EDIFICIO propio, vivo y COMPLETO. Sin
+            //    mercado no se comercia: es lo que ata la mecanica a una
+            //    decision de construccion y no a un menu siempre disponible.
+            if (!et_is_alive(g.entities, c.p.handle)) return RejectReason::INVALID_ENTITY;
+            const uint32_t bi = c.p.handle.index;
+            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+            if (g.entity_kind[bi] != 1u) return RejectReason::ILLEGAL_STATE;
+            if (g.catalog == nullptr || g.building_id[bi] >= g.catalog->building_count) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+            const BuildingDefinitionV1& mdef = g.catalog->buildings[g.building_id[bi]];
+            if (static_cast<uint32_t>(g.build_progress[bi]) < mdef.build_time_ticks) {
+                return RejectReason::ILLEGAL_STATE;
+            }
+            if (mdef.can_trade == 0u) return RejectReason::ILLEGAL_STATE;
+
+            // 2) Recurso valido, y NO el oro: cambiar oro por oro no significa
+            //    nada y seria una via silenciosa de mover el precio sin coste.
+            // El indice del ORO no es fijo: lo asigna el compilador (solo
+            // comida/madera/piedra tienen indice reservado). Se resuelve del
+            // catalogo en vez de cablearlo, o un cambio de datos romperia el
+            // mercado en silencio.
+            const ResourceId oro_id = catalog_find_resource(*g.catalog, "chunsa:gold", 11);
+            if (oro_id == INVALID_RESOURCE_ID) return RejectReason::ILLEGAL_STATE;
+            const uint32_t oro = g.catalog->resources[oro_id].index;
+
+            const uint32_t ridx = c.p.unit_id;
+            if (ridx >= RESOURCE_COUNT || ridx == oro) return RejectReason::MALFORMED;
+            const int32_t signo = c.p.hp;
+            if (signo == 0) return RejectReason::MALFORMED;
+
+            int32_t precio = g.market_price_bp[c.emitter][ridx];
+            if (precio == 0) precio = MARKET_BASE_BP;   // sin inicializar = base
+
+            if (signo < 0) {
+                // VENDER un lote: hay que tenerlo.
+                if (g.player_stock[c.emitter][ridx] < MARKET_LOT) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
+                g.player_stock[c.emitter][ridx] -= MARKET_LOT;
+                g.player_stock[c.emitter][oro] += market_sell_gold(precio);
+                g.market_price_bp[c.emitter][ridx] = market_price_after_sell(precio);
+            } else {
+                // COMPRAR un lote: hay que poder pagarlo.
+                const int32_t coste = market_buy_gold(precio);
+                if (g.player_stock[c.emitter][oro] < coste) {
+                    return RejectReason::ILLEGAL_STATE;
+                }
+                g.player_stock[c.emitter][oro] -= coste;
+                g.player_stock[c.emitter][ridx] += MARKET_LOT;
+                g.market_price_bp[c.emitter][ridx] = market_price_after_buy(precio);
+            }
             return RejectReason::ACCEPTED;
         }
         case CommandType::CRAFT: {

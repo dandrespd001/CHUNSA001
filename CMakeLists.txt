@@ -272,6 +272,14 @@ add_executable(chunsa_test_farms tests/unit/test_farms.cpp)
 target_link_libraries(chunsa_test_farms PRIVATE chunsa_sim_core)
 add_test(NAME farms COMMAND chunsa_test_farms)
 
+# --- Test Sprint 1.33: mercado (SPEC-010) -------------------------------------
+# Con 36 recursos, quedarse sin uno es MAS probable que en AoE2, no menos. Sin
+# mercado eso es un callejon sin salida. La prueba 5 es la que importa: ir y
+# volver SIEMPRE pierde, o el juego tendria una fabrica de recursos infinitos.
+add_executable(chunsa_test_market tests/unit/test_market.cpp)
+target_link_libraries(chunsa_test_market PRIVATE chunsa_sim_core)
+add_test(NAME market COMMAND chunsa_test_market)
+
 # --- Test Sprint 1.23: politica de epoca de la IA ----------------------------
 # El 1.22 abrio las epocas 1-5 al humano. Este mide si la MAQUINA sabe jugarlas:
 # que suba de epoca y que use el contenido temprano en vez de esperar a la 5.

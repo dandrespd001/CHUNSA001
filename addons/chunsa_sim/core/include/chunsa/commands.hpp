@@ -45,6 +45,14 @@ enum class CommandType : uint16_t {
     // ATTACK_MOVE: p.handle = unidad propia; p.x_raw/p.y_raw = destino.
     ATTACK = 15,
     ATTACK_MOVE = 16,
+    // Sprint 1.33 (SPEC-010) — APPEND-ONLY, como todo este enum: el valor viaja
+    // en los replays y renumerar los invalidaria.
+    //
+    // TRADE usa `unit_id` para el indice de recurso y `hp` como signo: hp > 0
+    // COMPRA un lote, hp < 0 VENDE uno. Reutilizar campos que el replay YA
+    // serializa evita subir el formato por un comando nuevo, que es el mismo
+    // truco que uso ATTACK en el 1.13.
+    TRADE = 17,
     // append-only; jamás renumerar (SPEC-001 §5.1)
 };
 

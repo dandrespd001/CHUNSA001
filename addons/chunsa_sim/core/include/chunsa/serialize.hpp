@@ -267,6 +267,12 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         w.i32(g.deposits[i].reserve);
         w.u32(g.deposits[i].reserve_capability);
     }
+    // Sprint 1.33: precios de mercado. Sin guardarlos, una partida reanudada
+    // volveria al precio base y el jugador recuperaria gratis un mercado que
+    // habia hundido.
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) w.i32(g.market_price_bp[e][r]);
+    }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         w.i64(g.dropoff_x[e]);
         w.i64(g.dropoff_y[e]);
@@ -541,6 +547,9 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         g.deposits[i].owner_building = r.u32();
         g.deposits[i].reserve = r.i32();
         g.deposits[i].reserve_capability = r.u32();
+    }
+    for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
+        for (uint32_t k = 0; k < RESOURCE_COUNT; ++k) g.market_price_bp[e][k] = r.i32();
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         g.dropoff_x[e] = r.i64();

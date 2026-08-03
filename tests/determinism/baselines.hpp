@@ -23,29 +23,29 @@ inline constexpr long GOLDEN_VECTOR_CASES = 1074;
 // checksum.hpp recorre TODOS los ECO_MAX_DEPOSITS slots de deposits[] y ahora
 // son 64 en vez de 32. Determinismo intacto (doble corrida idéntica en los
 // seis gates) y end_ticks inalterados —1227, 1108, 10473—.
-inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x2e3560f6a736c829ull;
+inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x94c158cc7beec7dbull;
 
 // G3: savetest canónico sin IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load conserva la continuación.
-inline constexpr uint64_t G3_SAVETEST_STATE = 0x46cdb1761187b232ull;
-inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xef68dd79bb16f521ull;
+inline constexpr uint64_t G3_SAVETEST_STATE = 0x7d4810170185f1b4ull;
+inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xbde9ed9700644aa0ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xe25e71e061cadd35ull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xb624b084fcae8bedull;
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0x54f0a8e23fea803aull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x5ffe5fe311d7d25aull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0xeebe5e38521f5554ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x3bc185983c7b2362ull;
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0xe6665b7f2f535c4full;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x75edbbc17bf61dc4ull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x973809a41cdefd34ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x402adbbcf695c729ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xab1b317fb019f36aull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x7cfb14d78ac92a17ull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
@@ -134,6 +134,14 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 // toca NOMBRES. Si alguna vez el end_tick se mueve con un renombrado, ahi hay
 // un fallo de verdad que buscar.
 //
+// Sprint 1.33 — cambio de DOMINIO otra vez, no de comportamiento. Los precios
+// de mercado entran al checksum y al guardado (SAVE_FORMAT 18->19,
+// CHECKSUM_ALGO 13->14) porque son ESTADO: cambian con cada operacion y
+// condicionan las siguientes. Sin guardarlos, una partida reanudada volveria al
+// precio base y el jugador recuperaria gratis un mercado que habia hundido.
+//
+// Los end_tick no se mueven: nadie comercia todavia en los escenarios.
+//
 // Sprint 1.32 — ESTE re-registro SI es un cambio de comportamiento, y conviene
 // distinguirlo de todos los anteriores. La saturacion por deposito hace que
 // amontonar aldeanos rinda menos por cabeza, asi que el escenario de economia
@@ -167,8 +175,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 // hubiera disparado, habria significado que la IA se atasca esperando
 // poblacion — y eso si habria sido un fallo que corregir, no un baseline que
 // re-registrar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x45b947a226aaf841ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x185073d3b64820a4ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x129c07da434ce3faull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x2bf99e9584d8658aull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

@@ -1,0 +1,25 @@
+# Hereda de base:market. Un mercado generico no afirma nada historico.
+extends: base:market
+id: rome:market
+civ_id: rome:republic_imperial
+display_name_key: rome:building.market
+description_key: rome:building.market.description
+playable_period_ids:
+  - rome:remedello_copper
+  - rome:terramare_bronze
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.33-mercado
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Mercado de rome. Con 36 recursos, quedarse sin uno concreto es mas probable que en un juego de cuatro, y sin mercado eso atasca la partida en vez de perderla. La horquilla del 30 por ciento es alta a proposito: es una salida de emergencia, no una estrategia que compita con recolectar. Epoca 3 porque es cuando aparece el oro y sin oro no hay con que comerciar."
+    reviewed_by:
+      - architect

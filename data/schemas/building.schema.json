@@ -128,6 +128,9 @@
     "resource_costs": {
       "$ref": "common.schema.json#/$defs/resource_costs"
     },
+    "can_trade": {
+      "type": "boolean", "default": false
+    },
     "population_provided": {
       "type": "integer", "minimum": 0, "maximum": 10000, "default": 0
     },
