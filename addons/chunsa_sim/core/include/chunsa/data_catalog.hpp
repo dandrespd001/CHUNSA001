@@ -285,6 +285,17 @@ struct BuildingDefinitionV1 {
     // Sprint 1.18: los edificios tambien tienen armadura por tipo (no atacan,
     // asi que no llevan attack_type).
     int32_t  armor[DAMAGE_TYPE_COUNT];
+    // Deposito que este edificio CREA al completarse (nucleo de depositos
+    // regenerativos). OPCIONAL con defecto 0, mismo patron que
+    // population_provided (Sprint 1.14): `creates_amount == 0` significa
+    // "este edificio no crea deposito", el caso de los edificios existentes
+    // que no declaran estos campos y deben seguir cargando.
+    // `creates_resource_idx` es el indice de recurso (0=comida, 1=madera, ...)
+    // validado contra RESOURCE_COUNT.
+    uint8_t  creates_resource_idx;
+    int32_t  creates_amount;
+    int32_t  creates_regen_per_tick;
+    int32_t  creates_cap;
     // resto de campos del schema (grants_capabilities/...) NO tipados
 };
 
@@ -1215,6 +1226,40 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         population_provided = static_cast<int32_t>(ppv->i);
     }
 
+    // Deposito que crea el edificio al completarse. OPCIONAL con defecto 0,
+    // mismo patron que population_provided: los 38 edificios existentes no
+    // declaran estos campos y deben seguir cargando (`creates_amount == 0`
+    // significa "este edificio no crea deposito"). El indice de recurso se
+    // valida contra RESOURCE_COUNT (0..63) como el resto de indices de este
+    // loader; los otros tres campos son cantidades >= 0 con los caps del
+    // schema de datos.
+    uint8_t creates_resource_idx = 0;
+    if (const CveValue* cri_v = obj.find("creates_resource_idx")) {
+        if (!cri_v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (cri_v->i < 0 || cri_v->i >= static_cast<int64_t>(RESOURCE_COUNT)) {
+            fail(CatalogLoadCode::InvalidBuilding);
+        }
+        creates_resource_idx = static_cast<uint8_t>(cri_v->i);
+    }
+    int32_t creates_amount = 0;
+    if (const CveValue* ca_v = obj.find("creates_amount")) {
+        if (!ca_v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (ca_v->i < 0 || ca_v->i > 1000000) fail(CatalogLoadCode::InvalidBuilding);
+        creates_amount = static_cast<int32_t>(ca_v->i);
+    }
+    int32_t creates_regen_per_tick = 0;
+    if (const CveValue* crt_v = obj.find("creates_regen_per_tick")) {
+        if (!crt_v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (crt_v->i < 0 || crt_v->i > 100000) fail(CatalogLoadCode::InvalidBuilding);
+        creates_regen_per_tick = static_cast<int32_t>(crt_v->i);
+    }
+    int32_t creates_cap = 0;
+    if (const CveValue* cc_v = obj.find("creates_cap")) {
+        if (!cc_v->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (cc_v->i < 0 || cc_v->i > 1000000) fail(CatalogLoadCode::InvalidBuilding);
+        creates_cap = static_cast<int32_t>(cc_v->i);
+    }
+
     const CveValue* btv = obj.find("build_time_ticks");
     if (!btv || !btv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
     // Enmienda del Arquitecto 2026-07-23 (SPEC-004 §4.1.2/§4.3): >= 0, no >= 1.
@@ -1299,6 +1344,10 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
     def.population_provided = population_provided;
+    def.creates_resource_idx = creates_resource_idx;
+    def.creates_amount = creates_amount;
+    def.creates_regen_per_tick = creates_regen_per_tick;
+    def.creates_cap = creates_cap;
 
     // Sprint 1.2 (SPEC-004 §11.1/§12.1/§12.4): epoch_window + listas de
     // referencia crudas (resueltas más tarde por load_impl).

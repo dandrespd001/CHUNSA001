@@ -131,6 +131,18 @@
     "population_provided": {
       "type": "integer", "minimum": 0, "maximum": 10000, "default": 0
     },
+    "creates_resource_idx": {
+      "type": "integer", "minimum": 0, "maximum": 63, "default": 0
+    },
+    "creates_amount": {
+      "type": "integer", "minimum": 0, "maximum": 1000000, "default": 0
+    },
+    "creates_regen_per_tick": {
+      "type": "integer", "minimum": 0, "maximum": 100000, "default": 0
+    },
+    "creates_cap": {
+      "type": "integer", "minimum": 0, "maximum": 1000000, "default": 0
+    },
     "build_time_ticks": {
       "type": "integer",
       "minimum": 0,
