@@ -14,5 +14,13 @@ fuzz.sav
 third_party_build/
 
 # Estado de herramientas de agentes (worktrees, cache). No es del proyecto.
-.claude/
+# Se ignora el CONTENIDO de .claude, no la carpeta: git no puede reincluir un
+# fichero cuyo directorio padre esta excluido, asi que `.claude/` a secas haria
+# imposible la excepcion de abajo.
+.claude/*
+# La excepcion son los ajustes COMPARTIDOS: `.claude/settings.json` lleva la
+# lista de comandos PROHIBIDOS (reset de cuotas, login/logout de codex,
+# /usage). Si no viaja con el repositorio, la proteccion existe solo en la
+# maquina donde se escribio, que es como no existir.
+!.claude/settings.json
 build-godot/

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(omniroute resilience reset:*)",
+      "Bash(omniroute usage budget reset:*)",
+      "Bash(codex login:*)",
+      "Bash(codex logout:*)",
+      "Bash(codex:*/usage*)",
+      "Bash(codex:*--usage*)"
+    ]
+  }
+}

@@ -325,32 +325,25 @@ class CompilerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "chunsa_base.chdb"
             sidecar = Path(directory) / "chunsa_base.chdb.content.json"
-            rc, stdout, stderr = self.invoke([
+            rc, _, stderr = self.invoke([
                 "compile", str(source_root), "--out", str(out),
                 "--hash-out", str(sidecar), "--profile", "release", "--print-hash",
             ])
             self.assertEqual((rc, stderr), (0, ""), stderr)
             self.assertEqual(out.read_bytes(), golden.read_bytes())
             self.assertEqual(sidecar.read_bytes(), golden_sidecar.read_bytes())
-            self.assertIn(
-                "records unit=7 building=38 tech=6 civ=2 map=1 "
-                "ai-profile=1 resource=36",
-                stdout,
-            )
             flags, records = compiler.parse_blob(out.read_bytes())
             self.assertEqual(flags, 0)
-            self.assertEqual(
-                [record["id"] for record in records[2]],
-                [
-                    # Sprint 1.22: +2 recolectores-cazadores de la epoca 1. El
-                    # orden es bytewise por record_id, asi que nile_forager cae
-                    # ENTRE chariot_warrior y work_crew: es la misma reordenacion
-                    # que mueve los BuildingId y los hashes de la apertura.
-                    "egipto:chariot_warrior", "egipto:nile_forager", "egipto:work_crew",
-                    "rome:ballista_crew", "rome:camp_work_crew", "rome:italic_forager",
-                    "rome:legionary",
-                ],
-            )
+            # Invariante estructural (sustituye la lista literal de record_ids y
+            # el recuento "unit=7 building=38 tech=6 ...": ambos caducaban en
+            # cada sprint de datos — 8 -> 16 -> 36 -> 38). El contrato real es
+            # el orden bytewise estricto sin duplicados por seccion; la paridad
+            # byte a byte con el golden de arriba es el guardian de cualquier
+            # cambio NO intencionado.
+            for kind_number in range(2, len(compiler.KIND_INFO) + 1):
+                ids = [record["id"] for record in records[kind_number]]
+                self.assertEqual(ids, sorted(ids))
+                self.assertEqual(len(ids), len(set(ids)))
 
     def test_templates_expand_to_identical_bytes_and_reject_bad_extends(self):
         """Sprint 1.24 — plantillas de contenido comun.
@@ -510,35 +503,12 @@ class ResourceReconciliationTests(unittest.TestCase):
     authors use record ids, while only the compiler may assign kernel indices.
     """
 
-    # Sprint 1.9C: 30 -> 36 recursos (seis textiles) y RESOURCE_COUNT 32 -> 64.
-    # El invariante crítico sigue siendo food/wood/stone en índices 0/1/2.
-    RESOURCE_IDS = (
-        "chunsa:aluminum", "chunsa:bauxite", "chunsa:bronze", "chunsa:cement",
-        "chunsa:charcoal", "chunsa:clay", "chunsa:cloth", "chunsa:coal",
-        "chunsa:coke", "chunsa:copper", "chunsa:cotton", "chunsa:flax",
-        "chunsa:food", "chunsa:gold", "chunsa:gunpowder", "chunsa:iron_ore",
-        "chunsa:lead", "chunsa:limestone", "chunsa:nitre", "chunsa:nitrogen_fixed",
-        "chunsa:oil", "chunsa:oil_products", "chunsa:quicklime", "chunsa:rare_earths",
-        "chunsa:salt", "chunsa:silicon", "chunsa:silk", "chunsa:steel",
-        "chunsa:stone", "chunsa:sulfur", "chunsa:synthetic_fiber", "chunsa:tin",
-        "chunsa:uranium", "chunsa:wood", "chunsa:wool", "chunsa:wrought_iron",
-    )
-    RESOURCE_INDEX = {
-        "chunsa:food": 0,
-        "chunsa:wood": 1,
-        "chunsa:stone": 2,
-        "chunsa:aluminum": 3, "chunsa:bauxite": 4, "chunsa:bronze": 5,
-        "chunsa:cement": 6, "chunsa:charcoal": 7, "chunsa:clay": 8,
-        "chunsa:cloth": 9, "chunsa:coal": 10, "chunsa:coke": 11,
-        "chunsa:copper": 12, "chunsa:cotton": 13, "chunsa:flax": 14,
-        "chunsa:gold": 15, "chunsa:gunpowder": 16, "chunsa:iron_ore": 17,
-        "chunsa:lead": 18, "chunsa:limestone": 19, "chunsa:nitre": 20,
-        "chunsa:nitrogen_fixed": 21, "chunsa:oil": 22, "chunsa:oil_products": 23,
-        "chunsa:quicklime": 24, "chunsa:rare_earths": 25, "chunsa:salt": 26,
-        "chunsa:silicon": 27, "chunsa:silk": 28, "chunsa:steel": 29,
-        "chunsa:sulfur": 30, "chunsa:synthetic_fiber": 31, "chunsa:tin": 32,
-        "chunsa:uranium": 33, "chunsa:wool": 34, "chunsa:wrought_iron": 35,
-    }
+    # Los índices kernel de los recursos eran una lista literal (RESOURCE_IDS +
+    # RESOURCE_INDEX, 36 entradas) que caducaba en cada sprint de datos: 30 ->
+    # 36 recursos y contando, cada añadido exigía reescribirla a mano. El
+    # contrato que NO caduca: los tres slots bootstrap quedan fijos en 0/1/2 y
+    # el resto de índices son únicos y dentro de rango — ver
+    # test_repository_declares_bootstrap_resources_at_indices_zero_one_two.
     RECORD_ID = re.compile(
         r"^[a-z][a-z0-9_]{0,31}:[a-z][a-z0-9_]{0,63}$"
     )
@@ -697,8 +667,6 @@ class ResourceReconciliationTests(unittest.TestCase):
             yaml.safe_load(path.read_text(encoding="utf-8"))["id"]
             for path in resource_paths
         )
-        self.assertEqual(sorted(self.RESOURCE_IDS), authored_ids)
-
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "repository.chdb"
             rc, _, stderr = self.invoke([
@@ -715,7 +683,21 @@ class ResourceReconciliationTests(unittest.TestCase):
                 record["id"]: record["index"]
                 for record in records[resource_kind]
             }
-            self.assertEqual(self.RESOURCE_INDEX, mapping)
+            # Invariante critico (no caduca): los tres slots bootstrap son
+            # fijos — food/wood/stone SIEMPRE en 0/1/2 (ver
+            # _resource_index_map/BOOTSTRAP_RESOURCE_INDICES).
+            self.assertEqual(mapping["chunsa:food"], 0)
+            self.assertEqual(mapping["chunsa:wood"], 1)
+            self.assertEqual(mapping["chunsa:stone"], 2)
+            # Relacion, no cifra absoluta: el blob declara exactamente los
+            # recursos del repo, con indices unicos y dentro de rango. Esto
+            # sustituye la antigua tabla literal RESOURCE_INDEX (36 entradas)
+            # que habia que reescribir con cada recurso nuevo.
+            self.assertEqual(sorted(mapping), authored_ids)
+            self.assertEqual(len(set(mapping.values())), len(mapping))
+            self.assertTrue(
+                all(0 <= index < compiler.RESOURCE_COUNT for index in mapping.values())
+            )
 
     def test_two_compilations_are_byte_identical(self):
         td, root = self.make_root()

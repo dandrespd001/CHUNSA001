@@ -874,9 +874,46 @@ static void test_catalog_real_golden() {
     CHECK(code == CatalogLoadCode::Ok);
     if (!store.valid()) { std::printf("catalog_real_golden: catálogo inválido, abortando subtest\n"); return; }
     const DataCatalogV1& cat = store.catalog();
-    CHECK(cat.building_count == 38);
-    CHECK(cat.tech_count == 6);
-    CHECK(cat.capability_count == 7);
+
+    // Invariantes estructurales del golden. SUSTITUYEN los recuentos
+    // building_count==38/tech_count==6/capability_count==7, que se reescribian
+    // con cada crecimiento del catalogo. Son relaciones, no cifras: no
+    // caducan. El guardian de los cambios NO intencionados es el content_hash
+    // (test_data_blob.cpp); aquí se fija el contrato estructural.
+    //
+    // (a) Round-trip find(name)==index en cada tabla: orden bytewise estricto,
+    // sin duplicados e índices coherentes.
+    for (uint32_t i = 0; i < cat.building_count; ++i) {
+        const BuildingNameIndexV1& e = cat.building_names[i];
+        CHECK(catalog_find_building(cat, e.record_id_utf8, e.record_id_bytes) == i);
+    }
+    for (uint32_t i = 0; i < cat.tech_count; ++i) {
+        const TechNameIndexV1& e = cat.tech_names[i];
+        CHECK(catalog_find_tech(cat, e.record_id_utf8, e.record_id_bytes) == i);
+    }
+    for (uint32_t i = 0; i < cat.capability_count; ++i) {
+        const CapabilityNameIndexV1& e = cat.capability_names[i];
+        CHECK(catalog_find_capability(cat, e.record_id_utf8, e.record_id_bytes) == i);
+    }
+    // (b) Referencias resueltas y en rango: civ_id resoluble, ventana de época
+    // coherente, y trains/researches/required_capabilities/prereqs/mutex/
+    // grants apuntando a ids válidos.
+    for (uint32_t b = 0; b < cat.building_count; ++b) {
+        const BuildingDefinitionV1& d = cat.buildings[b];
+        CHECK(d.civ_id < cat.civ_count);
+        CHECK(d.epoch_min <= d.epoch_max);
+        for (uint32_t k = 0; k < d.train_count; ++k) CHECK(d.trains[k] < cat.unit_count);
+        for (uint32_t k = 0; k < d.research_count; ++k) CHECK(d.researches[k] < cat.tech_count);
+        for (uint32_t k = 0; k < d.required_capabilities_count; ++k) CHECK(d.required_capabilities[k] < cat.capability_count);
+    }
+    for (uint32_t t = 0; t < cat.tech_count; ++t) {
+        const TechDefinitionV1& d = cat.techs[t];
+        CHECK(d.civ_id < cat.civ_count);
+        CHECK(d.epoch >= 1 && d.epoch <= 15);
+        for (uint32_t k = 0; k < d.prereq_count; ++k) CHECK(d.prerequisites[k] < cat.tech_count);
+        for (uint32_t k = 0; k < d.mutex_count; ++k) CHECK(d.mutually_exclusive_with[k] < cat.tech_count);
+        for (uint32_t k = 0; k < d.grant_count; ++k) CHECK(d.grants[k] < cat.capability_count);
+    }
 
     auto find_b = [&](const char* name) { return catalog_find_building(cat, name, std::strlen(name)); };
     auto find_t = [&](const char* name) { return catalog_find_tech(cat, name, std::strlen(name)); };

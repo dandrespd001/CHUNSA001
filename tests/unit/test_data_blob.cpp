@@ -266,7 +266,6 @@ int main() {
     }
 
     const DataCatalogV1& cat = store.catalog();
-    CHECK(cat.unit_count == 7);   // 1.22: +nile_forager, +italic_forager
     // Sprint 1.9: el blob gana dos fundiciones con la receta del bronce y un
     // par espejado de estaño en el mapa.
     // Sprint 1.8D: el blob lleva los depósitos de las épocas 1-4 y los costes
@@ -283,6 +282,41 @@ int main() {
     CHECK(cat.catalog_flags == 0);  // fixture release (no UNVERIFIED/HAS_PATCHES)
     CHECK(cat.base_package_id_bytes == std::strlen("chunsa.base"));
     CHECK(std::memcmp(cat.base_package_id_utf8, "chunsa.base", cat.base_package_id_bytes) == 0);
+
+    // ------------------------------------------------------------------------
+    // Invariantes estructurales del golden. SUSTITUYEN los recuentos fragiles
+    // (unit_count==7/building_count==38 se reescribian en cada sprint que el
+    // catalogo crecia: 8 -> 16 -> 36 -> 38). Ninguna de estas relaciones
+    // caduca. El guardian de los cambios NO intencionados es kExpectedHash de
+    // arriba; estas invariantes fijan el contrato estructural.
+    //
+    // (1) Round-trip find(name)==index en las tablas unit/building: implica
+    // orden bytewise estricto, sin duplicados e índices coherentes.
+    for (uint32_t i = 0; i < cat.unit_count; ++i) {
+        const UnitNameIndexV1& e = cat.unit_names[i];
+        CHECK(catalog_find_unit(cat, e.record_id_utf8, e.record_id_bytes) == i);
+    }
+    for (uint32_t i = 0; i < cat.building_count; ++i) {
+        const BuildingNameIndexV1& e = cat.building_names[i];
+        CHECK(catalog_find_building(cat, e.record_id_utf8, e.record_id_bytes) == i);
+    }
+    // (2) Toda unidad/edificio tiene civ_id resoluble y ventana de época
+    // coherente; todo trains/researches/required_capabilities apunta a un id
+    // válido (dentro de su tabla).
+    for (uint32_t u = 0; u < cat.unit_count; ++u) {
+        const UnitDefinitionV1& d = cat.units[u];
+        CHECK(d.civ_id < cat.civ_count);
+        CHECK(d.epoch_min <= d.epoch_max);
+    }
+    for (uint32_t b = 0; b < cat.building_count; ++b) {
+        const BuildingDefinitionV1& d = cat.buildings[b];
+        CHECK(d.civ_id < cat.civ_count);
+        CHECK(d.epoch_min <= d.epoch_max);
+        for (uint32_t k = 0; k < d.train_count; ++k) CHECK(d.trains[k] < cat.unit_count);
+        for (uint32_t k = 0; k < d.research_count; ++k) CHECK(d.researches[k] < cat.tech_count);
+        for (uint32_t k = 0; k < d.required_capabilities_count; ++k) CHECK(d.required_capabilities[k] < cat.capability_count);
+    }
+    // ------------------------------------------------------------------------
 
     // 2) Resolución de record_id → UnitId (setup, fuera de Step()).
     const UnitId legionary = catalog_find_unit(cat, "rome:legionary", 14);
@@ -634,10 +668,11 @@ int main() {
         // egipto:settlement_center/rome:forum_center, que son
         // constructible:false + build_time_ticks:0 (enmienda del Arquitecto
         // 2026-07-23, SPEC-004 §4.1.2/§4.3: el loader debe ACEPTAR T==0).
-        // Sprint 1.2 añade los cuarteles: el conteo crece con los datos (>= 4,
-        // exacto 6 desde mm/datos-tech-1.2); los checks por record_id de abajo
-        // son los que fijan el contrato, no el conteo.
-        CHECK(cat.building_count == 38);  // 1.14: +2 viviendas  // 1.25: +20 de las epocas 6-15  // 1.22: +8 de las epocas 1-4
+        // Sprint 1.2 añade los cuarteles. El conteo NO se pincha aquí a
+        // propósito: crece con los datos (8 -> 16 -> 36 -> 38 en cuatro
+        // sprints), y el contrato lo fijan los checks por record_id de abajo
+        // y las invariantes estructurales del arranque de main() (todas las
+        // referencias resueltas y en rango), no una cifra.
 
         auto find = [&](const char* name) {
             return catalog_find_building(cat, name, std::strlen(name));
