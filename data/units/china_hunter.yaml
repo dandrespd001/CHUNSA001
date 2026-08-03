@@ -1,0 +1,45 @@
+schema_version: 2
+id: china:hunter
+display_name_key: china:unit.hunter
+description_key: china:unit.hunter.description
+civ_id: china:yellow_river
+epoch_window:
+  - 1
+  - 2
+class: infantry
+tags: []
+resource_costs:
+  chunsa:food: 35
+  chunsa:stone: 10
+stats:
+  hp: 40
+  attack: 4
+  range_millitiles: 0
+  speed_millitile_tick: 62
+  morale: 40
+  build_time_ticks: 260
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: pierce
+playable_period_ids:
+  - china:zhoukoudian_paleolithic
+  - china:yangshao_neolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Cazador del Paleolitico del norte de China. Ataque PIERCE y armadura cero, igual que sus equivalentes: en la epoca 1 la punta litica es la tecnologia y nadie lleva proteccion. Numeros identicos a los otros dos cazadores por la regla de SPEC-TRAYECTORIA §3."
+    reviewed_by:
+      - architect

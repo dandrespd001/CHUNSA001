@@ -3,11 +3,15 @@ package_id: chunsa.base
 package_version: 0.4.0
 package_kind: base
 owned_namespaces:
+  - china
   - chunsa
   - base
   - egipto
   - rome
 declared_capabilities:
+  - china:sustain_the_mandate
+  - china:millet_cultivation
+  - china:coke_smelting
   - rome:froth_flotation
   - egipto:froth_flotation
   - egipto:coordinate_flood

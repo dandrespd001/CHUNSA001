@@ -68,6 +68,10 @@ struct Civ {
 constexpr Civ kCivs[] = {
     {"egipto:dynastic_nile"},
     {"rome:republic_imperial"},
+    // Sprint 1.30: tercera civilizacion. El guardian la exigio en cuanto entro
+    // al catalogo, que es exactamente para lo que se escribio el recuento
+    // contra civ_count.
+    {"china:yellow_river"},
 };
 
 bool covers(uint8_t emin, uint8_t emax, uint8_t e) noexcept {

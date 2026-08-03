@@ -1,0 +1,46 @@
+schema_version: 2
+id: china:work_crew
+display_name_key: china:unit.work_crew
+description_key: china:unit.work_crew.description
+civ_id: china:yellow_river
+epoch_window:
+  - 1
+  - 15
+class: citizen
+tags:
+  - drop_off_carrier
+resource_costs:
+  chunsa:food: 25
+stats:
+  hp: 45
+  attack: 0
+  range_millitiles: 0
+  speed_millitile_tick: 55
+  morale: 45
+  build_time_ticks: 300
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+  attack_damage_type: cut
+playable_period_ids:
+  - china:zhoukoudian_paleolithic
+  - china:yangshao_neolithic
+  - china:epoch_15
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Obrero del linaje del rio Amarillo. Mismos numeros que sus equivalentes egipcio e italico, y a proposito: SPEC-TRAYECTORIA §3 dice que dar nombres distintos a numeros identicos no es asimetria, es duplicacion. La diferencia entre civilizaciones tiene que venir de tecnologias y edificios con cita, no de que el aldeano corra mas."
+    reviewed_by:
+      - architect

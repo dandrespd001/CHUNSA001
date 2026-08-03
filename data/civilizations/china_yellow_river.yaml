@@ -1,0 +1,144 @@
+schema_version: 1
+id: china:yellow_river
+historical_window:
+  start_year: -40000
+  end_year: 2025
+epoch_window:
+  - 1
+  - 15
+region_key: china:region.yellow_river
+display_name_key: china:civ.yellow_river
+description_key: china:civ.yellow_river.description
+gameplay_verb:
+  id: china:sustain_the_mandate
+  name_key: china:verb.sustain_the_mandate
+  description_key: china:verb.sustain_the_mandate.description
+playable_periods:
+  - id: china:zhoukoudian_paleolithic
+    start_year: -40000
+    end_year: -10001
+    label_key: china:period.zhoukoudian_paleolithic
+  - id: china:yangshao_neolithic
+    start_year: -5000
+    end_year: -3001
+    label_key: china:period.yangshao_neolithic
+  - id: china:longshan_chalcolithic
+    start_year: -3000
+    end_year: -1901
+    label_key: china:period.longshan_chalcolithic
+  - id: china:shang_bronze
+    start_year: -1600
+    end_year: -1047
+    label_key: china:period.shang_bronze
+  - id: china:han_classical
+    start_year: -206
+    end_year: 220
+    label_key: china:period.han_classical
+  - id: china:epoch_06
+    start_year: 300
+    end_year: 799
+    label_key: china:period.epoch_06
+  - id: china:epoch_07
+    start_year: 800
+    end_year: 1299
+    label_key: china:period.epoch_07
+  - id: china:epoch_08
+    start_year: 1300
+    end_year: 1499
+    label_key: china:period.epoch_08
+  - id: china:epoch_09
+    start_year: 1500
+    end_year: 1699
+    label_key: china:period.epoch_09
+  - id: china:epoch_10
+    start_year: 1700
+    end_year: 1759
+    label_key: china:period.epoch_10
+  - id: china:epoch_11
+    start_year: 1760
+    end_year: 1839
+    label_key: china:period.epoch_11
+  - id: china:epoch_12
+    start_year: 1840
+    end_year: 1899
+    label_key: china:period.epoch_12
+  - id: china:epoch_13
+    start_year: 1900
+    end_year: 1944
+    label_key: china:period.epoch_13
+  - id: china:epoch_14
+    start_year: 1945
+    end_year: 1979
+    label_key: china:period.epoch_14
+  - id: china:epoch_15
+    start_year: 1980
+    end_year: 2025
+    label_key: china:period.epoch_15
+institutions:
+  - id: china:imperial_bureaucracy
+    name_key: china:institution.imperial_bureaucracy
+    mechanic_description_key: china:institution.imperial_bureaucracy.mechanic
+    cost_or_tension_key: china:institution.imperial_bureaucracy.tension
+    required_capability_ids: []
+social_tensions:
+  - id: china:centre_and_frontier
+    name_key: china:tension.centre_and_frontier
+    description_key: china:tension.centre_and_frontier.description
+unit_ids:
+  - china:hunter
+  - china:work_crew
+building_ids:
+  - china:dwelling
+  - china:epoch_06_works
+  - china:epoch_07_works
+  - china:epoch_08_works
+  - china:epoch_09_works
+  - china:epoch_10_works
+  - china:epoch_11_works
+  - china:epoch_12_works
+  - china:epoch_13_works
+  - china:epoch_14_works
+  - china:epoch_15_works
+  - china:farm
+  - china:flint_workshop
+  - china:han_blast_furnace
+  - china:longshan_workshop
+  - china:paleolithic_camp
+  - china:planted_grove
+  - china:settlement_center
+  - china:shang_foundry
+  - china:yangshao_granary
+tech_ids:
+  - china:millet_cultivation
+  - china:song_coke_smelting
+art_rule_keys:
+  - china:art.period_and_provenance
+  - china:art.responsible_labor
+review_roles:
+  - architect
+  - sinology_review
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Yangshao culture: fechada «c. 5000 - c. 3000 BC», florece «along the middle reaches of the Yellow River in China»; el mijo era el cultivo principal y las viviendas eran semisubterraneas, hechas «digging a rounded rectangular pit around one meter deep»"
+        locator: "Dates, location, agriculture and dwellings"
+        url: "https://en.wikipedia.org/wiki/Yangshao_culture"
+        accessed_on: "2026-08-03"
+      - citation: "Wikipedia, History of metallurgy in China: «The earliest known blast furnaces are attributed to the Han dynasty in the 1st century AD»; y «By the 11th century, the Song dynasty Chinese iron industry made a switch of resources from charcoal to coke in casting iron and steel, sparing thousands of acres of woodland from felling»"
+        locator: "Blast furnaces and the coke transition"
+        url: "https://en.wikipedia.org/wiki/History_of_metallurgy_in_China"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Tercera civilizacion, decision del Director. El identificador es china:yellow_river y no una dinastia a proposito: SPEC-TRAYECTORIA §1 define un linaje como TERRITORIO CON CONTINUIDAD, no como pueblo, y el valle del rio Amarillo es lo que une a Yangshao con la Republica Popular. China es ademas el mejor caso posible para esa definicion: pocos territorios tienen continuidad documentada tan larga. Su rasgo de juego no es un bono numerico sino una VENTAJA DE CALENDARIO: llego antes que Europa a varias tecnicas, y la mejor documentada es el paso del carbon vegetal al COQUE en el siglo XI —nuestra epoca 7— frente al XVIII europeo, unos setecientos anos. La fuente ademas dice que ese cambio ahorro bosque, asi que engancha con el sistema de madera renovable del Sprint 1.28: la tecnologia china resuelve el mismo problema de deforestacion por otra via."
+    reviewed_by:
+      - architect

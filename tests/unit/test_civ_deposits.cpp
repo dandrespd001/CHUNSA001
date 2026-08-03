@@ -289,7 +289,7 @@ static void test_civ_id_real_golden() {
     CHECK(code == CatalogLoadCode::Ok);
     if (!store.valid()) { std::printf("civ_id_real_golden: catálogo inválido, abortando subtest\n"); return; }
     const DataCatalogV1& cat = store.catalog();
-    CHECK(cat.civ_count == 2);
+    CHECK(cat.civ_count == 3);   // 1.30: entra china:yellow_river
 
     const CivId egipto = catalog_find_civ(cat, "egipto:dynastic_nile", std::strlen("egipto:dynastic_nile"));
     const CivId rome = catalog_find_civ(cat, "rome:republic_imperial", std::strlen("rome:republic_imperial"));

@@ -1,0 +1,57 @@
+schema_version: 1
+id: china:millet_cultivation
+display_name_key: china:tech.millet_cultivation
+description_key: china:tech.millet_cultivation.description
+available_to:
+  - china:yellow_river
+epoch: 2
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 50
+  chunsa:wood: 30
+required_capabilities: []
+research_time_ticks: 450
+prerequisites: []
+required_buildings:
+  - china:paleolithic_camp
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - china:millet_cultivation
+stat_effects:
+  - stat: harvest_rate
+    amount: 2
+    applies_to:
+      - citizen
+  - stat: carry_cap
+    amount: 10
+    applies_to:
+      - citizen
+playable_period_ids:
+  - china:yangshao_neolithic
+  - china:longshan_chalcolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Yangshao culture: la cultura se fecha «c. 5000 - c. 3000 BC» «along the middle reaches of the Yellow River in China»; el mijo era el cultivo principal y ademas «cultivated and consumed rice, though to a lesser extent than millet», practicando tanto rozas como agricultura intensiva"
+        locator: "Agriculture — el mijo como cultivo principal del Yangshao"
+        url: "https://en.wikipedia.org/wiki/Yangshao_culture"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Cultivo del mijo, epoca 2. Sustituye a la tech de recoleccion silvestre que iba a poner en la epoca 1: el esquema de tecnologias NO admite evidence N, asi que una tech sin cita no puede existir, y estirar la cita de Yangshao —que habla de mijo CULTIVADO— hasta la recoleccion silvestre de la epoca 1 habria sido colgarle a la fuente algo que no dice. El limite del esquema forzo la decision honesta, que es como deben funcionar los limites. Da +2 de ritmo y +10 de carga sobre citizen: la agricultura de mijo con rozas y cultivo intensivo es mas productiva que recolectar, y eso es lo que la fuente sostiene."
+    reviewed_by:
+      - architect

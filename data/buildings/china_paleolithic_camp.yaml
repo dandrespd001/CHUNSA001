@@ -1,0 +1,27 @@
+# Hereda de base:paleolithic_camp. Identidad y procedencia son de esta civilizacion.
+extends: base:paleolithic_camp
+id: china:paleolithic_camp
+civ_id: china:yellow_river
+display_name_key: china:building.paleolithic_camp
+description_key: china:building.paleolithic_camp.description
+researches:
+  - china:millet_cultivation
+playable_period_ids:
+  - china:zhoukoudian_paleolithic
+  - china:yangshao_neolithic
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Andamiaje declarado del linaje chino para esta epoca. No afirma nada historico —por eso evidence N, sin fuentes— y existe por la razon mecanica de siempre: ADVANCE_EPOCH exige dos edificios en la ventana actual. Las hipotesis para ascenderlo con nombre propio estan en docs/research/corpus/extractos/linaje_chino_PISTAS.md, y cada una necesita su cita literal antes de entrar."
+    reviewed_by:
+      - architect

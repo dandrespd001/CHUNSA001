@@ -1,0 +1,26 @@
+# Hereda de base:epoch11_workshop.
+extends: base:epoch11_workshop
+id: china:epoch_11_works
+civ_id: china:yellow_river
+display_name_key: china:building.epoch_11_works
+description_key: china:building.epoch_11_works.description
+playable_period_ids:
+  - china:epoch_11
+  - china:epoch_12
+  - china:epoch_13
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Andamiaje declarado del linaje chino. No afirma nada historico y existe por la razon mecanica de siempre: ADVANCE_EPOCH exige dos edificios en la ventana actual. Las hipotesis para ascenderlo con nombre propio estan en linaje_chino_PISTAS.md y cada una necesita cita literal antes de entrar."
+    reviewed_by:
+      - architect

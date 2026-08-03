@@ -1,0 +1,55 @@
+schema_version: 1
+id: china:settlement_center
+civ_id: china:yellow_river
+display_name_key: china:building.settlement_center
+description_key: china:building.settlement_center.description
+epoch_window:
+  - 1
+  - 15
+kind: civic
+footprint:
+  width_cells: 3
+  height_cells: 3
+  blocks_movement: true
+stats:
+  hp: 1500
+  armor:
+    cut: 2
+    pierce: 6
+    impact: 0
+constructible: false
+population_provided: 5
+resource_costs: {}
+build_time_ticks: 0
+dropoff_resources:
+  - chunsa:food
+  - chunsa:wood
+  - chunsa:stone
+trains:
+  - china:work_crew
+researches:
+  - rome:road_engineering
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - china:zhoukoudian_paleolithic
+  - china:yangshao_neolithic
+  - china:epoch_15
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: minimax
+    rationale: "Centro de asentamiento del linaje del rio Amarillo. Se escribe AUTONOMO y no heredando de plantilla, y el motivo merece quedar dicho porque es un limite real del mecanismo del 1.24: la fusion de diccionarios es EN PROFUNDIDAD, asi que un resource_costs vacio en el record no BORRA el de la plantilla, solo no anade nada. Un centro es constructible:false y sin coste, incompatible con cualquier plantilla de taller. Numeros identicos a los otros dos centros por SPEC-TRAYECTORIA §3."
+    reviewed_by:
+      - architect

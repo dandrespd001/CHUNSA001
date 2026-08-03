@@ -1,0 +1,30 @@
+# Hereda de base:neolithic_storehouse. Identidad y procedencia son de esta civilizacion.
+extends: base:neolithic_storehouse
+id: china:yangshao_granary
+civ_id: china:yellow_river
+display_name_key: china:building.yangshao_granary
+description_key: china:building.yangshao_granary.description
+playable_period_ids:
+  - china:yangshao_neolithic
+  - china:longshan_chalcolithic
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Yangshao culture: fechada «c. 5000 - c. 3000 BC» «along the middle reaches of the Yellow River in China»; el mijo era el cultivo principal, aunque tambien «cultivated and consumed rice, though to a lesser extent than millet»; las viviendas eran semisubterraneas, hechas «digging a rounded rectangular pit around one meter deep», reforzadas con zarzo, barro y techo de paja"
+        locator: "Dates, location, agriculture and dwellings"
+        url: "https://en.wikipedia.org/wiki/Yangshao_culture"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Granero Yangshao, epoca 2. Es contenido PROPIO y no plantilla compartida porque cumple el criterio 2 de SPEC-TRAYECTORIA §3: hay cita que sostiene una particularidad. La vivienda Yangshao es SEMISUBTERRANEA —un pozo de un metro reforzado con zarzo y barro— y eso justifica HP mas bajos y coste sin piedra: se excava, no se levanta. El mijo, no el trigo, es lo que se guarda dentro."
+    reviewed_by:
+      - architect

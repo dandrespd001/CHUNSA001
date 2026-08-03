@@ -1,0 +1,47 @@
+# Hereda de base:epoch6_workshop y sobrescribe lo que su cita justifica.
+extends: base:epoch6_workshop
+id: china:shang_foundry
+civ_id: china:yellow_river
+display_name_key: china:building.shang_foundry
+description_key: china:building.shang_foundry.description
+epoch_window:
+  - 4
+  - 7
+kind: economic
+dropoff_resources: []
+resource_costs:
+  chunsa:wood: 60
+  chunsa:clay: 70
+  chunsa:copper: 30
+recipes:
+  - id: china:shang_piece_mould_bronze
+    input_resource_costs:
+      chunsa:copper: 3
+      chunsa:tin: 1
+    output_resource_id: chunsa:bronze
+    output_amount: 2
+    duration_ticks: 250
+playable_period_ids:
+  - china:shang_bronze
+  - china:han_classical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Chinese ritual bronzes: «The Chinese Bronze Age began in the Xia dynasty (c. 2070 - c. 1600 BC) [...] reaching its zenith during the Shang dynasty (c. 1600 - c. 1046 BC)»; en el molde por secciones «a clay mould is formed around the model of the object to be cast and then removed in sections»; la cera perdida llego despues y «was never used to make large vessels»; la tumba de Fu Hao contenia «over two hundred» vasos rituales"
+        locator: "Piece-mould casting, Shang dates and production scale"
+        url: "https://en.wikipedia.org/wiki/Chinese_ritual_bronzes"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Fundicion Shang de molde por secciones, epoca 4. Es contenido PROPIO y no plantilla compartida porque cumple el criterio 2 de SPEC-TRAYECTORIA §3: la cita sostiene una particularidad mecanica real. El molde por secciones NO es la cera perdida —la fuente dice que esta llego despues a China y nunca se uso para vasos grandes— y por eso el edificio cuesta ARCILLA en cantidad: el molde se hace de barro alrededor del modelo y se desmonta por piezas. Que la tumba de Fu Hao guardara mas de doscientos vasos da la escala: esto no era artesania de taller, era produccion de estado."
+    reviewed_by:
+      - architect

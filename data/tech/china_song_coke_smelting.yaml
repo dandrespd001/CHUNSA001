@@ -1,0 +1,53 @@
+schema_version: 1
+id: china:song_coke_smelting
+display_name_key: china:tech.song_coke_smelting
+description_key: china:tech.song_coke_smelting.description
+available_to:
+  - china:yellow_river
+epoch: 7
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 150
+  chunsa:coal: 60
+required_capabilities: []
+research_time_ticks: 900
+prerequisites: []
+required_buildings:
+  - china:han_blast_furnace
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - china:coke_smelting
+stat_effects:
+  - stat: recovery
+    amount: 1000
+    applies_to:
+      - citizen
+playable_period_ids:
+  - china:epoch_07
+  - china:epoch_08
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, History of metallurgy in China: «By the 11th century, the Song dynasty Chinese iron industry made a switch of resources from charcoal to coke in casting iron and steel, sparing thousands of acres of woodland from felling»; y «the Song Chinese discovered how to produce coke from bituminous coal as a substitute for charcoal»"
+        locator: "The coke transition; el articulo apunta que pudo empezar ya en el siglo IV, pero el cambio del siglo XI es el documentado con firmeza"
+        url: "https://en.wikipedia.org/wiki/History_of_metallurgy_in_China"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "LA SENA DE IDENTIDAD DE CHINA, y no es un bono numerico: es una VENTAJA DE CALENDARIO. Nuestro catalogo situa el coque en la epoca 11 porque esa es la historia europea —Darby y Coalbrookdale, 1709—. La Song lo hizo en el siglo XI, que en nuestra escala es la epoca 7: unos SETECIENTOS anos antes. Por eso esta tech va en la epoca 7 y no en la 11, y por eso China es la unica que la tiene ahi. Y hay algo mejor que la fecha: la fuente dice que el cambio ahorro bosque —sparing thousands of acres of woodland from felling—, asi que engancha directamente con el sistema de madera renovable del Sprint 1.28. La tecnologia china resuelve el MISMO problema de deforestacion que el bosque plantado, por otra via. Eso es lo que hace que esta civilizacion no sea un reskin: no juega igual con otros nombres, llega antes y por otro camino. Mecanicamente da recovery +1000 puntos basicos, un 10 por ciento (el esquema acota el efecto a 1000 y se respeta en vez de ampliarlo por comodidad): de la misma roca sale mas metal util, que es lo que significa cambiar de combustible a uno que arde mas caliente y limpio."
+    reviewed_by:
+      - architect

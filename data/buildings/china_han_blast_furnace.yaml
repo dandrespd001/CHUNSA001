@@ -1,0 +1,49 @@
+# Hereda de base:epoch6_workshop y sobrescribe lo que su cita justifica.
+extends: base:epoch6_workshop
+id: china:han_blast_furnace
+civ_id: china:yellow_river
+display_name_key: china:building.han_blast_furnace
+description_key: china:building.han_blast_furnace.description
+epoch_window:
+  - 5
+  - 9
+kind: economic
+dropoff_resources: []
+resource_costs:
+  chunsa:wood: 70
+  chunsa:stone: 60
+  chunsa:clay: 40
+recipes:
+  - id: china:han_bloomery
+    input_resource_costs:
+      chunsa:iron_ore: 2
+      chunsa:charcoal: 2
+      chunsa:limestone: 1
+    output_resource_id: chunsa:wrought_iron
+    output_amount: 1
+    duration_ticks: 280
+playable_period_ids:
+  - china:han_classical
+  - china:epoch_06
+  - china:epoch_07
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.30-tercera-civ
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, History of metallurgy in China: «The earliest known blast furnaces are attributed to the Han dynasty in the 1st century AD»"
+        locator: "Blast furnaces; el hierro colado ya estaba extendido en China en el siglo V a.C., pero el alto horno es Han"
+        url: "https://en.wikipedia.org/wiki/History_of_metallurgy_in_China"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Alto horno Han, epoca 5. Contenido propio con cita: el alto horno mas antiguo conocido es de la dinastia Han, siglo I. Da a China una fundicion de hierro una epoca antes de lo que el resto del catalogo asume, y esa es su ventaja real: no un bono numerico, sino llegar antes. Lleva la receta de hierro forjado con caliza como fundente, la misma que documenta Turner para el 1.9."
+    reviewed_by:
+      - architect

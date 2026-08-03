@@ -67,6 +67,9 @@ struct Expected {
 constexpr Expected kExpected[] = {
     {"egipto:dynastic_nile", 1},
     {"rome:republic_imperial", 1},
+    // Sprint 1.30: China arranca en la 1 como las otras dos. Su ventana es
+    // [1,15] y su dato mas temprano es el campamento paleolitico.
+    {"china:yellow_river", 1},
 };
 
 }  // namespace
