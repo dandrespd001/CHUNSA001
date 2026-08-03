@@ -223,9 +223,9 @@ static void test_economic_layer_redirects_idle_citizen() {
     // 3 depósitos propios de prueba: A cerca, B cerca, Me lejos — todos vivos.
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 3;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500};
-    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500};
+    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500, 0, 0, 0, 0, 0};
 
     // 3 ciudadanos propios (owner=1): 2 ya recolectando A, 1 OCIOSO (sin
     // depósito válido). Ninguno con build_target.
@@ -294,9 +294,9 @@ static void test_economic_layer_redirects_surplus_when_no_idle() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 3;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500};
-    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500};
+    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500, 0, 0, 0, 0, 0};
 
     // 3 ciudadanos: 2 en A (índices 1,2), 1 en Me (índice 3) — NINGUNO ocioso.
     for (int k = 0; k < 3; ++k) {
@@ -354,7 +354,7 @@ static void test_economic_layer_skips_citizen_used_by_assign_build() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 1;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 1u /*B*/, 500};
+    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
 
     // ÚNICO ciudadano propio: ocioso (sin build_target, sin depósito) — el
     // ÚNICO candidato tanto para ASSIGN_BUILD como para la capa económica.
@@ -398,8 +398,8 @@ static void test_ai_execute_deterministic_with_economic_layer() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 2;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500};
+    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
     for (int k = 0; k < 2; ++k) {
         const EntityHandle h = et_spawn(g->entities);
         const uint32_t i = h.index;

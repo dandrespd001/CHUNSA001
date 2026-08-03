@@ -1624,7 +1624,7 @@ inline bool is_complete_owned_building(const GameState& g, uint32_t entity,
 // depósitos: evita multiplicar el barrido por MAX_EMITTERS. Todo es ascendente,
 // entero y fijo: cero heap/STL dentro de Step().
 inline void allied_auto_gather_deposit_masks(
-        const GameState& g, uint32_t out[MAX_EMITTERS]) noexcept {
+        const GameState& g, uint64_t out[MAX_EMITTERS]) noexcept {
     for (uint32_t owner = 0; owner < MAX_EMITTERS; ++owner) out[owner] = 0u;
     const uint64_t radius_sq =
         static_cast<uint64_t>(ECO_AUTO_GATHER_RADIUS_RAW)
@@ -1639,17 +1639,17 @@ inline void allied_auto_gather_deposit_masks(
             FatalReason local_fatal = FatalReason::NONE;
             const Vec2Fx deposit{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
             if (dist_sq_raw(deposit, building, local_fatal) <= radius_sq) {
-                out[owner] |= (uint32_t{1} << d);
+                out[owner] |= (uint64_t{1} << d);
             }
         }
     }
 }
 
 // Conveniencia de consulta aislada para pruebas del predicado dinámico.
-inline uint32_t allied_auto_gather_deposit_mask(const GameState& g,
+inline uint64_t allied_auto_gather_deposit_mask(const GameState& g,
                                                 uint8_t owner) noexcept {
     if (owner >= MAX_EMITTERS) return 0u;
-    uint32_t eligible[MAX_EMITTERS] = {};
+    uint64_t eligible[MAX_EMITTERS] = {};
     allied_auto_gather_deposit_masks(g, eligible);
     return eligible[owner];
 }
@@ -1714,7 +1714,7 @@ inline void economy_system(GameState& g) noexcept {
     // entrega a cada ciudadano. La máscara solo interviene si SEEK necesita
     // auto-reasignar: un GATHER explícito ya válido puede seguir fuera de zona
     // hasta que su depósito se agote (§23.3).
-    uint32_t auto_gather_eligible[MAX_EMITTERS] = {};
+    uint64_t auto_gather_eligible[MAX_EMITTERS] = {};
     allied_auto_gather_deposit_masks(g, auto_gather_eligible);
 
     for (uint32_t i = 0; i < t.capacity; ++i) {

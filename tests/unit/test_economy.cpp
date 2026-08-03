@@ -112,8 +112,8 @@ static EcoCitizenIn citizen_at(int64_t x_raw, int64_t y_raw,
 static void test_nearest_tie_and_invalid_retarget() {
     constexpr int64_t T = FX_ONE_RAW;
     const EcoDeposit deposits[2] = {
-        {-2 * T, 0, 0, 50},
-        { 2 * T, 0, 1, 50},
+        {-2 * T, 0, 0, 50, 0, 0, 0, 0, 0},
+        { 2 * T, 0, 1, 50, 0, 0, 0, 0, 0},
     };
     FatalReason fatal = FatalReason::NONE;
 
@@ -132,8 +132,8 @@ static void test_nearest_tie_and_invalid_retarget() {
 static void test_exhaustion_retargets_deterministically() {
     constexpr int64_t T = FX_ONE_RAW;
     const EcoDeposit deposits[2] = {
-        {0, 0, 0, 0},
-        {2 * T, 0, 1, 50},
+        {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        {2 * T, 0, 1, 50, 0, 0, 0, 0, 0},
     };
     FatalReason fatal = FatalReason::NONE;
 
@@ -164,7 +164,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     FatalReason fatal = FatalReason::NONE;
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 2, 3}};
+        const EcoDeposit deposits[1] = {{0, 0, 2, 3, 0, 0, 0, 0, 0}};
         const EcoCitizenIn harvesting =
             citizen_at(0, 0, EcoState::HARVEST, 0u);
         const EcoCitizenOut out =
@@ -178,7 +178,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     }
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 1, 100}};
+        const EcoDeposit deposits[1] = {{0, 0, 1, 100, 0, 0, 0, 0, 0}};
         const EcoCitizenIn almost_full =
             citizen_at(0, 0, EcoState::HARVEST, 0u, ECO_CARRY_CAP - 1, 1u);
         const EcoCitizenOut out =
@@ -192,7 +192,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     }
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 0, 50}};
+        const EcoDeposit deposits[1] = {{0, 0, 0, 50, 0, 0, 0, 0, 0}};
         const EcoCitizenIn returning =
             citizen_at(10 * T, 10 * T, EcoState::RETURN, 0u, 37, 2u);
         const EcoCitizenOut out =

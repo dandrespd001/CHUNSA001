@@ -18,29 +18,34 @@ inline constexpr long GOLDEN_VECTOR_CASES = 1074;
 
 // G1: synthetic_movement_v1@1, 600 unidades, 2000 ticks, seed 20260716.
 // Cambió solo por el bump V8→V9; alloc_delta=0 y doble corrida idéntica.
-inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x33871dfa8ecce99dull;
+//
+// Sprint 1.29 (ECO_MAX_DEPOSITS 32 -> 64): SOLO cambian los hashes, porque
+// checksum.hpp recorre TODOS los ECO_MAX_DEPOSITS slots de deposits[] y ahora
+// son 64 en vez de 32. Determinismo intacto (doble corrida idéntica en los
+// seis gates) y end_ticks inalterados —1227, 1108, 10473—.
+inline constexpr uint64_t G1_SYNTHETIC_STATE = 0xce3e1e43f76c6fd0ull;
 
 // G3: savetest canónico sin IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load conserva la continuación.
-inline constexpr uint64_t G3_SAVETEST_STATE = 0x9a8f3e6b1a237eecull;
-inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xd3e141648fa764a3ull;
+inline constexpr uint64_t G3_SAVETEST_STATE = 0x18f043a9c255675aull;
+inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0x91f7b155f99a90c9ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xd421eccf7eae3251ull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x45d1d58bf82583deull;
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xe61519c6cdb60cb1ull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xa9ea0d5f4b4dd003ull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0x531465489b194a40ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x7abc1a1ab2d246bcull;
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0x551267b09755fcb4ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x0eb6568b0c573dabull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x052aa6591bafe8e2ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0xfed5496ac359cfcdull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x17788c10803fb350ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x2a1d8d617da69cfcull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
@@ -129,6 +134,17 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // toca NOMBRES. Si alguna vez el end_tick se mueve con un renombrado, ahi hay
 // un fallo de verdad que buscar.
 //
+// Sprint 1.28 — re-registro por CAMBIO DE DOMINIO, no por renombrado. Suben
+// SAVE_FORMAT_VERSION (17->18) y CHECKSUM_ALGO_VERSION (12->13) porque
+// ECO_MAX_DEPOSITS pasa de 32 a 64 y EcoDeposit gana cinco campos
+// (regeneracion, techo, dueno, reserva y capacidad que la abre). El guardado
+// escribe ECO_MAX_DEPOSITS entradas: un save viejo tiene 32 y el lector nuevo
+// espera 64, asi que sin el bump se malinterpretaria en silencio. Mismo
+// precedente exacto que el 1.9C con RESOURCE_COUNT.
+//
+// Los end_tick NO se mueven: 1227, 1108 y 10473 siguen igual. Cambia lo que se
+// hashea, no como se juega.
+//
 // Sprint 1.14 — ESTE re-registro es de otra naturaleza y conviene no
 // confundirlo con los anteriores. Los del 1.22, 1.25 y 1.26 eran renombrados:
 // cambiaba la numeracion y nada mas. Este cambia DOS REGLAS de verdad: el tope
@@ -142,8 +158,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // hubiera disparado, habria significado que la IA se atasca esperando
 // poblacion — y eso si habria sido un fallo que corregir, no un baseline que
 // re-registrar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xed04cc5b890e8b72ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x521199cfa6d6a9bcull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x832db6a93c18df0aull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xde74d35240391a9eull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

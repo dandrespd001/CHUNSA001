@@ -101,7 +101,7 @@ namespace chunsa {
 // estado con 3..31 en cero usa CHUNSA_STATE_V9; no hay rutas condicionales por
 // contenido. La trayectoria sigue intacta y todos los baselines cambian solo
 // por este nuevo dominio.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 12;  // Sprint 1.9C: RESOURCE_COUNT 32->64
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 13;  // Sprint 1.28: 64 depositos y campos de granja/reserva  // Sprint 1.9C: RESOURCE_COUNT 32->64
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
