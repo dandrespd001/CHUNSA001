@@ -363,6 +363,133 @@ int main() {
         }
     }
 
+    // ========================================================================
+    // LA IA PUNTÚA LAS TECNOLOGÍAS Y ELIGE LA MEJOR, NO LA PRIMERA (Sprint 1.36)
+    //
+    // POR QUÉ ESTA PRUEBA EXISTE. `ai_execute` investigaba la PRIMERA tech
+    // elegible y pagable del barrido ascendente por BuildingId/researches[].
+    // Con 4 techs era tolerable; con 12 —las de producción del 1.29
+    // (harvest_rate/carry_cap/recovery) y el coque Song entre ellas— la
+    // elección quedaba al albur del orden de índices. Sin un escenario con DOS
+    // techs elegibles a la vez, la suite pasaría en verde aunque el candidato
+    // eligiera la primera por suerte alfabética (la lección del 1.34).
+    //
+    // Escenario: forum_center (investiga road_engineering, SIN efectos, score
+    // 0) y castra_barracks (investiga marching_drill, armadura cortante y
+    // perforante, score 2) propios y COMPLETOS. El forum_center se coloca
+    // PRIMERO, con el índice de entidad más bajo: es exactamente el orden con
+    // el que la elección por barrido habría caído en road_engineering. Comida
+    // y piedra de sobra para pagar AMBAS techs (80/60 comida + 40 piedra).
+    //
+    // Todo lo demás se bloquea a mano para que ninguna otra intención (5000 bp
+    // del perfil) le gane a la de tecnología: las colas de producción de los
+    // dos edificios se LLENAN con una unidad válida (mata entrenar ciudadano y
+    // legionario: `prod_count < PROD_QUEUE_CAP` falla), y la castra_barracks
+    // ya construida mata construir. Sin batch de apertura no hay ciudadanos
+    // (mata la granja, que exige citizen_count > 0), y sin mercado ni taller
+    // no hay comercio ni fabricación. La IA tiene que emitir RESEARCH_TECH de
+    // marching_drill, NO de road_engineering.
+    // ========================================================================
+    {
+        auto g4 = make_state(cat, setup, 20260805ull);
+        // Sin batch de setup: el escenario es autoconstruido. (make_state deja
+        // la época en la 1; se sube a la 5 abajo, que es donde viven las techs.)
+        for (uint8_t e = 0; e < 2u; ++e) g4->player_epoch[e] = 5u;
+
+        const BuildingId forum_b    = catalog_find_building(cat, "rome:forum_center",
+                                                            sizeof("rome:forum_center") - 1);
+        const BuildingId barracks_b = catalog_find_building(cat, "rome:castra_barracks",
+                                                            sizeof("rome:castra_barracks") - 1);
+        const TechId marching_id    = catalog_find_tech(cat, "rome:marching_drill",
+                                                        sizeof("rome:marching_drill") - 1);
+        const TechId road_id        = catalog_find_tech(cat, "rome:road_engineering",
+                                                        sizeof("rome:road_engineering") - 1);
+        const UnitId citizen_id     = catalog_find_unit(cat, "rome:camp_work_crew",
+                                                        sizeof("rome:camp_work_crew") - 1);
+        CHECK(forum_b != INVALID_BUILDING_ID && barracks_b != INVALID_BUILDING_ID
+              && marching_id != INVALID_TECH_ID && road_id != INVALID_TECH_ID
+              && citizen_id != INVALID_UNIT_ID);
+        if (forum_b == INVALID_BUILDING_ID || barracks_b == INVALID_BUILDING_ID
+            || marching_id == INVALID_TECH_ID || road_id == INVALID_TECH_ID
+            || citizen_id == INVALID_UNIT_ID) {
+            std::printf("tech: el catálogo real no resolvió forum_center/castra_barracks/"
+                        "marching_drill/road_engineering/camp_work_crew\n");
+            ++g_fails;
+        } else {
+            auto put_complete_building = [&](BuildingId bid, int64_t tx, int64_t ty) -> uint32_t {
+                const EntityHandle h = et_spawn(g4->entities);
+                const uint32_t i = h.index;
+                zero_components(*g4, i);
+                g4->owner[i] = 1u;
+                g4->entity_kind[i] = 1u;
+                g4->building_id[i] = bid;
+                g4->build_progress[i] = cat.buildings[bid].build_time_ticks;
+                g4->hp[i] = 500; g4->max_hp[i] = 500;
+                g4->pos_x[i] = tx * FX_ONE_RAW;
+                g4->pos_y[i] = ty * FX_ONE_RAW;
+                g4->bld_anchor_tx[i] = static_cast<uint16_t>(tx);
+                g4->bld_anchor_ty[i] = static_cast<uint16_t>(ty);
+                return i;
+            };
+            // forum_center PRIMERO: índice de entidad más bajo, el orden en el
+            // que la elección por barrido habría caído en road_engineering.
+            const uint32_t forum_idx    = put_complete_building(forum_b, 200, 100);
+            const uint32_t barracks_idx = put_complete_building(barracks_b, 204, 100);
+
+            // Colas de producción LLENAS con una unidad VÁLIDA (invariante del
+            // kernel: production_system lee prod_queue[0] si prod_count > 0) y
+            // prod_count al tope: ni entrenar ciudadano (forum_center) ni
+            // legionario (castra_barracks) puede ganarle a investigar.
+            const uint32_t idxs[2] = {forum_idx, barracks_idx};
+            for (uint32_t q = 0; q < 2u; ++q) {
+                for (uint32_t k = 0; k < PROD_QUEUE_CAP; ++k) g4->prod_queue[idxs[q]][k] = citizen_id;
+                g4->prod_count[idxs[q]] = PROD_QUEUE_CAP;
+            }
+
+            // Comida y piedra para pagar AMBAS techs (80/60 comida + 40
+            // piedra); madera a cero para que no quede ninguna construcción
+            // barata que compita con investigar.
+            g4->player_stock[1][0] = 200;
+            g4->player_stock[1][1] = 0;
+            g4->player_stock[1][2] = 40;
+
+            AiJobBox box4{}; ai_box_init(box4, 1);
+            AiRuntimeV1 rt4{0u, 0u};
+            TechId emitted = INVALID_TECH_ID;
+            for (uint32_t t = 0; t < 400u && emitted == INVALID_TECH_ID; ++t) {
+                if (ai_should_dispatch(box4, g4->tick)) ai_dispatch(box4, g4->tick, rt4);
+                if (box4.state == AiJobState::DISPATCHED) {
+                    ai_execute(box4, *g4);
+                    for (uint32_t k = 0; k < box4.result_count; ++k) {
+                        const RawCommand& rc = box4.result[k];
+                        if (rc.type != CommandType::RESEARCH_TECH) continue;
+                        emitted = static_cast<TechId>(rc.p.unit_id);
+                    }
+                    step(*g4, box4.result, box4.result_count);
+                    rt4.decision_epoch += 1u;
+                    rt4.ai_sequence += box4.result_count;
+                    ai_box_init(box4, 1);
+                } else {
+                    step(*g4, nullptr, 0);
+                }
+            }
+            if (emitted == INVALID_TECH_ID) {
+                std::printf("La IA NO emitio RESEARCH_TECH con dos techs elegibles "
+                            "y pagables: el candidato del 1.36 no se dispara\n");
+                ++g_fails;
+            } else if (emitted != marching_id) {
+                // road_engineering (sin efectos) es la primera por índice y la
+                // peor por puntuación; marching_drill (armadura) es la mejor.
+                std::printf("La IA emitio RESEARCH_TECH de tid=%u (esperado "
+                            "marching_drill=%u): la eleccion sigue siendo la "
+                            "primera por indice, no la mejor por puntuacion\n",
+                            static_cast<unsigned>(emitted),
+                            static_cast<unsigned>(marching_id));
+                ++g_fails;
+            }
+        }
+    }
+
     if (g_fails == 0) {
         std::printf("ai_epoch_policy OK\n");
         return 0;

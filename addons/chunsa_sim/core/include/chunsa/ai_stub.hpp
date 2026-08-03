@@ -53,7 +53,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 10;  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 11;  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -140,6 +140,12 @@ inline constexpr int32_t AI_TRADE_PRIORITY_BP = 3000;
 // forma de usarlo. Por debajo de 2 lotes no se toca nada: el mercado castiga
 // la monotonía y vender poco a poco es perder oro en movimiento de precio.
 inline constexpr int32_t AI_TRADE_SELL_THRESHOLD = 200;
+
+// Sprint 1.36 — pesos de la puntuación de tecnologías candidatas
+// (ai_tech_score). La justificación completa está en la función; aquí solo el
+// orden: económico = 10, combate = 1. Sin float: solo se multiplican enteros.
+inline constexpr int32_t AI_TECH_ECON_WEIGHT   = 10;
+inline constexpr int32_t AI_TECH_COMBAT_WEIGHT = 1;
 
 // Estados del ciclo de vida de UN job de IA. EMPTY = slot libre;
 // DISPATCHED/RUNNING = en vuelo; COMPLETED = resultado disponible;
@@ -601,6 +607,47 @@ inline bool ai_afford_epoch(const GameState& g, uint8_t player,
     return g.player_stock[player][0] >= cost0
         && g.player_stock[player][1] >= cost1
         && g.player_stock[player][2] >= cost2;
+}
+
+// Sprint 1.36 — PUNTUACIÓN de una tecnología candidata (capa estratégica).
+//
+// POR QUÉ. Hasta aquí la IA investigaba la PRIMERA tecnología elegible y
+// pagable del barrido ascendente. Con 4 techs era tolerable; con 12, y la
+// llegada de las de producción del Sprint 1.29 (harvest_rate/carry_cap/
+// recovery) y de la ventaja de calendario china (coque Song), la elección
+// quedaba al albur del orden alfabético de BuildingId y del array
+// `researches[]`. Esta función puntúa y elige la mejor; el desempate a igual
+// puntuación lo decide el candidato de la IA (TechId más bajo, regla de oro
+// de SPEC-005 §0).
+//
+// CRITERIO. Un efecto ECONÓMICO (HarvestRate, CarryCap, Recovery) rinde todos
+// los ticks de recolección de la partida — trabaja más rápido, carga más por
+// viaje, saca más material de la misma roca—; uno de COMBATE (Attack, Armor*)
+// solo rinde los ticks en que hay combate. Por eso se pondera 10:1. La
+// magnitud (`amount`) escala dentro de la categoría: rome:copper_tools
+// (harvest 3 + carry 15 = 18×10 = 180) gana a rome:backed_bladelet (attack 1
+// ×1 = 1), y el coque Song (recovery 1000×10 = 10000) es la ventaja de
+// calendario de China — la tech de producción más valiosa del catálogo, que
+// es exactamente lo que debe ser. Los efectos se ACUMULAN (una tech con dos
+// efectos vale su suma, igual que se aplican sumados en `tech_stat_bonus`).
+//
+// Un efecto de estadística desconocida en el futuro (el enum es APPEND-ONLY)
+// se trata como combate (peso bajo): si no se sabe lo que rinde, no se le da
+// prioridad sobre lo que sí se sabe que rinde siempre.
+//
+// Enteros, sin float, sin heap, sin reloj, sin entropía: función pura de la
+// definición del catálogo (inmutable y compartida), barrido determinista.
+inline int64_t ai_tech_score(const TechDefinitionV1& tdef) noexcept {
+    int64_t score = 0;
+    for (uint8_t k = 0; k < tdef.stat_effect_count; ++k) {
+        const TechEffectV1& e = tdef.stat_effects[k];
+        const bool econ = (e.stat == StatEffectV1::HarvestRate)
+                       || (e.stat == StatEffectV1::CarryCap)
+                       || (e.stat == StatEffectV1::Recovery);
+        score += static_cast<int64_t>(e.amount) * (econ ? AI_TECH_ECON_WEIGHT
+                                                        : AI_TECH_COMBAT_WEIGHT);
+    }
+    return score;
 }
 
 // Sprint 1.35 — candidato COMERCIAR (mercado, SPEC-010). Una sola búsqueda
@@ -1263,18 +1310,25 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             }
         }
 
-        // Candidato TECH/ÉPOCA: investigar la primera tech disponible de un
-        // edificio propio COMPLETO, o subir de época. REGLA DE ORO: el gate
-        // (b) de EPOCH_UP (SPEC-004 §12.3, tiempo mínimo desde la época
-        // inicial) depende de g.tick — DELIBERADAMENTE no se pre-verifica
-        // aquí (sería leer g.tick por la puerta trasera). Solo se verifica el
-        // gate (a) (recuento de edificios), que es función pura de g sin
-        // tick; el kernel decide el resto — la IA emite optimista y lee el
-        // rechazo el ciclo siguiente (SPEC-005 §5), reintentando cada 20
-        // ticks hasta que el tiempo real haya pasado.
+        // Candidato TECH/ÉPOCA: investigar la MEJOR tech disponible de un
+        // edificio propio COMPLETO (puntuación de ai_tech_score, Sprint 1.36),
+        // o subir de época. REGLA DE ORO: el gate (b) de EPOCH_UP (SPEC-004
+        // §12.3, tiempo mínimo desde la época inicial) depende de g.tick —
+        // DELIBERADAMENTE no se pre-verifica aquí (sería leer g.tick por la
+        // puerta trasera). Solo se verifica el gate (a) (recuento de
+        // edificios), que es función pura de g sin tick; el kernel decide el
+        // resto — la IA emite optimista y lee el rechazo el ciclo siguiente
+        // (SPEC-005 §5), reintentando cada 20 ticks hasta que el tiempo real
+        // haya pasado.
+        //
+        // El barrido es COMPLETO — no se corta al encontrar el primer candidato
+        // — y entre todos los elegibles gana el de mayor puntuación; a igual
+        // puntuación gana el TechId más bajo (desempate determinista, SPEC-005
+        // §0: sin él el orden dependería del recorrido y el replay divergiría).
         bool     research_ok = false;
         uint32_t research_building = 0;
         TechId   research_tech_id = INVALID_TECH_ID;
+        int64_t  research_score = 0;
         bool     epoch_up_try = false;
         {
             uint32_t epoch_building_count = 0;
@@ -1288,10 +1342,9 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 if (g.build_progress[bi] < bdef.build_time_ticks) continue;  // no completo
                 if (epoch >= bdef.epoch_min && epoch <= bdef.epoch_max) ++epoch_building_count;
 
-                if (research_ok) continue;               // ya se eligió candidato, sigue contando (a)
                 if (g.research_tech[bi] != INVALID_TECH_ID) continue;  // edificio ocupado
 
-                for (uint8_t rk = 0; rk < bdef.research_count && !research_ok; ++rk) {
+                for (uint8_t rk = 0; rk < bdef.research_count; ++rk) {
                     const TechId tid = bdef.researches[rk];
                     if (tid >= cat.tech_count) continue;
                     const uint32_t tw = tid / 64u, tb = tid % 64u;
@@ -1330,9 +1383,14 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
 
                     if (!ai_afford(g, ai_player, tdef.cost)) continue;
 
-                    research_ok = true;
-                    research_building = bi;
-                    research_tech_id = tid;
+                    const int64_t score = ai_tech_score(tdef);
+                    if (!research_ok || score > research_score
+                        || (score == research_score && tid < research_tech_id)) {
+                        research_ok = true;
+                        research_building = bi;
+                        research_tech_id = tid;
+                        research_score = score;
+                    }
                 }
             }
             if (epoch < EPOCH_MAX_V1 && epoch_building_count >= 2u
