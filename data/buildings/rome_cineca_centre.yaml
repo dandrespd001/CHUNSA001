@@ -1,0 +1,31 @@
+# Hereda de base:epoch15_workshop; sobrescribe lo que su cita justifica.
+extends: base:epoch15_workshop
+id: rome:cineca_centre
+civ_id: rome:republic_imperial
+display_name_key: rome:building.cineca_centre
+description_key: rome:building.cineca_centre.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - rome:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.37-celdas-atascadas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, CINECA: consorcio sin animo de lucro «established in 1969 in Casalecchio di Reno, Bologna», formado por 69 universidades italianas, 27 centros publicos de investigacion y dos ministerios; «It is the most powerful supercomputing centre for scientific research in Italy», y su Marconi100 alcanzo «about 30 P/FLOPS»"
+        locator: "Founding, consortium composition and supercomputing role"
+        url: "https://en.wikipedia.org/wiki/CINECA"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "CINECA, epoca 15. Cierra la segunda celda sin anclar. Se elige frente a Olivetti —que era la apuesta narrativa de la investigacion— por una razon de fecha: Olivetti arranca en 1908 y la epoca 15 empieza en 1980, mientras CINECA es infraestructura de computo viva y publica. Y frente a un politecnico porque la epoca 15 pide un edificio de INFORMACION, no de ensenanza. Kind research: lo que sale de ahi es capacidad de calculo."
+    reviewed_by:
+      - architect

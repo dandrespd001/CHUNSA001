@@ -1,0 +1,31 @@
+# Hereda de base:epoch15_workshop; sobrescribe lo que su cita justifica.
+extends: base:epoch15_workshop
+id: egipto:bibliotheca_alexandrina
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.bibliotheca_alexandrina
+description_key: egipto:building.bibliotheca_alexandrina.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - egipto:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.37-celdas-atascadas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "Wikipedia, Bibliotheca Alexandrina: abrio el 16 de octubre de 2002 como «a commemoration of the Library of Alexandria, once one of the largest libraries worldwide, which was lost in antiquity»; su sala de lectura principal «was the largest in the world», 20.000 m2 en once niveles, con estanteria para ocho millones de libros; el Internet Archive dono material digital valorado en cinco millones de dolares, incluidas «10 billion web pages from over 16 million sites»"
+        locator: "Opening, purpose, capacity and digital archives; se levanto cerca de donde estuvo la antigua"
+        url: "https://en.wikipedia.org/wiki/Bibliotheca_Alexandrina"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Biblioteca de Alejandria, epoca 15. Cierra una de las tres celdas que quedaron sin anclar en el 1.25 —el Smart Village de El Cairo devolvia 404— y con algo mejor de lo que buscaba: es kind research y su materia prima es la INFORMACION, que es el nombre literal de la epoca 15. Ademas cierra un arco de quince epocas dentro de la misma civilizacion: el nilometro de la epoca 6 media la crecida para SABER, y esto guarda diez mil millones de paginas web. El mismo verbo, dos milenios despues."
+    reviewed_by:
+      - architect
