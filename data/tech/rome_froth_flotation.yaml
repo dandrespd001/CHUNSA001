@@ -1,0 +1,49 @@
+schema_version: 1
+id: rome:froth_flotation
+display_name_key: rome:tech.froth_flotation
+description_key: rome:tech.froth_flotation.description
+available_to:
+  - rome:republic_imperial
+epoch: 12
+branch: E
+evidence: H
+resource_costs:
+  chunsa:food: 300
+  chunsa:stone: 200
+required_capabilities: []
+research_time_ticks: 1200
+prerequisites: []
+required_buildings:
+  - rome:pirelli_works
+mutually_exclusive_with: []
+grants:
+  units: []
+  buildings: []
+  capabilities:
+    - rome:froth_flotation
+stat_effects: []
+playable_period_ids:
+  - rome:epoch_12
+  - rome:epoch_13
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.28-granjas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJES_6_15.md
+    sources:
+      - citation: "U.S. Bureau of Mines, List of References on Concentrating Ores by Flotation (Washington, 1916): la bibliografia recoge «Hoover, Theodore J. Concentrating ores by flotation», «Rickard, T. A. ed. The flotation process. San Francisco. 1916» y «McDermott, Walter. The concentrating of ores by oil». Que en 1916 hiciera falta un INDICE de referencias sobre la tecnica mide lo nueva que era."
+        locator: "Bibliografia tecnica oficial, dominio publico. Extractada en docs/research/corpus/extractos/mineria.md, fuente 6, con las tres entradas citadas literalmente."
+        url: "https://archive.org/download/cu31924029602707/cu31924029602707_djvu.txt"
+        accessed_on: "2026-07-31"
+  balance_design:
+    author: architect
+    rationale: "Es la tecnologia que hace verdad la correccion del Director: los yacimientos minerales no desaparecen, se vuelven inexplotables hasta que llega la tecnica. La flotacion por espuma hizo rentable justo el mineral de baja ley que la separacion gravitacional abandonaba, asi que un yacimiento agotado del siglo XIX es una mina rentable del XX. Concede la capacidad rome:froth_flotation, que es la que abre la reserva de los depositos con reserve_capability. Epoca 12 porque la bibliografia del Bureau of Mines es de 1916 y nuestra epoca 12 llega hasta 1900 mientras la 13 empieza en ese ano: se coloca en la 12 como tecnologia de FINAL de epoca, que es cuando la tecnica se estaba gestando, y no en la 13, cuando ya era rutina. Coste alto y 1200 ticks: reabrir un mapa agotado debe costar una decision, no un tramite."
+    reviewed_by:
+      - architect

@@ -1,0 +1,27 @@
+# Hereda de base:planted_grove. Un bosque plantado generico no afirma nada
+# historico: evidence N, sin fuentes ni informe.
+extends: base:planted_grove
+id: egipto:planted_grove
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.planted_grove
+description_key: egipto:building.planted_grove.description
+playable_period_ids:
+  - egipto:epoch_07
+  - egipto:epoch_08
+  - egipto:epoch_09
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.28-granjas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Bosque plantado de egipto. Segunda mitad de la correccion del Director sobre la madera: los bosques del mapa ya se talaban y se consumian, faltaba poder PLANTAR. Usa el mismo mecanismo que la granja —deposito con regeneracion y edificio dueno— asi que la madera pasa a renovable sin inventar un segundo sistema. Regenera a la MITAD del ritmo de la granja, una unidad cada dos segundos, con techo mayor (200): un arbol tarda mas en crecer que el trigo y eso debe notarse. Cuesta 80 de madera, que es el bucle economico correcto —plantar arboles cuesta madera— e impide que salir del agujero sea gratis. Ventana [7,15] por SPEC-007 §16."
+    reviewed_by:
+      - architect

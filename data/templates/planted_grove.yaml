@@ -1,0 +1,63 @@
+# Plantilla: bosque plantado. La madera que vuelve a crecer.
+#
+# CORRECCION DEL DIRECTOR (2026-08-03): «la madera tampoco debe considerarse
+# yacimiento, debe estar en bosques que se van talando a medida que se extrae,
+# esta tambien debe poder plantarse».
+#
+# La primera mitad ya funcionaba: los bosques del mapa son depositos finitos
+# que se consumen al talarlos. Lo que faltaba era la segunda — poder PLANTAR.
+#
+# Y encaja sin inventar nada: un bosque plantado es a la madera lo que la
+# granja es a la comida. Mismo mecanismo —deposito con regeneracion y edificio
+# dueno— asi que la madera pasa a renovable sin un segundo sistema. Que las dos
+# correcciones del Director se resuelvan con la misma pieza es senal de que la
+# pieza estaba bien elegida.
+#
+# LOS NUMEROS, y por que difieren de la granja. Un arbol tarda mas en crecer
+# que el trigo, y eso deberia notarse: 25 milesimas por tick es la MITAD del
+# ritmo de la granja —una unidad cada dos segundos— con un techo mayor, 200.
+# Un bosque da mas que un campo, pero hay que esperarlo. Cuesta 80 de madera:
+# plantar arboles cuesta madera, que es el bucle economico correcto y ademas
+# impide que sea gratis salir del agujero.
+#
+# Ventana [7, 15] por la decision ya tomada en SPEC-007 §16: la plantacion
+# forestal entra en la epoca 7. Antes de eso la madera es lo que el mapa da, y
+# gastarla mal se paga.
+template_id: base:planted_grove
+schema_version: 1
+epoch_window:
+  - 7
+  - 15
+kind: economic
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: false
+stats:
+  hp: 100
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 80
+build_time_ticks: 400
+creates_resource_idx: 1
+creates_amount: 100
+creates_regen_per_tick: 25
+creates_cap: 200
+dropoff_resources: []
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.28-granjas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect

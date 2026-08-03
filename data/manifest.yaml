@@ -8,6 +8,8 @@ owned_namespaces:
   - egipto
   - rome
 declared_capabilities:
+  - rome:froth_flotation
+  - egipto:froth_flotation
   - egipto:coordinate_flood
   - egipto:wild_grain_harvest
   - egipto:composite_bow_craft

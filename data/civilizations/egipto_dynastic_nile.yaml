@@ -103,6 +103,7 @@ building_ids:
   - egipto:merimde_storage
   - egipto:misr_spinning
   - egipto:nilometer
+  - egipto:planted_grove
   - egipto:qadan_camp
   - egipto:settlement_center
   - egipto:shena_granary
@@ -111,8 +112,9 @@ building_ids:
   - egipto:wikala
 tech_ids:
   - egipto:composite_bow_program
-  - egipto:wild_grain_harvest
   - egipto:corvee_logistics
+  - egipto:froth_flotation
+  - egipto:wild_grain_harvest
 art_rule_keys:
   - egipto:art.period_and_provenance
   - egipto:art.responsible_labor

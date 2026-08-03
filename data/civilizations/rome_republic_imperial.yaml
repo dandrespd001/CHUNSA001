@@ -112,11 +112,13 @@ building_ids:
   - rome:opificio_pietre_dure
   - rome:pavia_physics_cabinet
   - rome:pirelli_works
+  - rome:planted_grove
   - rome:remedello_hamlet
   - rome:terramare_workshop
   - rome:venetian_arsenal
 tech_ids:
   - rome:backed_bladelet
+  - rome:froth_flotation
   - rome:marching_drill
   - rome:road_engineering
 art_rule_keys:

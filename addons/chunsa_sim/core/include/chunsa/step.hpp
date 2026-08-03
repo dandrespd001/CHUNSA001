@@ -1638,9 +1638,18 @@ inline void allied_auto_gather_deposit_masks(
         for (uint32_t d = 0; d < g.n_deposits && d < ECO_MAX_DEPOSITS; ++d) {
             FatalReason local_fatal = FatalReason::NONE;
             const Vec2Fx deposit{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
-            if (dist_sq_raw(deposit, building, local_fatal) <= radius_sq) {
-                out[owner] |= (uint64_t{1} << d);
-            }
+            if (dist_sq_raw(deposit, building, local_fatal) > radius_sq) continue;
+            // Sprint 1.28 (SPEC-007 §4): la RESERVA la abre la tecnologia, y
+            // por jugador. Un yacimiento agotado deja de ser elegible para
+            // quien no sabe extraer lo que queda, y sigue siendolo para quien
+            // si. Es aqui —en la mascara POR JUGADOR— donde esa ventaja se
+            // puede expresar; en el modulo de economia, que no conoce
+            // GameState, no habria a quien preguntarle.
+            //
+            // El corpus lo sostiene: la flotacion de 1916 hizo rentable lo que
+            // antes se abandonaba en la mina. La misma roca, otra tecnica.
+            if (eco_available_for(g.deposits[d], g.player_caps[owner][0]) <= 0) continue;
+            out[owner] |= (uint64_t{1} << d);
         }
     }
 }
