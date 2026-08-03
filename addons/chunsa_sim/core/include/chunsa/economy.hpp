@@ -45,7 +45,15 @@ struct EcoDeposit {
     // --- Sprint 1.28 (SPEC-007 §15): granjas -------------------------------
     // regen_per_tick == 0 significa FINITO: es el comportamiento de siempre y
     // el valor por defecto, asi que los 22 yacimientos del mapa no cambian.
-    int32_t  regen_per_tick;
+    // MILESIMAS de unidad por tick, no unidades. 1000 = 1/tick.
+    //
+    // Por que milesimas y no unidades enteras: el juego corre a 20 ticks por
+    // segundo, asi que 1 unidad por tick serian 1200 por minuto — absurdo para
+    // una granja. Y con enteros no se puede bajar de 1. Las milesimas dan
+    // resolucion suficiente (50 = una unidad cada 20 ticks) sin tocar coma
+    // flotante, que esta prohibida en el kernel.
+    int32_t  regen_milli_per_tick;
+    int32_t  regen_accum;     // resto acumulado, en milesimas
     int32_t  cap;             // techo al que regenera
     // Indice de la entidad-edificio que creo este deposito, o ECO_NO_OWNER.
     //
@@ -112,10 +120,16 @@ inline bool eco_deposit_is_farm(const EcoDeposit& d) noexcept {
 //     con una tecnologia) NO se recorta. Quitarle recursos al jugador por un
 //     cambio de catalogo seria peor que el exceso.
 inline void eco_regen_deposit(EcoDeposit& d) noexcept {
-    if (d.regen_per_tick <= 0) return;
+    if (d.regen_milli_per_tick <= 0) return;
     if (d.remaining >= d.cap) return;
-    const int64_t sumado = static_cast<int64_t>(d.remaining)
-                         + static_cast<int64_t>(d.regen_per_tick);
+    // Acumulador ENTERO: se suman milesimas y solo se convierte a unidades
+    // cuando hay al menos una completa. El resto se guarda, asi que el ritmo
+    // es exacto a largo plazo y no se pierde nada por redondeo.
+    d.regen_accum += d.regen_milli_per_tick;
+    if (d.regen_accum < 1000) return;
+    const int32_t unidades = d.regen_accum / 1000;
+    d.regen_accum -= unidades * 1000;
+    const int64_t sumado = static_cast<int64_t>(d.remaining) + unidades;
     d.remaining = sumado > static_cast<int64_t>(d.cap)
                 ? d.cap
                 : static_cast<int32_t>(sumado);

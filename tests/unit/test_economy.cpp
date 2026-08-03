@@ -10,6 +10,20 @@
 #include "chunsa/step.hpp"
 #include "chunsa/checksum.hpp"
 
+// Helper local (Sprint 1.28): EcoDeposit crece cada vez que el modelo de
+// recursos gana algo —regeneracion, techo, dueno, reserva— y la inicializacion
+// POSICIONAL se rompe con cada campo nuevo por -Wmissing-field-initializers.
+// Ya paso dos veces. Nombrar solo lo que la prueba usa deja el resto en cero y
+// hace el fixture inmune al proximo campo.
+static chunsa::EcoDeposit dep_at(int64_t x, int64_t y, uint8_t recurso, int32_t queda) {
+    chunsa::EcoDeposit d{};
+    d.x_raw = x; d.y_raw = y; d.resource_idx = recurso; d.remaining = queda;
+    d.owner_building = chunsa::ECO_NO_OWNER;
+    d.reserve_capability = chunsa::ECO_NO_CAPABILITY;
+    return d;
+}
+
+
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
 
@@ -112,8 +126,8 @@ static EcoCitizenIn citizen_at(int64_t x_raw, int64_t y_raw,
 static void test_nearest_tie_and_invalid_retarget() {
     constexpr int64_t T = FX_ONE_RAW;
     const EcoDeposit deposits[2] = {
-        {-2 * T, 0, 0, 50, 0, 0, 0, 0, 0},
-        { 2 * T, 0, 1, 50, 0, 0, 0, 0, 0},
+        dep_at(-2 * T, 0, 0, 50),
+        dep_at(2 * T, 0, 1, 50),
     };
     FatalReason fatal = FatalReason::NONE;
 
@@ -132,8 +146,8 @@ static void test_nearest_tie_and_invalid_retarget() {
 static void test_exhaustion_retargets_deterministically() {
     constexpr int64_t T = FX_ONE_RAW;
     const EcoDeposit deposits[2] = {
-        {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {2 * T, 0, 1, 50, 0, 0, 0, 0, 0},
+        dep_at(0, 0, 0, 0),
+        dep_at(2 * T, 0, 1, 50),
     };
     FatalReason fatal = FatalReason::NONE;
 
@@ -164,7 +178,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     FatalReason fatal = FatalReason::NONE;
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 2, 3, 0, 0, 0, 0, 0}};
+        const EcoDeposit deposits[1] = {dep_at(0, 0, 2, 3)};
         const EcoCitizenIn harvesting =
             citizen_at(0, 0, EcoState::HARVEST, 0u);
         const EcoCitizenOut out =
@@ -178,7 +192,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     }
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 1, 100, 0, 0, 0, 0, 0}};
+        const EcoDeposit deposits[1] = {dep_at(0, 0, 1, 100)};
         const EcoCitizenIn almost_full =
             citizen_at(0, 0, EcoState::HARVEST, 0u, ECO_CARRY_CAP - 1, 1u);
         const EcoCitizenOut out =
@@ -192,7 +206,7 @@ static void test_harvest_clamps_and_exact_dropoff() {
     }
 
     {
-        const EcoDeposit deposits[1] = {{0, 0, 0, 50, 0, 0, 0, 0, 0}};
+        const EcoDeposit deposits[1] = {dep_at(0, 0, 0, 50)};
         const EcoCitizenIn returning =
             citizen_at(10 * T, 10 * T, EcoState::RETURN, 0u, 37, 2u);
         const EcoCitizenOut out =

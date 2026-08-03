@@ -256,6 +256,16 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         w.i64(g.deposits[i].y_raw);
         w.u8 (g.deposits[i].resource_idx);
         w.i32(g.deposits[i].remaining);
+        // Sprint 1.28: los campos de granja y reserva TAMBIEN se guardan. Sin
+        // ellos, una partida reanudada perdia el ritmo de regeneracion y el
+        // acumulador, y divergia del original — que es exactamente lo que
+        // detecto el subtest de frontera de guardado.
+        w.i32(g.deposits[i].regen_milli_per_tick);
+        w.i32(g.deposits[i].regen_accum);
+        w.i32(g.deposits[i].cap);
+        w.u32(g.deposits[i].owner_building);
+        w.i32(g.deposits[i].reserve);
+        w.u32(g.deposits[i].reserve_capability);
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         w.i64(g.dropoff_x[e]);
@@ -525,6 +535,12 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         if (ridx >= RESOURCE_COUNT) return false;
         g.deposits[i].resource_idx = ridx;
         g.deposits[i].remaining = r.i32();
+        g.deposits[i].regen_milli_per_tick = r.i32();
+        g.deposits[i].regen_accum = r.i32();
+        g.deposits[i].cap = r.i32();
+        g.deposits[i].owner_building = r.u32();
+        g.deposits[i].reserve = r.i32();
+        g.deposits[i].reserve_capability = r.u32();
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         g.dropoff_x[e] = r.i64();

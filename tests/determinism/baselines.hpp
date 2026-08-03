@@ -23,29 +23,29 @@ inline constexpr long GOLDEN_VECTOR_CASES = 1074;
 // checksum.hpp recorre TODOS los ECO_MAX_DEPOSITS slots de deposits[] y ahora
 // son 64 en vez de 32. Determinismo intacto (doble corrida idéntica en los
 // seis gates) y end_ticks inalterados —1227, 1108, 10473—.
-inline constexpr uint64_t G1_SYNTHETIC_STATE = 0xce3e1e43f76c6fd0ull;
+inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x2e3560f6a736c829ull;
 
 // G3: savetest canónico sin IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load conserva la continuación.
-inline constexpr uint64_t G3_SAVETEST_STATE = 0x18f043a9c255675aull;
-inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0x91f7b155f99a90c9ull;
+inline constexpr uint64_t G3_SAVETEST_STATE = 0x46cdb1761187b232ull;
+inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xef68dd79bb16f521ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xe61519c6cdb60cb1ull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xa9ea0d5f4b4dd003ull;
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0xe25e71e061cadd35ull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xb624b084fcae8bedull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0x551267b09755fcb4ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x0eb6568b0c573dabull;
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0xeebe5e38521f5554ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x3bc185983c7b2362ull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x17788c10803fb350ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x2a1d8d617da69cfcull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0x066c40e3afcff1d8ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0xe247578297646fccull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
@@ -158,8 +158,8 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1108u;
 // hubiera disparado, habria significado que la IA se atasca esperando
 // poblacion — y eso si habria sido un fallo que corregir, no un baseline que
 // re-registrar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x832db6a93c18df0aull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xde74d35240391a9eull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x2b9030bd3fced294ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x918a0a4cf490c33aull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

@@ -1791,6 +1791,70 @@ inline void economy_system(GameState& g) noexcept {
 // por tgt_x/tgt_y ni por movement_v1. El comportamiento observable — el
 // ciudadano converge a p_cerca y, al llegar, suma progreso — es idéntico al
 // descrito; solo cambia el mecanismo interno de locomoción.
+// Sprint 1.28 (SPEC-007 §15) — granjas y bosques plantados.
+//
+// Un sistema propio, y no un enganche dentro de `construction_system`, por dos
+// razones: es IDEMPOTENTE —comprueba si el deposito ya existe antes de
+// crearlo— y asi cubre tambien los edificios que nacen COMPLETOS, como los
+// centros de escenario, que nunca pasan por el constructor.
+//
+// Orden dentro del tick: va con el resto de sistemas, en barrido ASCENDENTE
+// por indice y con desempate por indice bajo, como todo lo demas.
+inline void farm_system(GameState& g) noexcept {
+    if (g.catalog == nullptr) return;
+    const EntityTable& t = g.entities;
+
+    // (a) Alta: todo edificio COMPLETO que declare deposito y aun no lo tenga.
+    for (uint32_t i = 0; i < t.capacity; ++i) {
+        if (!t.alive[i]) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.building_id[i] >= g.catalog->building_count) continue;
+        const BuildingDefinitionV1& bd = g.catalog->buildings[g.building_id[i]];
+        if (bd.creates_amount <= 0) continue;
+        // Una obra a medias no alimenta a nadie.
+        if (static_cast<uint32_t>(g.build_progress[i]) < bd.build_time_ticks) continue;
+
+        bool ya = false;
+        for (uint32_t d = 0; d < g.n_deposits && !ya; ++d) {
+            if (g.deposits[d].owner_building == i) ya = true;
+        }
+        if (ya) continue;
+        if (g.n_deposits >= ECO_MAX_DEPOSITS) continue;  // cota dura, sin desbordar
+
+        EcoDeposit& nd = g.deposits[g.n_deposits];
+        nd.x_raw = g.pos_x[i];
+        nd.y_raw = g.pos_y[i];
+        nd.resource_idx = bd.creates_resource_idx;
+        nd.remaining = bd.creates_amount;
+        nd.regen_milli_per_tick = bd.creates_regen_per_tick;
+        nd.regen_accum = 0;
+        nd.cap = bd.creates_cap;
+        nd.owner_building = i;
+        nd.reserve = 0;
+        nd.reserve_capability = ECO_NO_CAPABILITY;
+        ++g.n_deposits;
+    }
+
+    // (b) Baja: si el edificio dueno ya no esta, su deposito deja de dar.
+    //     NO se borra la entrada —quitarla desplazaria indices y romperia las
+    //     asignaciones de los aldeanos— sino que se agota y se marca sin
+    //     regeneracion. Un campo sin quien lo trabaje deja de producir.
+    for (uint32_t d = 0; d < g.n_deposits; ++d) {
+        EcoDeposit& dep = g.deposits[d];
+        if (dep.owner_building == ECO_NO_OWNER) continue;
+        if (dep.owner_building < t.capacity && t.alive[dep.owner_building]
+            && g.entity_kind[dep.owner_building] == 1u) {
+            continue;
+        }
+        dep.remaining = 0;
+        dep.regen_milli_per_tick = 0;
+    }
+
+    // (c) Regeneracion, un tick. Los yacimientos del mapa tienen regen 0 y no
+    //     se enteran de que este sistema existe.
+    for (uint32_t d = 0; d < g.n_deposits; ++d) eco_regen_deposit(g.deposits[d]);
+}
+
 inline void construction_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
@@ -2169,6 +2233,11 @@ inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexce
 
         // (5e) Producción + investigación (Sprint 1.2, SPEC-004 §11.4/§12.3):
         // después de construction_system, antes del destroy batch.
+        // (5e-bis) Granjas y bosques plantados (Sprint 1.28, SPEC-007 §15):
+        // tras el constructor, para que una granja terminada ESTE TICK ya
+        // registre su deposito.
+        detail::farm_system(g);
+
         detail::production_system(g);
         detail::craft_system(g);
         detail::research_system(g);

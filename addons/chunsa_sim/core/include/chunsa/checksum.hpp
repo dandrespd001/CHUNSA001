@@ -261,6 +261,14 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         h.i64(g.deposits[i].y_raw);
         h.u8(g.deposits[i].resource_idx);
         h.i32(g.deposits[i].remaining);
+        // Sprint 1.28: al dominio, o dos partidas con granjas distintas darian
+        // el mismo hash.
+        h.i32(g.deposits[i].regen_milli_per_tick);
+        h.i32(g.deposits[i].regen_accum);
+        h.i32(g.deposits[i].cap);
+        h.u32(g.deposits[i].owner_building);
+        h.i32(g.deposits[i].reserve);
+        h.u32(g.deposits[i].reserve_capability);
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         h.i64(g.dropoff_x[e]);

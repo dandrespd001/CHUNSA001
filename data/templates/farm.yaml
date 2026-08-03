@@ -1,0 +1,62 @@
+# Plantilla: granja. La comida que NO se agota.
+#
+# POR QUE EXISTE. La partida de 15 epocas que abrio el Sprint 1.25 no se podia
+# terminar: 6000 de comida en todo el mapa, y subir de epoca cuesta 200 —
+# catorce subidas son 2800, casi la mitad del mapa solo en avanzar. No faltaba
+# un ajuste de numeros: faltaba la agricultura.
+#
+# LA GRANJA ES UN EDIFICIO, NO UNA MENA (correccion del Director). Tiene HP, se
+# derriba, ocupa sitio y CUENTA para subir de epoca igual que cualquier otro
+# edificio. El deposito que registra es el mecanismo de recoleccion, no un
+# yacimiento: una mina agotada desaparece, una granja agotada sigue ahi y
+# vuelve a crecer.
+#
+# LOS NUMEROS, que son balance declarado. 60 de madera es caro para lo temprano
+# y barato para lo tardio, a proposito: en la epoca 2 una granja es una
+# inversion que duele, y en la 12 es rutina. 150 de techo con 1 cada 20 ticks
+# significa que una granja vacia tarda 3000 ticks —dos minutos y medio a 20
+# por segundo— en llenarse sola. Es lento aposta: la granja no sustituye al
+# aldeano, le da a donde volver.
+#
+# Ventana [2, 15] porque la epoca 2 ES la Neolitica, y la Neolitica es
+# literalmente la invencion de la agricultura (SPEC-007 §2). No hay granjas en
+# la Paleolitica y eso no es una limitacion de diseno, es lo que separa una
+# epoca de la otra.
+template_id: base:farm
+schema_version: 1
+epoch_window:
+  - 2
+  - 15
+kind: economic
+footprint:
+  width_cells: 2
+  height_cells: 2
+  blocks_movement: false
+stats:
+  hp: 120
+  armor:
+    cut: 0
+    pierce: 0
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 60
+build_time_ticks: 300
+creates_resource_idx: 0
+creates_amount: 150
+creates_regen_per_tick: 50   # milesimas: 1 unidad cada 20 ticks (1 seg)
+creates_cap: 150
+dropoff_resources: []
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.28-granjas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect

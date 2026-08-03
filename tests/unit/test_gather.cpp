@@ -27,6 +27,20 @@
 #include "chunsa/replay.hpp"
 #include "chunsa/save_io.hpp"
 
+// Helper local (Sprint 1.28): EcoDeposit crece cada vez que el modelo de
+// recursos gana algo —regeneracion, techo, dueno, reserva— y la inicializacion
+// POSICIONAL se rompe con cada campo nuevo por -Wmissing-field-initializers.
+// Ya paso dos veces. Nombrar solo lo que la prueba usa deja el resto en cero y
+// hace el fixture inmune al proximo campo.
+static chunsa::EcoDeposit dep_at(int64_t x, int64_t y, uint8_t recurso, int32_t queda) {
+    chunsa::EcoDeposit d{};
+    d.x_raw = x; d.y_raw = y; d.resource_idx = recurso; d.remaining = queda;
+    d.owner_building = chunsa::ECO_NO_OWNER;
+    d.reserve_capability = chunsa::ECO_NO_CAPABILITY;
+    return d;
+}
+
+
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
 
@@ -421,9 +435,9 @@ static void test_exhaustion_prefers_same_resource_then_any_then_idle() {
     // Depósito 1: B, a 3 tiles — MÁS CERCA que el depósito 2, pero recurso distinto.
     // Depósito 2: A, a 10 tiles — MISMO recurso que el agotado, más lejos que B.
     EcoDeposit deposits[3] = {
-        {0, 0, /*A*/0u, 0, 0, 0, 0, 0, 0},
-        {3 * T, 0, /*B*/1u, 50, 0, 0, 0, 0, 0},
-        {10 * T, 0, /*A*/0u, 50, 0, 0, 0, 0, 0},
+        dep_at(0, 0, /*A*/0u, 0),
+        dep_at(3 * T, 0, /*B*/1u, 50),
+        dep_at(10 * T, 0, /*A*/0u, 50),
     };
 
     EcoCitizenIn in{};
@@ -697,9 +711,9 @@ static void test_save_load_and_replay_preserve_redirect_transition() {
 static void test_auto_gather_prefers_in_zone_over_remote_same_resource() {
     using namespace allied_zone_fixture;
     auto g = make_state(3u);
-    g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
-    g->deposits[2] = EcoDeposit{50 * FX_ONE_RAW, CENTER_Y, 1u, 100, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(CENTER_X, CENTER_Y, 0u, 0);
+    g->deposits[1] = dep_at(100 * FX_ONE_RAW, CENTER_Y, 0u, 100);
+    g->deposits[2] = dep_at(50 * FX_ONE_RAW, CENTER_Y, 1u, 100);
     g->eco_assigned_deposit[1] = 0u;
 
     step(*g, nullptr, 0u);
@@ -716,9 +730,9 @@ static void test_auto_gather_nearest_and_low_index_tiebreak() {
     using namespace allied_zone_fixture;
     {
         auto g = make_state(3u);
-        g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0, 0, 0, 0, 0, 0};
-        g->deposits[1] = EcoDeposit{55 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
-        g->deposits[2] = EcoDeposit{45 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
+        g->deposits[0] = dep_at(CENTER_X, CENTER_Y, 0u, 0);
+        g->deposits[1] = dep_at(55 * FX_ONE_RAW, CENTER_Y, 0u, 100);
+        g->deposits[2] = dep_at(45 * FX_ONE_RAW, CENTER_Y, 0u, 100);
         g->eco_assigned_deposit[1] = 0u;
 
         step(*g, nullptr, 0u);
@@ -726,9 +740,9 @@ static void test_auto_gather_nearest_and_low_index_tiebreak() {
     }
     {
         auto g = make_state(3u);
-        g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0, 0, 0, 0, 0, 0};
-        g->deposits[1] = EcoDeposit{35 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
-        g->deposits[2] = EcoDeposit{45 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
+        g->deposits[0] = dep_at(CENTER_X, CENTER_Y, 0u, 0);
+        g->deposits[1] = dep_at(35 * FX_ONE_RAW, CENTER_Y, 0u, 100);
+        g->deposits[2] = dep_at(45 * FX_ONE_RAW, CENTER_Y, 0u, 100);
         g->eco_assigned_deposit[1] = 0u;
 
         step(*g, nullptr, 0u);
@@ -743,8 +757,8 @@ static void test_auto_gather_nearest_and_low_index_tiebreak() {
 static void test_auto_gather_without_in_zone_deposit_becomes_idle() {
     using namespace allied_zone_fixture;
     auto g = make_state(2u);
-    g->deposits[0] = EcoDeposit{CENTER_X, CENTER_Y, 0u, 0, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 1u, 100, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(CENTER_X, CENTER_Y, 0u, 0);
+    g->deposits[1] = dep_at(100 * FX_ONE_RAW, CENTER_Y, 1u, 100);
     g->eco_assigned_deposit[1] = 0u;
     g->vel_x[1] = FX_ONE_RAW;
 
@@ -764,7 +778,7 @@ static void test_auto_gather_without_in_zone_deposit_becomes_idle() {
 static void test_player_gather_outside_allied_zone_is_accepted() {
     using namespace allied_zone_fixture;
     auto g = make_state(1u);
-    g->deposits[0] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * FX_ONE_RAW, CENTER_Y, 0u, 100);
     const EntityHandle citizen{1u, g->entities.generation[1]};
     const int64_t x_before = g->pos_x[1];
     RawCommand cmd = gather(g->tick, 0u, 1u, citizen,
@@ -787,8 +801,8 @@ static void test_player_gather_outside_allied_zone_is_accepted() {
 static void test_remote_player_deposit_exhaustion_returns_to_allied_zone() {
     using namespace allied_zone_fixture;
     auto g = make_state(2u);
-    g->deposits[0] = EcoDeposit{50 * FX_ONE_RAW, CENTER_Y, 1u, 100, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 0u, 100, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(50 * FX_ONE_RAW, CENTER_Y, 1u, 100);
+    g->deposits[1] = dep_at(100 * FX_ONE_RAW, CENTER_Y, 0u, 100);
     const EntityHandle citizen{1u, g->entities.generation[1]};
     RawCommand cmd = gather(g->tick, 0u, 1u, citizen,
                             g->deposits[1].x_raw, g->deposits[1].y_raw);
@@ -812,7 +826,7 @@ static void test_remote_player_deposit_exhaustion_returns_to_allied_zone() {
 static void test_completed_expansion_building_extends_allied_zone() {
     using namespace allied_zone_fixture;
     auto g = make_state(1u);
-    g->deposits[0] = EcoDeposit{100 * FX_ONE_RAW, CENTER_Y, 2u, 100, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * FX_ONE_RAW, CENTER_Y, 2u, 100);
     const EntityHandle expansion =
         spawn_building(*g, 1u, 100 * FX_ONE_RAW, CENTER_Y, 49u);
     CHECK(expansion.index == 2u);

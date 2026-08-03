@@ -338,6 +338,8 @@ inline void gs_init_economy(GameState& g) noexcept {
         g.deposits[i].y_raw = fixed[i].ty * T + T / 2;
         g.deposits[i].resource_idx = fixed[i].res;
         g.deposits[i].remaining = 500;
+        g.deposits[i].owner_building = ECO_NO_OWNER;
+        g.deposits[i].reserve_capability = ECO_NO_CAPABILITY;
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         const int64_t dtx = 20 + static_cast<int64_t>(e) * 28;
@@ -566,6 +568,11 @@ inline void gs_init_economy_from_catalog(GameState& g) noexcept {
     if (n > ECO_MAX_DEPOSITS) n = ECO_MAX_DEPOSITS;
     g.n_deposits = n;
     for (uint32_t i = 0; i < n; ++i) {
+        // Sprint 1.28: marcar como YACIMIENTO DEL MAPA, no granja. Sin esto
+        // owner_building queda en 0 por el memset, farm_system lo toma por una
+        // granja cuyo edificio ya no existe y lo vacia en el primer tick.
+        g.deposits[i].owner_building = ECO_NO_OWNER;
+        g.deposits[i].reserve_capability = ECO_NO_CAPABILITY;
         g.deposits[i].x_raw = cat.map_resource_spawns[i].x_raw;
         g.deposits[i].y_raw = cat.map_resource_spawns[i].y_raw;
         g.deposits[i].resource_idx = cat.map_resource_spawns[i].resource_idx;

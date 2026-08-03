@@ -46,7 +46,7 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 100;
-        d.regen_per_tick = 0;
+        d.regen_milli_per_tick = 0;
         d.cap = 0;
         for (uint32_t t = 0; t < 1000u; ++t) eco_regen_deposit(d);
         CHECK(d.remaining == 100);
@@ -57,7 +57,7 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 0;
-        d.regen_per_tick = 0;
+        d.regen_milli_per_tick = 0;
         for (uint32_t t = 0; t < 100u; ++t) eco_regen_deposit(d);
         CHECK(d.remaining == 0);
     }
@@ -68,7 +68,7 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 0;
-        d.regen_per_tick = 1;
+        d.regen_milli_per_tick = 1000;   // 1 unidad por tick
         d.cap = 10;
         for (uint32_t t = 0; t < 100u; ++t) eco_regen_deposit(d);
         CHECK(d.remaining == 10);
@@ -79,7 +79,7 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 0;
-        d.regen_per_tick = 1;
+        d.regen_milli_per_tick = 1000;   // 1 unidad por tick
         d.cap = 100;
         for (uint32_t t = 0; t < 5u; ++t) eco_regen_deposit(d);
         CHECK(d.remaining == 5);
@@ -91,7 +91,7 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 50;
-        d.regen_per_tick = 1;
+        d.regen_milli_per_tick = 1000;   // 1 unidad por tick
         d.cap = 10;
         eco_regen_deposit(d);
         CHECK(d.remaining == 50);
@@ -102,10 +102,42 @@ int main() {
     {
         EcoDeposit d{};
         d.remaining = 0;
-        d.regen_per_tick = 1000000;
+        d.regen_milli_per_tick = 1000000000;
         d.cap = 150;
         eco_regen_deposit(d);
         CHECK(d.remaining == 150);
+    }
+
+    // 6-bis) EL CASO QUE DE VERDAD USA LA GRANJA: ritmo POR DEBAJO de una
+    //    unidad por tick. Con enteros no se puede bajar de 1, y 1 por tick a
+    //    20 ticks/segundo serían 1200 por minuto — absurdo para un campo de
+    //    trigo. Por eso el ritmo va en MILÉSIMAS y hay un acumulador entero.
+    //
+    //    50 milésimas = una unidad cada 20 ticks, que es un segundo de juego.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.regen_milli_per_tick = 50;
+        d.cap = 1000;
+        for (uint32_t t = 0; t < 19u; ++t) eco_regen_deposit(d);
+        CHECK(d.remaining == 0);          // aún no llega a la unidad
+        eco_regen_deposit(d);
+        CHECK(d.remaining == 1);          // en el tick 20, exacta
+        for (uint32_t t = 0; t < 20u; ++t) eco_regen_deposit(d);
+        CHECK(d.remaining == 2);          // y el ritmo se mantiene
+    }
+
+    // 6-ter) El RESTO no se pierde. Tras 1000 ticks a 50 milésimas deben ser
+    //    exactamente 50 unidades: si el acumulador tirara el sobrante, el
+    //    ritmo real sería más lento que el declarado y nadie lo notaría hasta
+    //    hacer la cuenta.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.regen_milli_per_tick = 50;
+        d.cap = 10000;
+        for (uint32_t t = 0; t < 1000u; ++t) eco_regen_deposit(d);
+        CHECK(d.remaining == 50);
     }
 
     // 7) UN DEPÓSITO DE GRANJA SE DISTINGUE DE UN YACIMIENTO. Es la corrección

@@ -1,0 +1,27 @@
+# Hereda de base:farm. Una granja generica no afirma nada historico, asi que
+# su procedencia es evidence N: sin fuentes y sin informe.
+extends: base:farm
+id: rome:farm
+civ_id: rome:republic_imperial
+display_name_key: rome:building.farm
+description_key: rome:building.farm.description
+playable_period_ids:
+  - rome:italic_neolithic
+  - rome:remedello_copper
+  - rome:terramare_bronze
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.28-granjas
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: N
+    verification_reports: []
+    sources: []
+  balance_design:
+    author: architect
+    rationale: "Granja de rome. Es lo que hace terminable una partida de 15 epocas: sin ella el mapa tiene 6000 de comida en total y subir de epoca cuesta 200, asi que catorce subidas se llevan casi la mitad. Regenera 1 unidad por segundo hasta un techo de 150, lento a proposito: la granja no sustituye al aldeano, le da a donde volver. Ventana [2,15] porque la epoca 2 ES la Neolitica y la Neolitica es la invencion de la agricultura; que no haya granjas en la Paleolitica no es una limitacion, es lo que separa una epoca de la otra."
+    reviewed_by:
+      - architect

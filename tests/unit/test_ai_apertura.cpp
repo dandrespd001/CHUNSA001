@@ -25,6 +25,20 @@
 #include "chunsa/step.hpp"
 #include "chunsa/ai_stub.hpp"
 
+// Helper local (Sprint 1.28): EcoDeposit crece cada vez que el modelo de
+// recursos gana algo —regeneracion, techo, dueno, reserva— y la inicializacion
+// POSICIONAL se rompe con cada campo nuevo por -Wmissing-field-initializers.
+// Ya paso dos veces. Nombrar solo lo que la prueba usa deja el resto en cero y
+// hace el fixture inmune al proximo campo.
+static chunsa::EcoDeposit dep_at(int64_t x, int64_t y, uint8_t recurso, int32_t queda) {
+    chunsa::EcoDeposit d{};
+    d.x_raw = x; d.y_raw = y; d.resource_idx = recurso; d.remaining = queda;
+    d.owner_building = chunsa::ECO_NO_OWNER;
+    d.reserve_capability = chunsa::ECO_NO_CAPABILITY;
+    return d;
+}
+
+
 static int g_fails = 0;
 #define CHECK(cond) do { if (!(cond)) { ++g_fails; std::printf("CHECK L%d: %s\n", __LINE__, #cond); } } while (0)
 
@@ -223,9 +237,9 @@ static void test_economic_layer_redirects_idle_citizen() {
     // 3 depósitos propios de prueba: A cerca, B cerca, Me lejos — todos vivos.
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 3;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
-    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * T, 100 * T, 0u /*A*/, 500);
+    g->deposits[1] = dep_at(105 * T, 100 * T, 1u /*B*/, 500);
+    g->deposits[2] = dep_at(200 * T, 200 * T, 2u /*Me*/, 500);
 
     // 3 ciudadanos propios (owner=1): 2 ya recolectando A, 1 OCIOSO (sin
     // depósito válido). Ninguno con build_target.
@@ -294,9 +308,9 @@ static void test_economic_layer_redirects_surplus_when_no_idle() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 3;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
-    g->deposits[2] = EcoDeposit{200 * T, 200 * T, 2u /*Me*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * T, 100 * T, 0u /*A*/, 500);
+    g->deposits[1] = dep_at(105 * T, 100 * T, 1u /*B*/, 500);
+    g->deposits[2] = dep_at(200 * T, 200 * T, 2u /*Me*/, 500);
 
     // 3 ciudadanos: 2 en A (índices 1,2), 1 en Me (índice 3) — NINGUNO ocioso.
     for (int k = 0; k < 3; ++k) {
@@ -354,7 +368,7 @@ static void test_economic_layer_skips_citizen_used_by_assign_build() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 1;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * T, 100 * T, 1u /*B*/, 500);
 
     // ÚNICO ciudadano propio: ocioso (sin build_target, sin depósito) — el
     // ÚNICO candidato tanto para ASSIGN_BUILD como para la capa económica.
@@ -398,8 +412,8 @@ static void test_ai_execute_deterministic_with_economic_layer() {
 
     const int64_t T = FX_ONE_RAW;
     g->n_deposits = 2;
-    g->deposits[0] = EcoDeposit{100 * T, 100 * T, 0u /*A*/, 500, 0, 0, 0, 0, 0};
-    g->deposits[1] = EcoDeposit{105 * T, 100 * T, 1u /*B*/, 500, 0, 0, 0, 0, 0};
+    g->deposits[0] = dep_at(100 * T, 100 * T, 0u /*A*/, 500);
+    g->deposits[1] = dep_at(105 * T, 100 * T, 1u /*B*/, 500);
     for (int k = 0; k < 2; ++k) {
         const EntityHandle h = et_spawn(g->entities);
         const uint32_t i = h.index;
