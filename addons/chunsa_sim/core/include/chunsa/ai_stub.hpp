@@ -36,6 +36,7 @@
 #include "chunsa/rng.hpp"
 #include "chunsa/commands.hpp"
 #include "chunsa/serialize.hpp"
+#include "chunsa/market.hpp"   // MARKET_LOT/MARKET_BASE_BP/market_buy_gold (Sprint 1.35)
 #include "chunsa/step.hpp"   // EPOCH_MAX_V1/EPOCH_COST_*/BUILD_ARRIVE_RADIUS_RAW (constantes v1, no duplicar)
 
 namespace chunsa {
@@ -52,7 +53,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 9;  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 10;  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -115,6 +116,30 @@ inline constexpr int32_t AI_FARM_FOOD_OUTLOOK_THRESHOLD = 200;
 // tope de población. El "no encadenar" (una granja en obra a la vez) es lo que
 // impide que esta prioridad degrade en construir campos sin parar.
 inline constexpr int32_t AI_FARM_PRIORITY_BP = 8000;
+
+// Sprint 1.35 — prioridad del candidato COMERCIAR en la utilidad entera (bp)
+// de la capa estratégica. Justificación: comerciar es un MEDIO, no un fin.
+// La horquilla del mercado es del 30 % a propósito (SPEC-010): el mercado es
+// una SALIDA DE EMERGENCIA para desatascar una partida, no una estrategia
+// económica que compita con recolectar. Por eso esta prioridad (3000) pierde
+// contra TODOS los pesos del perfil (economía/construir/militarizar/tech =
+// 5000) y contra la vivienda (10000) y la granja (8000). Solo gana cuando la
+// IA está BLOQUEADA — sin receta que pagar, sin edificio que levantar, sin
+// unidad que entrenar — y el mercado puede desatascar la receta que quiere
+// ejecutar. El "una operación por decisión" es lo que impide que esto
+// degrade en comerciar por costumbre, que es la única forma de arruinarse
+// con un mercado de horquilla alta.
+inline constexpr int32_t AI_TRADE_PRIORITY_BP = 3000;
+
+// Sprint 1.35 — umbral de VENTA del candidato COMERCIAR. Vender solo
+// "excedente claro": un recurso que la economía de la civ NO puede gastar
+// (ninguna receta, ningún edificio construible, ninguna unidad entrenable lo
+// consume en esta época) y que además está por encima de este umbral (2
+// lotes). Ese recurso es stock muerto por construcción: convertirlo en oro
+// es estricto bien y no puede sabotear ningún plan porque el plan no tiene
+// forma de usarlo. Por debajo de 2 lotes no se toca nada: el mercado castiga
+// la monotonía y vender poco a poco es perder oro en movimiento de precio.
+inline constexpr int32_t AI_TRADE_SELL_THRESHOLD = 200;
 
 // Estados del ciclo de vida de UN job de IA. EMPTY = slot libre;
 // DISPATCHED/RUNNING = en vuelo; COMPLETED = resultado disponible;
@@ -576,6 +601,161 @@ inline bool ai_afford_epoch(const GameState& g, uint8_t player,
     return g.player_stock[player][0] >= cost0
         && g.player_stock[player][1] >= cost1
         && g.player_stock[player][2] >= cost2;
+}
+
+// Sprint 1.35 — candidato COMERCIAR (mercado, SPEC-010). Una sola búsqueda
+// para las DOS direcciones, y como máximo UNA operación por ciclo (el
+// kernel solo aplica un lote por comando y encadenar diez seguidos es la
+// forma de arruinarse con la horquilla del 30 %).
+//
+// COMPRAR: ¿hay una receta que la IA quiere ejecutar pero no puede pagar
+// porque le falta EXACTAMENTE UN recurso (que no sea el oro), y un lote del
+// mercado cubre el déficit y el oro alcanza para pagarlo? Esa es la SALIDA
+// DE EMERGENCIA del Sprint 1.33: desatasca la receta bloqueada. Se exige que
+// UN lote baste y que sea el ÚNICO recurso corto — si faltan dos, comprar
+// uno no desatasca nada y es gastar oro por costumbre, y la horquilla hace
+// que toda compra que no desbloquee sea una mala compra.
+//
+// VENDER: solo "excedente claro". Un recurso es excedente claro cuando la
+// economía de la civ en esta época NO tiene forma de gastarlo: ninguna
+// receta lo consume como input, ningún edificio construible lo cobra, y
+// ninguna unidad entrenable lo cuesta. Ese stock es muerto por construcción;
+// convertirlo en oro es estricto bien. El umbral (AI_TRADE_SELL_THRESHOLD,
+// 2 lotes) evita el goteo: vender poco a poco es perder oro en movimiento
+// de precio.
+//
+// El índice del ORO NO es fijo: se resuelve del catálogo con
+// catalog_find_resource (mismo patrón que el `case TRADE` de step.hpp), o un
+// cambio de datos rompería el mercado en silencio. Toda la función es PURA
+// de (g, player): sin float, sin heap, sin reloj, sin entropía; barrido
+// ascendente y desempate por índice bajo (regla de oro, SPEC-005 §0).
+struct AiTradeV1 {
+    bool     found = false;        // hay una operación que emitir
+    bool     buy = false;          // true = COMPRAR un lote, false = VENDER uno
+    uint32_t market_index = 0;     // entidad del mercado propio COMPLETO
+    uint8_t  resource = 0;         // slot de recurso a comprar/vender
+    int32_t  cost_gold = 0;        // coste en oro de la compra (0 si es venta)
+};
+
+inline AiTradeV1 ai_find_trade(const GameState& g, uint8_t player) noexcept {
+    AiTradeV1 r{};
+    if (g.catalog == nullptr) return r;
+    const DataCatalogV1& cat = *g.catalog;
+    const uint8_t epoch = g.player_epoch[player];
+
+    static constexpr char kGold[] = "chunsa:gold";
+    const ResourceId oro_id = catalog_find_resource(cat, kGold, sizeof(kGold) - 1);
+    if (oro_id == INVALID_RESOURCE_ID) return r;
+    const uint8_t oro = static_cast<uint8_t>(cat.resources[oro_id].index);
+    if (oro >= RESOURCE_COUNT) return r;
+
+    // 1) Mercado propio COMPLETO: primer edificio propio completo con
+    //    can_trade. Sin él nada de lo siguiente puede emitirse — el kernel
+    //    rechazaría el TRADE con ILLEGAL_STATE y un comando condenado es
+    //    ruido en el mailbox.
+    uint32_t market = 0;
+    bool has_market = false;
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] != player) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.building_id[i] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bd = cat.buildings[g.building_id[i]];
+        if (static_cast<uint32_t>(g.build_progress[i]) < bd.build_time_ticks) continue;
+        if (bd.can_trade == 0u) continue;
+        market = i; has_market = true; break;
+    }
+    if (!has_market) return r;
+
+    // 2) COMPRAR: primera receta (barrido ascendente por edificio y por
+    //    receta, el MISMO orden que el candidato FABRICAR de más abajo) que
+    //    está lista para ejecutar — edificio completo, época alcanzada,
+    //    edificio ocioso — salvo por UN recurso corto, no-oro, cuyo déficit
+    //    un lote cubre y que el oro alcanza a pagar.
+    for (uint32_t bi = 0; bi < g.entities.capacity; ++bi) {
+        if (!g.entities.alive[bi]) continue;
+        if (g.owner[bi] != player) continue;
+        if (g.entity_kind[bi] != 1u) continue;
+        if (g.building_id[bi] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bd = cat.buildings[g.building_id[bi]];
+        if (static_cast<uint32_t>(g.build_progress[bi]) < bd.build_time_ticks) continue;
+        if (g.craft_recipe[bi] != INVALID_RECIPE_ID) continue;   // ocupada: el kernel lo rechazaría
+        if (bd.epoch_min > epoch) continue;
+        for (uint8_t k = 0; k < bd.recipe_count; ++k) {
+            const RecipeId rid = bd.recipes[k];
+            if (rid >= cat.recipe_count) continue;
+            const RecipeV1& rec = cat.recipes[rid];
+            uint8_t missing = 0xFFu;
+            bool     clean = true;
+            for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+                const int32_t need = rec.input[rr];
+                if (need <= 0) continue;
+                if (rr == oro) { clean = false; break; }        // el oro no se compra en el mercado
+                if (g.player_stock[player][rr] >= need) continue;
+                if (missing != 0xFFu) { clean = false; break; } // más de un recurso corto
+                missing = rr;
+            }
+            if (!clean || missing == 0xFFu) continue;
+            const int32_t deficit = rec.input[missing] - g.player_stock[player][missing];
+            if (deficit <= 0 || deficit > MARKET_LOT) continue;
+            int32_t precio = g.market_price_bp[player][missing];
+            if (precio == 0) precio = MARKET_BASE_BP;           // sin inicializar = base
+            const int32_t coste = market_buy_gold(precio);
+            if (g.player_stock[player][oro] < coste) continue;
+            r.found = true;
+            r.buy = true;
+            r.market_index = market;
+            r.resource = missing;
+            r.cost_gold = coste;
+            return r;
+        }
+    }
+
+    // 3) VENDER: primer recurso (ascendente) que sea stock muerto de verdad.
+    //    Solo se llega aquí si no hay nada que comprar, así que la venta es
+    //    la única operación posible este ciclo.
+    bool spendable[RESOURCE_COUNT] = {};
+    for (uint32_t ri = 0; ri < cat.recipe_count; ++ri) {
+        const RecipeV1& rec = cat.recipes[ri];
+        for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+            if (rec.input[rr] > 0) spendable[rr] = true;
+        }
+    }
+    for (uint32_t bi = 0; bi < cat.building_count; ++bi) {
+        const BuildingDefinitionV1& bd = cat.buildings[bi];
+        if (bd.constructible == 0u) continue;
+        if (bd.civ_id != INVALID_CIV_ID && bd.civ_id != g.player_civ[player]) continue;
+        if (!ai_epoch_ok(epoch, bd.epoch_min, bd.epoch_max)) continue;
+        for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+            if (bd.cost[rr] > 0) spendable[rr] = true;
+        }
+    }
+    for (uint32_t bi = 0; bi < cat.building_count; ++bi) {
+        const BuildingDefinitionV1& bd = cat.buildings[bi];
+        if (bd.civ_id != INVALID_CIV_ID && bd.civ_id != g.player_civ[player]) continue;
+        if (!ai_epoch_ok(epoch, bd.epoch_min, bd.epoch_max)) continue;
+        for (uint8_t k = 0; k < bd.train_count; ++k) {
+            const UnitId uid = bd.trains[k];
+            if (uid >= cat.unit_count) continue;
+            const UnitDefinitionV1& ud = cat.units[uid];
+            if (!ai_epoch_ok(epoch, ud.epoch_min, ud.epoch_max)) continue;
+            for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+                if (ud.cost[rr] > 0) spendable[rr] = true;
+            }
+        }
+    }
+    for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+        if (rr == oro) continue;
+        if (spendable[rr]) continue;
+        if (g.player_stock[player][rr] < AI_TRADE_SELL_THRESHOLD) continue;
+        r.found = true;
+        r.buy = false;
+        r.market_index = market;
+        r.resource = rr;
+        r.cost_gold = 0;
+        return r;
+    }
+    return r;
 }
 
 inline bool ai_caps_ok(const GameState& g, uint8_t player, const BuildingDefinitionV1& bdef) noexcept {
@@ -1196,6 +1376,14 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             }
         }
 
+        // Candidato COMERCIAR (Sprint 1.35, SPEC-010). Se calcula SIEMPRE que
+        // haya catálogo y mercado propio completo, pero su utilidad solo gana
+        // cuando la IA está bloqueada (ver AI_TRADE_PRIORITY_BP). No comparte
+        // bandera con FABRICAR a propósito: fabricar exige pagar la receta hoy
+        // (si puede, lo hace); comerciar existe justamente para cuando NO puede
+        // y el mercado desatasca.
+        const AiTradeV1 trade = ai_find_trade(g, ai_player);
+
         // ---- utilidad entera (bp), empate -> menor índice de intención ----
         const int32_t u_econ  = econ_ok  ? profile.economy_focus_bp  : 0;
         const int32_t u_build = build_ok ? profile.military_focus_bp : 0;
@@ -1228,6 +1416,12 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         const int32_t u_farm  = farm_ok ? AI_FARM_PRIORITY_BP : 0;
         if (u_farm  > best_u) { best_u = u_farm;  best_idx = 6; }
         if (u_craft > best_u) { best_u = u_craft; best_idx = 4; }
+        // El COMERCIO se evalua el ULTIMO y con estricto mayor: con
+        // AI_TRADE_PRIORITY_BP (3000) pierde contra todos los pesos del perfil
+        // (5000), contra la vivienda (10000) y contra la granja (8000) — ver el
+        // comentario de la constante sobre por que ese orden es el correcto.
+        const int32_t u_trade = trade.found ? AI_TRADE_PRIORITY_BP : 0;
+        if (u_trade > best_u) { best_u = u_trade; best_idx = 7; }
 
         if (best_u > 0) {
             if (best_idx == 0) {
@@ -1256,6 +1450,26 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 emit(CommandType::CRAFT,
                      EntityHandle{craft_building, g.entities.generation[craft_building]},
                      0, 0, craft_recipe_id);
+            } else if (best_idx == 7) {
+                // TRADE reutiliza unit_id para el índice de recurso y hp como
+                // signo (SPEC-010, mismo truco de campos que ATTACK): hp > 0
+                // COMPRA un lote, hp < 0 VENDE uno. El kernel ya validó lo
+                // mismo que comprueba ai_find_trade (edificio-mercado completo,
+                // oro suficiente, stock para vender), así que el comando se
+                // acepta — emitir a ciegas habría sido ruido en el mailbox.
+                if (count < AI_MAX_COMMANDS) {
+                    RawCommand cmd{};
+                    cmd.target_tick = target_tick;
+                    cmd.emitter     = static_cast<uint16_t>(ai_player);
+                    cmd.type        = CommandType::TRADE;
+                    cmd.sequence    = seq_base + static_cast<uint64_t>(count + 1u);
+                    cmd.p.handle    = EntityHandle{trade.market_index,
+                                                   g.entities.generation[trade.market_index]};
+                    cmd.p.unit_id   = trade.resource;
+                    cmd.p.hp        = trade.buy ? 1 : -1;
+                    b.result[count] = cmd;
+                    ++count;
+                }
             } else {  // best_idx == 3
                 if (research_ok) {
                     emit(CommandType::RESEARCH_TECH,

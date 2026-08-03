@@ -235,6 +235,134 @@ int main() {
         }
     }
 
+    // ========================================================================
+    // LA IA COMERCIA CUANDO UN RECURSO LA BLOQUEA (Sprint 1.35)
+    //
+    // POR QUE ESTA PRUEBA EXISTE. El Sprint 1.33 anadió el mercado (TRADE) y
+    // la IA no lo usaba: podía quedarse bloqueada sin estaño —con oro de sobra
+    // y un mercado propio construido— mirándolo. Ningún test ejercita el
+    // comercio: test_market solo prueba la aritmética del lote, y sin un
+    // escenario donde la IA DEBA comprar, la suite pasaría en verde con un
+    // candidato que nunca se dispara (la lección del 1.34).
+    //
+    // Escenario: mercado propio COMPLETO, taller propio COMPLETO con la
+    // receta rome:terramare_bronze_casting (cobre 3 + estaño 1 -> bronce 2),
+    // oro de sobra, cobre de sobra y ESTAÑO A CERO. La IA quiere ejecutar la
+    // receta, no puede pagarla, y el mercado la desatasca. Tiene que emitir
+    // TRADE de COMPRA de estaño. Sin comida/madera/piedra, además, ningún otro
+    // intento (construir/entrenar/época) puede ganarle al comercio.
+    // ========================================================================
+    {
+        auto g3 = make_state(cat, setup, 20260804ull);
+        {
+            std::vector<RawCommand> batch(16);
+            const uint32_t n = build_apertura_batch(batch, 0u, setup);
+            step(*g3, batch.data(), n);
+        }
+        // Se AGOTA TODO el mapa a mano para que ningún ciudadano recolecte y
+        // los stocks se queden exactamente donde los pone esta prueba. Sin
+        // esto, los 3 aldeanos de la apertura podrían reunir comida/madera/
+        // piedra y destapar EPOCH_UP, que (5000 bp) le ganaría al comercio.
+        for (uint32_t d = 0; d < g3->n_deposits; ++d) g3->deposits[d].remaining = 0;
+        // El taller [4,5] y el mercado [3,15] de Roma viven en la época 5,
+        // que es donde la apertura fija el escenario. Sin esto no habría ni
+        // receta que pagar ni mercado con el que pagarla.
+        for (uint8_t e = 0; e < 2u; ++e) g3->player_epoch[e] = 5u;
+
+        // Indices DINAMICOS del catálogo real — el oro NO tiene índice fijo y
+        // cablearlo aquí rompería la prueba si cambian los datos.
+        const ResourceId gold_id   = catalog_find_resource(cat, "chunsa:gold", 11);
+        const ResourceId tin_id    = catalog_find_resource(cat, "chunsa:tin", 10);
+        const ResourceId copper_id = catalog_find_resource(cat, "chunsa:copper", 13);
+        const BuildingId market_b  = catalog_find_building(cat, "rome:market", 11);
+        const BuildingId workshop_b = catalog_find_building(cat, "rome:terramare_workshop",
+                                                           sizeof("rome:terramare_workshop") - 1);
+        CHECK(gold_id != INVALID_RESOURCE_ID && tin_id != INVALID_RESOURCE_ID
+              && copper_id != INVALID_RESOURCE_ID
+              && market_b != INVALID_BUILDING_ID && workshop_b != INVALID_BUILDING_ID);
+        if (gold_id == INVALID_RESOURCE_ID || tin_id == INVALID_RESOURCE_ID
+            || copper_id == INVALID_RESOURCE_ID
+            || market_b == INVALID_BUILDING_ID || workshop_b == INVALID_BUILDING_ID) {
+            std::printf("comercio: el catálogo real no resolvió oro/estaño/cobre/"
+                        "mercado/taller\n");
+            ++g_fails;
+        } else {
+            const uint8_t oro    = static_cast<uint8_t>(cat.resources[gold_id].index);
+            const uint8_t tin    = static_cast<uint8_t>(cat.resources[tin_id].index);
+            const uint8_t copper = static_cast<uint8_t>(cat.resources[copper_id].index);
+
+            // Mercado y taller propios y COMPLETOS (build_progress = su
+            // build_time: nacer completos, mismo patrón que el put_foundry de
+            // test_ai_craft pero con los tiempos reales del catálogo).
+            auto put_complete_building = [&](BuildingId bid, int64_t tx, int64_t ty) -> void {
+                const EntityHandle h = et_spawn(g3->entities);
+                const uint32_t i = h.index;
+                zero_components(*g3, i);
+                g3->owner[i] = 1u;
+                g3->entity_kind[i] = 1u;
+                g3->building_id[i] = bid;
+                g3->build_progress[i] = cat.buildings[bid].build_time_ticks;
+                g3->hp[i] = 500; g3->max_hp[i] = 500;
+                g3->pos_x[i] = tx * FX_ONE_RAW;
+                g3->pos_y[i] = ty * FX_ONE_RAW;
+                g3->bld_anchor_tx[i] = static_cast<uint16_t>(tx);
+                g3->bld_anchor_ty[i] = static_cast<uint16_t>(ty);
+            };
+            put_complete_building(market_b, 200, 100);
+            put_complete_building(workshop_b, 204, 100);
+
+            // Oro de sobra, cobre de sobra, ESTAÑO a cero. Sin comida/madera/
+            // piedra, todos los demás intentos mueren por no poder pagar y el
+            // comercio (3000 bp) queda como única salida.
+            g3->player_stock[1][0] = 0;
+            g3->player_stock[1][1] = 0;
+            g3->player_stock[1][2] = 0;
+            g3->player_stock[1][oro] = 500;
+            g3->player_stock[1][copper] = 30;
+            g3->player_stock[1][tin] = 0;
+
+            AiJobBox box3{}; ai_box_init(box3, 1);
+            AiRuntimeV1 rt3{0u, 0u};
+            bool trade_emitido = false;
+            bool trade_compra = false;
+            uint8_t trade_recurso = 0;
+            for (uint32_t t = 0; t < 400u && !trade_emitido; ++t) {
+                if (ai_should_dispatch(box3, g3->tick)) ai_dispatch(box3, g3->tick, rt3);
+                if (box3.state == AiJobState::DISPATCHED) {
+                    ai_execute(box3, *g3);
+                    for (uint32_t k = 0; k < box3.result_count; ++k) {
+                        const RawCommand& rc = box3.result[k];
+                        if (rc.type != CommandType::TRADE) continue;
+                        trade_emitido = true;
+                        trade_compra = rc.p.hp > 0;
+                        trade_recurso = static_cast<uint8_t>(rc.p.unit_id);
+                    }
+                    step(*g3, box3.result, box3.result_count);
+                    rt3.decision_epoch += 1u;
+                    rt3.ai_sequence += box3.result_count;
+                    ai_box_init(box3, 1);
+                } else {
+                    step(*g3, nullptr, 0);
+                }
+            }
+            if (!trade_emitido) {
+                std::printf("La IA NO emitio TRADE con mercado completo, oro de "
+                            "sobra y estaño a cero: el candidato del 1.35 no se dispara\n");
+                ++g_fails;
+            } else if (!trade_compra || trade_recurso != tin) {
+                // Y cuando comercia, COMPRA el estaño que le falta, no vende
+                // otra cosa. hp > 0 es la compra (SPEC-010); vender con una
+                // receta bloqueada sería sabotearse.
+                std::printf("La IA emitio TRADE pero no la compra de estaño "
+                            "(hp=%d recurso=%u, esperado estaño=%u)\n",
+                            static_cast<int>(trade_compra ? 1 : -1),
+                            static_cast<unsigned>(trade_recurso),
+                            static_cast<unsigned>(tin));
+                ++g_fails;
+            }
+        }
+    }
+
     if (g_fails == 0) {
         std::printf("ai_epoch_policy OK\n");
         return 0;
