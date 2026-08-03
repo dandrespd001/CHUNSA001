@@ -33,12 +33,56 @@ static_assert(ECO_MAX_DEPOSITS <= 32u);
 
 enum class EcoState : uint8_t { SEEK = 0, HARVEST = 1, RETURN = 2 };
 
+// Sprint 1.28: sentinela "este deposito NO lo creo un edificio", es decir, es
+// un yacimiento del mapa de toda la vida.
+inline constexpr uint32_t ECO_NO_OWNER = 0xFFFFFFFFu;
+
 struct EcoDeposit {
     int64_t  x_raw;
     int64_t  y_raw;
     uint8_t  resource_idx; // 0=A, 1=B, 2=Me
     int32_t  remaining;    // <=0 = agotado
+    // --- Sprint 1.28 (SPEC-007 §15): granjas -------------------------------
+    // regen_per_tick == 0 significa FINITO: es el comportamiento de siempre y
+    // el valor por defecto, asi que los 22 yacimientos del mapa no cambian.
+    int32_t  regen_per_tick;
+    int32_t  cap;             // techo al que regenera
+    // Indice de la entidad-edificio que creo este deposito, o ECO_NO_OWNER.
+    //
+    // POR QUE EXISTE, y es la correccion del Director del 2026-08-03: LA
+    // GRANJA ES UN EDIFICIO, NO UNA MENA. Sin este campo, todo lo que hoy
+    // cuenta o dibuja "depositos" trataria una granja como un yacimiento: la
+    // pintaria como mineral en el minimapa y la sumaria al recuento del mapa.
+    // Con el, la distincion es explicita y quien deba ignorarlas puede.
+    uint32_t owner_building;
 };
+
+// Un deposito de granja se distingue de un yacimiento del mapa por tener
+// edificio dueno. La diferencia no es cosmetica: un yacimiento agotado
+// desaparece, una granja agotada sigue ahi y vuelve a crecer.
+inline bool eco_deposit_is_farm(const EcoDeposit& d) noexcept {
+    return d.owner_building != ECO_NO_OWNER;
+}
+
+// Regeneracion de UN deposito, un tick. Aritmetica ENTERA pura: nada de coma
+// flotante, que esta prohibida en el kernel.
+//
+// Tres decisiones que merecen quedar dichas:
+//   · regen 0 no toca nada — compatibilidad exacta con lo anterior.
+//   · Nunca se pasa del techo, o una granja vieja acumularia comida infinita y
+//     premiaria a quien NO juega.
+//   · Si ya esta POR ENCIMA del techo (dato mal puesto, o un techo que baja
+//     con una tecnologia) NO se recorta. Quitarle recursos al jugador por un
+//     cambio de catalogo seria peor que el exceso.
+inline void eco_regen_deposit(EcoDeposit& d) noexcept {
+    if (d.regen_per_tick <= 0) return;
+    if (d.remaining >= d.cap) return;
+    const int64_t sumado = static_cast<int64_t>(d.remaining)
+                         + static_cast<int64_t>(d.regen_per_tick);
+    d.remaining = sumado > static_cast<int64_t>(d.cap)
+                ? d.cap
+                : static_cast<int32_t>(sumado);
+}
 
 struct EcoCitizenIn {
     int64_t  pos_x, pos_y;

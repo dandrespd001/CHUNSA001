@@ -265,6 +265,13 @@ add_executable(chunsa_test_population_housing tests/unit/test_population_housing
 target_link_libraries(chunsa_test_population_housing PRIVATE chunsa_sim_core)
 add_test(NAME population_housing COMMAND chunsa_test_population_housing)
 
+# --- Test Sprint 1.28: granjas, comida renovable (SPEC-007 §15) ---------------
+# La partida de 15 epocas del 1.25 no se podia terminar: 6000 de comida en todo
+# el mapa y cero regeneracion. Falta un sistema, no un ajuste de numeros.
+add_executable(chunsa_test_farms tests/unit/test_farms.cpp)
+target_link_libraries(chunsa_test_farms PRIVATE chunsa_sim_core)
+add_test(NAME farms COMMAND chunsa_test_farms)
+
 # --- Test Sprint 1.23: politica de epoca de la IA ----------------------------
 # El 1.22 abrio las epocas 1-5 al humano. Este mide si la MAQUINA sabe jugarlas:
 # que suba de epoca y que use el contenido temprano en vez de esperar a la 5.
