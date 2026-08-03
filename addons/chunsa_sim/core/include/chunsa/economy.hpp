@@ -55,7 +55,44 @@ struct EcoDeposit {
     // pintaria como mineral en el minimapa y la sumaria al recuento del mapa.
     // Con el, la distincion es explicita y quien deba ignorarlas puede.
     uint32_t owner_building;
+    // --- Sprint 1.28 (SPEC-007 §4): RESERVA MINERAL ------------------------
+    // Correccion del Director (2026-08-03): "los yacimientos minerales no
+    // deben desaparecer, sino que no deben poder ser explotados hasta que se
+    // desarrolle una nueva tecnologia de explotacion".
+    //
+    // No es una idea suelta: el corpus lo documenta. La ley del mineral cae
+    // con la profundidad y la FLOTACION —bibliografia del U.S. Bureau of Mines
+    // de 1916, en docs/research/corpus/extractos/mineria.md— hizo rentable
+    // justo lo que antes se abandonaba en la mina. Un yacimiento "agotado" del
+    // siglo XIX es una mina rentable del XX.
+    //
+    // Ademas arregla algo que molestaba jugando: un mapa agotado dejaba de
+    // tener nada que hacer. Ahora la tecnologia REABRE el mapa.
+    int32_t  reserve;              // 0 = no hay nada mas ahi abajo
+    uint32_t reserve_capability;   // capacidad que la desbloquea
 };
+
+// Sentinela "esta reserva no la abre ninguna capacidad".
+inline constexpr uint32_t ECO_NO_CAPABILITY = 0xFFFFFFFFu;
+
+// Cuanto puede sacar DE VERDAD un jugador de este deposito, segun lo que sepa
+// hacer. Es funcion PURA de (deposito, capacidades del jugador).
+//
+// Por que depende del JUGADOR y no del deposito: un yacimiento es neutral y lo
+// disputan los dos bandos. Que uno haya investigado la flotacion y el otro no
+// es exactamente la ventaja que la tecnologia debe dar, y meter el estado en
+// el deposito la haria comun a ambos.
+//
+// El orden importa: mientras QUEDE mineral facil, la reserva no se toca.
+// Primero se agota lo barato, que es como funciono siempre la mineria.
+inline int32_t eco_available_for(const EcoDeposit& d, uint64_t player_caps) noexcept {
+    if (d.remaining > 0) return d.remaining;
+    if (d.reserve <= 0) return 0;
+    if (d.reserve_capability == ECO_NO_CAPABILITY) return 0;
+    if (d.reserve_capability >= 64u) return 0;   // fuera de la palabra: no abre
+    const bool tiene = ((player_caps >> d.reserve_capability) & 1ull) != 0ull;
+    return tiene ? d.reserve : 0;
+}
 
 // Un deposito de granja se distingue de un yacimiento del mapa por tener
 // edificio dueno. La diferencia no es cosmetica: un yacimiento agotado

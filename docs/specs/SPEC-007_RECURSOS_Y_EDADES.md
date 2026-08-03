@@ -1570,3 +1570,60 @@ termina nunca.
 **Recordatorio del alcance de la 1.0 (ADR-012)**: 4–6 civilizaciones y las
 épocas del slice, no las 15. Esta directriz describe el juego completo; el plan
 sigue construyendo el slice.
+
+## §15.1 Renovables y reservas — decisiones del Director (2026-08-03)
+
+Tres correcciones que cambian el modelo de recursos y conviene tenerlas juntas,
+porque se sostienen entre sí.
+
+### 1. La granja es un EDIFICIO, no una mena
+
+Tiene HP, ocupa espacio, se derriba, y **cuenta como edificio para la puerta de
+`ADVANCE_EPOCH`** igual que cualquier otro. El depósito que registra es un
+detalle interno del mecanismo de recolección.
+
+La diferencia de fondo, hecha código en `EcoDeposit::owner_building`: **un
+yacimiento agotado desaparece; una granja agotada sigue ahí y vuelve a crecer.**
+
+### 2. La madera no es un yacimiento: son BOSQUES que se talan
+
+Un bosque se consume al extraerlo y **se ve encoger**. No es un pozo del que se
+saca madera: son árboles que dejan de estar.
+
+Y se puede **plantar**. La reforestación usa exactamente el mismo mecanismo que
+la granja —un depósito con regeneración y edificio dueño—, lo que convierte la
+madera en renovable sin inventar un segundo sistema. Un bosque plantado es a la
+madera lo que la granja es a la comida.
+
+### 3. Los yacimientos minerales NO desaparecen: se vuelven inexplotables
+
+Ésta es la que más cambia el juego. Un yacimiento agotado **no se borra del
+mapa**: agota lo que la tecnología actual sabe extraer, y su **reserva** queda
+esperando a que alguien aprenda a sacarla.
+
+**Está documentado, no inventado.** El corpus recoge la caída histórica de la
+ley del mineral con la profundidad, y la **flotación** —bibliografía del U.S.
+Bureau of Mines, 1916, en `docs/research/corpus/extractos/mineria.md`— hizo
+rentable justo lo que antes se abandonaba en la mina. Un yacimiento «agotado»
+del siglo XIX es una mina rentable del XX.
+
+Mecánicamente arregla algo que molestaba: **un mapa agotado dejaba de tener nada
+que hacer.** Ahora la tecnología reabre el mapa, que es lo que pasó de verdad.
+
+#### Por qué la disponibilidad depende del JUGADOR y no del yacimiento
+
+`eco_available_for(deposito, capacidades_del_jugador)` es función pura de los
+dos. Un yacimiento es neutral y lo disputan ambos bandos: que uno haya
+investigado la flotación y el otro no **es exactamente la ventaja que la
+tecnología debe dar**. Guardar el estado en el depósito la haría común a los
+dos y borraría la ventaja.
+
+Y el orden importa: **mientras quede mineral fácil, la reserva no se toca.**
+Primero se agota lo barato, que es como funcionó siempre la minería.
+
+### Lo que une a las tres
+
+Un solo mecanismo —depósito con regeneración, techo, dueño y reserva— cubre
+granjas, bosques plantados y minas profundas. **Los recursos dejan de ser un
+almacén que se vacía y pasan a ser un sistema que responde a lo que el jugador
+sabe hacer y a lo que decide construir.**

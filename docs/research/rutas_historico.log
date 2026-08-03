@@ -1,0 +1,11 @@
+== Sondeo de rutas (2026-08-03T09:09:51-05:00) ==
+RUTA                                       WEB    MUESTRA
+zenmux-free/deepseek/deepseek-v4-pro       no     We are asked: "Busca en la web la version estable mas reciente de Godo
+gweb/gemini-3.1-flash-lite                 SI     GodotGodot 4.7.1, lanzada el 14 de julio de 202Godot 4.7.1, lanzada el
+gemini-web/gemini-3.5-flash                SI     GodotGodot Engine 4.7.1, 14 de julio de 2026Godot Engine 4.7.1, 14 de 
+gemini-web/gemini-3.1-pro                  SI     La versiónLa versión estable más reciente de Godot Engine es la 4.7.1,
+qwen-web/qwen3.7-plus                      SI     [qwen-web/qwen3.7-plus] Provider returned empty content (reset after 3
+
+-- MiniMax (WebFetch local) --
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+La portada anuncia Godot 4.7.1.

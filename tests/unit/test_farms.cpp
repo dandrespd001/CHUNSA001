@@ -120,6 +120,73 @@ int main() {
         CHECK(eco_deposit_is_farm(granja));
     }
 
+    // ========================================================================
+    // RESERVA MINERAL (corrección del Director, 2026-08-03)
+    //
+    // «Los yacimientos minerales no deben desaparecer, sino que no deben poder
+    // ser explotados hasta que se desarrolle una nueva tecnología.»
+    //
+    // No es una idea de diseño suelta: el corpus lo documenta. La ley del
+    // mineral cae con la profundidad, y la FLOTACIÓN —bibliografía del U.S.
+    // Bureau of Mines de 1916, ya en `docs/research/corpus/extractos/
+    // mineria.md`— hizo rentable justo lo que antes se abandonaba en la mina.
+    // Un yacimiento «agotado» del siglo XIX es una mina rentable del XX.
+    //
+    // Mecánicamente esto arregla algo que molestaba: un mapa agotado dejaba de
+    // tener nada que hacer. Ahora la tecnología REABRE el mapa, que es lo que
+    // pasó en la historia.
+    // ========================================================================
+
+    // 8) Un yacimiento con reserva y SIN la capacidad no da nada extra al
+    //    agotarse. La tecnología es el requisito, no el tiempo.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.reserve = 500;
+        d.reserve_capability = 3u;
+        CHECK(eco_available_for(d, /*player_caps=*/0ull) == 0);
+    }
+
+    // 9) Con la capacidad, la reserva SÍ está disponible. Es el momento
+    //    "flotación": la misma roca, otra técnica.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.reserve = 500;
+        d.reserve_capability = 3u;
+        CHECK(eco_available_for(d, /*player_caps=*/(1ull << 3)) == 500);
+    }
+
+    // 10) Mientras QUEDE mineral fácil, la reserva no se toca. Primero se
+    //     agota lo barato, que es como funcionó siempre la minería.
+    {
+        EcoDeposit d{};
+        d.remaining = 40;
+        d.reserve = 500;
+        d.reserve_capability = 3u;
+        CHECK(eco_available_for(d, (1ull << 3)) == 40);
+    }
+
+    // 11) Un yacimiento SIN reserva se comporta como hasta hoy: agotado es
+    //     agotado. La compatibilidad manda, otra vez.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.reserve = 0;
+        d.reserve_capability = ECO_NO_CAPABILITY;
+        CHECK(eco_available_for(d, ~0ull) == 0);
+    }
+
+    // 12) Una capacidad distinta NO abre la reserva. Sin esto, cualquier
+    //     tecnología valdría para todo y la progresión no significaría nada.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.reserve = 500;
+        d.reserve_capability = 3u;
+        CHECK(eco_available_for(d, (1ull << 5)) == 0);
+    }
+
     if (g_fails == 0) {
         std::printf("farms OK\n");
         return 0;
