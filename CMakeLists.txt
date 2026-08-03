@@ -222,6 +222,15 @@ target_include_directories(chunsa_test_idle_view PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
 add_test(NAME idle_view COMMAND chunsa_test_idle_view)
 
+# --- Test Sprint 1.16: paginación pura del panel de comandos -----------------
+# La política vive en command_panel_view.hpp para poder cubrir los límites
+# 15/16 sin compilar godot-cpp.
+add_executable(chunsa_test_pagination_view tests/unit/test_pagination_view.cpp)
+target_link_libraries(chunsa_test_pagination_view PRIVATE chunsa_sim_core)
+target_include_directories(chunsa_test_pagination_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/addons/chunsa_sim/gdextension)
+add_test(NAME pagination_view COMMAND chunsa_test_pagination_view)
+
 # --- Test Sprint 1.9: recetas y CRAFT (SPEC-007 §12.6) -------------------------
 add_executable(chunsa_test_craft tests/unit/test_craft.cpp)
 target_link_libraries(chunsa_test_craft PRIVATE chunsa_sim_core)

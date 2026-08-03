@@ -219,6 +219,10 @@ private:
     bool placement_input_captured = false;
     bool rally_mode = false;
     bool research_mode = false;
+    // Página visible de la barra de comandos. La aritmética y las reglas de
+    // borde viven en command_panel_view.hpp; aquí solo se conserva el estado
+    // de interacción del adaptador.
+    uint32_t command_page = 0u;
     // Índice por ResourceFamilyV1; el valor 0 (Invalid) no se usa.
     bool resource_family_expanded[8] = {};
     uint64_t last_feedback_sequence = 0;
@@ -324,7 +328,11 @@ private:
     uint32_t issue_move_orders(int64_t x_raw, int64_t y_raw);
     mutable int32_t epoch_cost_cache[chunsa::RESOURCE_COUNT] = {};
     godot::Rect2 command_bar_rect() const;
-    uint32_t collect_command_slots(PanelSlot* out, uint32_t max) const;
+    void collect_command_items(std::vector<PanelSlot>& out) const;
+    uint32_t command_item_count() const;
+    uint32_t command_page_count() const;
+    void normalize_command_page();
+    uint32_t collect_command_slots(PanelSlot* out, uint32_t max);
     void draw_command_bar(const godot::Ref<godot::Font>& font,
                           const godot::Color& text,
                           const godot::Color& muted);

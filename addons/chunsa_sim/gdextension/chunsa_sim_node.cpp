@@ -818,6 +818,19 @@ void ChunsaSimNode::_input(const godot::Ref<godot::InputEvent>& event) {
             }
             return;
         }
+        // La navegación vive en PageUp/PageDown: no roba ninguna de las 15
+        // teclas del panel y tampoco interfiere con las flechas reservadas a la
+        // cámara. Si no hay más de una página, consumirlas sigue siendo seguro
+        // y evita que otra acción contextual las interprete por accidente.
+        if (code == godot::KEY_PAGEUP || code == godot::KEY_PAGEDOWN) {
+            normalize_command_page();
+            const uint32_t pages = command_page_count();
+            command_page = code == godot::KEY_PAGEUP
+                    ? chunsa::presentation::previous_command_page(command_page, pages)
+                    : chunsa::presentation::next_command_page(command_page, pages);
+            queue_redraw();
+            return;
+        }
         // SPEC-006 Parte V: las teclas de la rejilla actuan sobre la POSICION,
         // no sobre el nombre. Es lo que hace que la memoria muscular sobreviva
         // a que cambie el contenido del panel.
@@ -2307,15 +2320,17 @@ godot::Rect2 ChunsaSimNode::command_bar_rect() const {
 }
 
 // Qué botones hay AHORA depende de la selección, como en AoE2: aldeanos →
-// edificios; edificio productor → lo que entrena y lo que investiga.
-uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) const {
-    if (out == nullptr || !have_curr) return 0u;
+// edificios; edificio productor → lo que entrena y lo que investiga. Esta
+// primera pasada conserva TODOS los elementos; la paginación se aplica después
+// con la política pura de command_panel_view.hpp.
+void ChunsaSimNode::collect_command_items(std::vector<PanelSlot>& out) const {
+    out.clear();
+    if (!have_curr) return;
     const chunsa::DataCatalogV1& catalog = catalog_storage.catalog();
-    uint32_t n = 0;
 
     const bool citizens_selected = selected_citizen_count() > 0u;
     if (citizens_selected) {
-        for (uint32_t bid = 0; bid < catalog.building_count && n < max; ++bid) {
+        for (uint32_t bid = 0; bid < catalog.building_count; ++bid) {
             const chunsa::BuildingDefinitionV1& def = catalog.buildings[bid];
             if (def.constructible == 0u) continue;
             const bool civ_ok = snap_curr.player_civ == chunsa::INVALID_CIV_ID ||
@@ -2324,24 +2339,24 @@ uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) cons
                         def.epoch_min, def.epoch_max, snap_curr.player_epoch, civ_ok)) {
                 continue;
             }
-            out[n++] = PanelSlot{PanelKind::Build, bid};
+            out.push_back(PanelSlot{PanelKind::Build, bid});
         }
-        return n;
+        return;
     }
 
     const int32_t sel = selected_single_building_slot();
-    if (sel < 0 || snap_curr.building_id[sel] >= catalog.building_count) return 0u;
+    if (sel < 0 || snap_curr.building_id[sel] >= catalog.building_count) return;
     const chunsa::BuildingDefinitionV1& def = catalog.buildings[snap_curr.building_id[sel]];
     // Fila de arriba para lo que se produce, filas de abajo para tecnologías:
     // es la convención de AoE2 y sale gratis si se emiten en este orden.
-    for (uint32_t k = 0; k < def.train_count && n < max; ++k) {
-        out[n++] = PanelSlot{PanelKind::Train, def.trains[k]};
+    for (uint32_t k = 0; k < def.train_count; ++k) {
+        out.push_back(PanelSlot{PanelKind::Train, def.trains[k]});
     }
-    while (n % PANEL_COLS != 0u && n < max) {
-        out[n++] = PanelSlot{PanelKind::Build, UINT32_MAX};  // hueco
+    while (out.size() % PANEL_COLS != 0u) {
+        out.push_back(PanelSlot{PanelKind::Build, UINT32_MAX});  // hueco
     }
-    for (uint32_t k = 0; k < def.research_count && n < max; ++k) {
-        out[n++] = PanelSlot{PanelKind::Research, def.researches[k]};
+    for (uint32_t k = 0; k < def.research_count; ++k) {
+        out.push_back(PanelSlot{PanelKind::Research, def.researches[k]});
     }
     // AoE2 pone el avance de edad en el panel del centro urbano. El nuestro es
     // el edificio que entrena aldeanos, asi que se deduce en vez de cablearlo.
@@ -2349,8 +2364,40 @@ uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) cons
     for (uint32_t k = 0; k < def.train_count; ++k) {
         if (def.trains[k] == uid_citizen) is_town_center = true;
     }
-    if (is_town_center && n < max) {
-        out[n++] = PanelSlot{PanelKind::EpochUp, 0u};
+    if (is_town_center) {
+        out.push_back(PanelSlot{PanelKind::EpochUp, 0u});
+    }
+}
+
+uint32_t ChunsaSimNode::command_item_count() const {
+    std::vector<PanelSlot> items;
+    collect_command_items(items);
+    return static_cast<uint32_t>(items.size());
+}
+
+uint32_t ChunsaSimNode::command_page_count() const {
+    return chunsa::presentation::command_page_count(command_item_count());
+}
+
+void ChunsaSimNode::normalize_command_page() {
+    command_page = chunsa::presentation::command_page_after_selection_change(
+            command_page, command_item_count());
+}
+
+uint32_t ChunsaSimNode::collect_command_slots(PanelSlot* out, uint32_t max) {
+    if (out == nullptr || max == 0u) return 0u;
+
+    std::vector<PanelSlot> items;
+    collect_command_items(items);
+    command_page = chunsa::presentation::command_page_after_selection_change(
+            command_page, static_cast<uint32_t>(items.size()));
+    const chunsa::presentation::PageRange range =
+            chunsa::presentation::command_page_range(
+                    static_cast<uint32_t>(items.size()), command_page);
+
+    uint32_t n = 0u;
+    for (uint32_t index = range.begin; index < range.end && n < max; ++index) {
+        out[n++] = items[index];
     }
     return n;
 }
@@ -2650,8 +2697,10 @@ static const char* const PANEL_HOTKEYS[15] = {
 void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
                                      const godot::Color& text,
                                      const godot::Color& muted) {
+    normalize_command_page();
     PanelSlot slots[PANEL_SLOTS];
     const uint32_t count = collect_command_slots(slots, PANEL_SLOTS);
+    const uint32_t pages = command_page_count();
 
     const godot::Rect2 bar = command_bar_rect();
     draw_rect(bar, godot::Color(0.03, 0.05, 0.08, 0.94));
@@ -2663,7 +2712,16 @@ void ChunsaSimNode::draw_command_bar(const godot::Ref<godot::Font>& font,
             : (selected_single_building_slot() >= 0 ? U("PRODUCIR E INVESTIGAR")
                                                     : U("Sin selección"));
     draw_string(font, bar.position + godot::Vector2(10.0f, 15.0f), header,
-                static_cast<godot::HorizontalAlignment>(0), bar.size.x - 20.0f, 12, muted);
+                static_cast<godot::HorizontalAlignment>(0), bar.size.x * 0.55f, 12, muted);
+    const godot::String page_label = U("Página ") +
+            godot::String::num_int64(pages == 0u
+                    ? 0
+                    : static_cast<int64_t>(command_page + 1u)) +
+            U("/") + godot::String::num_int64(static_cast<int64_t>(pages)) +
+            U("  [PgUp/PgDn]");
+    draw_string(font, bar.position + godot::Vector2(0.0f, 15.0f), page_label,
+                static_cast<godot::HorizontalAlignment>(2), bar.size.x - 10.0f,
+                11, pages > 1u ? text : muted);
 
     if (count == 0u) {
         return;
