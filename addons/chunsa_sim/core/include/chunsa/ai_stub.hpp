@@ -52,7 +52,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 8;  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 9;  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -76,6 +76,45 @@ inline constexpr int64_t  AI_REACTIVE_RADIUS_MT       = 20000;  // 20 tiles
 // umbral MÁS alto ⇒ la IA se sobre-abastece antes/más). Con el perfil v1
 // (economy_focus_bp=5000, 50%) el umbral efectivo es la MITAD de la base.
 inline constexpr int32_t AI_GATHER_STOCK_THRESHOLD_BASE = 150;
+
+// Sprint 1.34 — umbral de COMIDA del candidato GRANJA (capa estratégica).
+//
+// NO es un umbral sobre la caja (player_stock) a secas: es un umbral sobre el
+// "outlook" de comida del jugador = caja + lo que queda en los depositos de
+// comida que su economia puede tocar (ai_food_outlook, la misma mascara
+// auto-gather del kernel). Por que asi y no player_stock:
+//
+//   En la APERTURA la caja empieza en 0 y va subiendo, y cada entrenamiento la
+//   vacia un poco antes de que los aldeanos repongan — la caja VIVE por debajo
+//   del valor de rampa con 3000 de comida en el suelo. Un umbral sobre la caja
+//   dispararia la granja ahi, con el mapa lleno, gastando 60 de madera y un
+//   aldeano 300 ticks en levantar algo que no hace falta. El outlook no: suma
+//   la comida aun por recolectar, asi que solo baja cuando la comida DEL MAPA
+//   de verdad escasea — que es exactamente el caso que este candidato existe
+//   para resolver (la partida larga del Sprint 1.25 que no se podia terminar).
+//
+// El numero: 200. Cuando al jugador le quedan menos de 200 de comida TOTAL —
+// cuatro entrenamientos de ciudadano (25) o cuatro legionarios (50) — la
+// granja todavia tiene margen para terminar sus 300 ticks de obra (farm.yaml:
+// build_time_ticks) antes de que el pozo se agote, y la caja alcanza para
+// seguir entrenando mientras. Disparar al llegar a CERO es tarde: el jugador
+// se quedaria sin comida todo el rato de la obra, bloqueado de entrenar. La
+// capa economica adaptativa (1.5) ya redirige recolectores a comida por
+// debajo de 75 con el perfil v1; este candidato es la solucion ESTRUCTURAL,
+// la economia adaptativa solo la provisional.
+inline constexpr int32_t AI_FARM_FOOD_OUTLOOK_THRESHOLD = 200;
+
+// Sprint 1.34 — prioridad de la GRANJA en la utilidad entera (bp) de la capa
+// estratégica. Justificación: quedarse sin comida BLOQUEA entrenar, pero no es
+// tan inmediato como quedarse sin población — el tope de población (Sprint
+// 1.14) bloquea TODAS las intenciones económicas y militares a la vez, la
+// comida solo bloquea TRAIN_UNIT y la capa 1.5 ya redirige recolectores a
+// comida mientras tanto. Por eso la granja queda por debajo de la vivienda
+// (10000) y por encima de los pesos del perfil (5000): la escasez de comida es
+// más urgente que la rutina económica/militar/tech, pero menos urgente que el
+// tope de población. El "no encadenar" (una granja en obra a la vez) es lo que
+// impide que esta prioridad degrade en construir campos sin parar.
+inline constexpr int32_t AI_FARM_PRIORITY_BP = 8000;
 
 // Estados del ciclo de vida de UN job de IA. EMPTY = slot libre;
 // DISPATCHED/RUNNING = en vuelo; COMPLETED = resultado disponible;
@@ -440,6 +479,59 @@ inline BuildingId ai_find_housing_type(const DataCatalogV1& cat, CivId civ,
         return static_cast<BuildingId>(bt);
     }
     return INVALID_BUILDING_ID;
+}
+
+// Sprint 1.34 — tipo de GRANJA de la civilizacion, valida en esta epoca.
+//
+// Mismo patron que ai_find_housing_type y por la misma leccion del 1.23: el
+// filtro va DENTRO del barrido para que la busqueda CONTINUE hasta el primer
+// candidato valido, en vez de rendirse en el primero a secas. Devolver la
+// primera granja sin mirar la epoca dejaria a la IA enganchada a un campo que
+// todavia no puede construir.
+//
+// Lo que marca a una granja son los DOS campos que el Sprint 1.28 anadio a
+// BuildingDefinitionV1 y que farm_system consume: `creates_amount > 0` (declara
+// un deposito al completarse) y `creates_regen_per_tick > 0` (ese deposito se
+// regenera — es lo que separa un campo de una mina agotable). `constructible`
+// excluye los centros de escenario que declaran deposito pero no se construyen.
+inline BuildingId ai_find_farm_type(const DataCatalogV1& cat, CivId civ,
+                                    uint8_t epoch) noexcept {
+    for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
+        const BuildingDefinitionV1& bdef = cat.buildings[bt];
+        if (civ != INVALID_CIV_ID && bdef.civ_id != civ) continue;
+        if (bdef.creates_amount <= 0) continue;
+        if (bdef.creates_regen_per_tick <= 0) continue;
+        if (bdef.constructible == 0u) continue;
+        if (!ai_epoch_ok(epoch, bdef.epoch_min, bdef.epoch_max)) continue;
+        return static_cast<BuildingId>(bt);
+    }
+    return INVALID_BUILDING_ID;
+}
+
+// Sprint 1.34 — OUTLOOK de comida de un jugador: la caja (player_stock) MAS lo
+// que queda en los depositos de comida que su economia puede tocar de verdad.
+//
+// Función PURA de (g, player): la mascara de depositos es la MISMA que usa el
+// kernel para la auto-recoleccion (allied_auto_gather_deposit_mask, SPEC-004
+// §3.4 base) y eco_available_for resuelve cuanta comida saca de verdad el
+// jugador de cada uno (remaining, o reserva si tiene la capacidad). No lee
+// g.tick, no asigna heap, no usa float — misma disciplina de regla de oro.
+//
+// Es el diferenciador que evita el disparo PREMATURO de la granja: en la
+// apertura la caja vive por debajo del umbral de rampa mientras los depositos
+// del mapa estan llenos — un umbral sobre player_stock a secas construiria
+// granjas con 3000 de comida en el suelo. El outlook solo baja cuando la
+// comida DEL MAPA de verdad escasea.
+inline int64_t ai_food_outlook(const GameState& g, uint8_t player) noexcept {
+    int64_t total = g.player_stock[player][RESOURCE_INDEX_FOOD];
+    const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, player);
+    for (uint32_t d = 0; d < g.n_deposits; ++d) {
+        if (((mask >> d) & 1u) == 0u) continue;
+        if (g.deposits[d].resource_idx != RESOURCE_INDEX_FOOD) continue;
+        const int32_t avail = eco_available_for(g.deposits[d], g.player_caps[player][0]);
+        if (avail > 0) total += avail;
+    }
+    return total;
 }
 
 // ¿El jugador IA ya posee (vivo) al menos una instancia del tipo de edificio
@@ -912,6 +1004,51 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             }
         }
 
+        // Candidato GRANJA (Sprint 1.34). Se dispara con MARGEN, no al llegar a
+        // cero: la granja tarda 300 ticks en construirse (farm.yaml:
+        // build_time_ticks), asi que esperar a quedarse sin comida significa
+        // estar bloqueado de entrenar TODO ese rato. El disparo es por OUTLOOK
+        // de comida (caja + depositos gatherables, ver ai_food_outlook y la
+        // constante AI_FARM_FOOD_OUTLOOK_THRESHOLD) precisamente para NO
+        // construir granjas en la apertura, cuando la caja esta baja pero el
+        // mapa esta lleno.
+        //
+        // Ademas NO encadena granjas: si ya tiene una en obra, espera. Sin esa
+        // condicion gastaria toda la madera en campos en cuanto el outlook de
+        // comida bajara del umbral, que es la forma tonta de arruinarse.
+        bool       farm_ok = false;
+        BuildingId farm_type = INVALID_BUILDING_ID;
+        AiFreeCellV1 farm_cell{};
+        {
+            if (macro.has_anchor
+                && ai_food_outlook(g, ai_player) < AI_FARM_FOOD_OUTLOOK_THRESHOLD) {
+                const BuildingId ft = ai_find_farm_type(cat, ai_civ, epoch);
+                if (ft != INVALID_BUILDING_ID) {
+                    // ¿Hay ya una granja EN OBRA? Barrido ascendente.
+                    bool en_obra = false;
+                    for (uint32_t j = 0; j < g.entities.capacity && !en_obra; ++j) {
+                        if (!g.entities.alive[j]) continue;
+                        if (g.owner[j] != ai_player) continue;
+                        if (g.entity_kind[j] != 1u) continue;
+                        if (g.building_id[j] != ft) continue;
+                        if (static_cast<uint32_t>(g.build_progress[j]) < cat.buildings[ft].build_time_ticks) {
+                            en_obra = true;
+                        }
+                    }
+                    const BuildingDefinitionV1& fd = cat.buildings[ft];
+                    if (!en_obra && ai_caps_ok(g, ai_player, fd)
+                        && ai_afford(g, ai_player, fd.cost)) {
+                        farm_cell = ai_find_free_cell(g, macro.anchor_tx, macro.anchor_ty,
+                                                      fd.footprint_w, fd.footprint_h);
+                        if (farm_cell.found) {
+                            farm_ok = true;
+                            farm_type = ft;
+                        }
+                    }
+                }
+            }
+        }
+
         // Candidato MILITARIZAR: entrenar una unidad de combate en el primer
         // edificio propio COMPLETO capaz de hacerlo.
         bool     mil_ok = false;
@@ -1084,6 +1221,12 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         // sin parar.
         const int32_t u_house = house_ok ? 10000 : 0;
         if (u_house > best_u) { best_u = u_house; best_idx = 5; }
+        // La GRANJA se evalua antes que CRAFT y con estricto mayor: con
+        // AI_FARM_PRIORITY_BP (8000) gana a todos los pesos del perfil (5000)
+        // y pierde contra la vivienda (10000) — ver el comentario de la
+        // constante sobre por que ese orden es el correcto.
+        const int32_t u_farm  = farm_ok ? AI_FARM_PRIORITY_BP : 0;
+        if (u_farm  > best_u) { best_u = u_farm;  best_idx = 6; }
         if (u_craft > best_u) { best_u = u_craft; best_idx = 4; }
 
         if (best_u > 0) {
@@ -1099,6 +1242,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
                      static_cast<int64_t>(house_cell.tx), static_cast<int64_t>(house_cell.ty),
                      house_type);
+            } else if (best_idx == 6) {
+                emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
+                     static_cast<int64_t>(farm_cell.tx), static_cast<int64_t>(farm_cell.ty),
+                     farm_type);
             } else if (best_idx == 2) {
                 emit(CommandType::TRAIN_UNIT,
                      EntityHandle{mil_building, g.entities.generation[mil_building]},

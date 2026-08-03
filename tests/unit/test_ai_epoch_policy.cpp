@@ -171,6 +171,70 @@ int main() {
         ++g_fails;
     }
 
+
+    // ========================================================================
+    // LA IA CONSTRUYE GRANJAS CUANDO ESCASEA LA COMIDA (Sprint 1.34)
+    //
+    // POR QUE ESTA PRUEBA EXISTE. El delegado que implemento el candidato
+    // señalo el hueco el mismo: "ningun test existente ejerce la granja de la
+    // IA". Y tenia razon — la suite entera pasaba en verde con el candidato
+    // recien anadido, porque en los escenarios actuales la comida nunca
+    // escasea de verdad. Un verde que no prueba nada.
+    //
+    // Ya me mordio antes con `eco_available_for`: una funcion con pruebas
+    // propias que NADIE llamaba. Aqui se cierra el hueco de entrada.
+    // ========================================================================
+    {
+        auto g2 = make_state(cat, setup, 20260803ull);
+        {
+            std::vector<RawCommand> batch(16);
+            const uint32_t n = build_apertura_batch(batch, 0u, setup);
+            step(*g2, batch.data(), n);
+        }
+        // Se AGOTA el mapa a mano y se deja al jugador sin reservas de comida,
+        // pero con madera de sobra para pagar la granja. Es el escenario que
+        // hace falta y que ningun test producia.
+        for (uint32_t d = 0; d < g2->n_deposits; ++d) {
+            if (g2->deposits[d].resource_idx == 0u) g2->deposits[d].remaining = 0;
+        }
+        // La granja es de epoca [2,15] y este escenario arranca en la 1, donde
+        // NO existe. Se fija la epoca 5, que es donde la apertura vive. Sin
+        // esto la prueba mediria "no hay granja en el Paleolitico", que es
+        // cierto y no es lo que interesa.
+        for (uint8_t e = 0; e < 2u; ++e) g2->player_epoch[e] = 5u;
+        g2->player_stock[1][0] = 30;      // comida casi agotada
+        g2->player_stock[1][1] = 500;     // madera de sobra
+
+        AiJobBox box2{}; ai_box_init(box2, 1);
+        AiRuntimeV1 rt2{0u, 0u};
+        bool granja_emitida = false;
+        for (uint32_t t = 0; t < 400u && !granja_emitida; ++t) {
+            if (ai_should_dispatch(box2, g2->tick)) ai_dispatch(box2, g2->tick, rt2);
+            if (box2.state == AiJobState::DISPATCHED) {
+                ai_execute(box2, *g2);
+                for (uint32_t k = 0; k < box2.result_count; ++k) {
+                    const RawCommand& rc = box2.result[k];
+                    if (rc.type != CommandType::PLACE_BUILDING) continue;
+                    if (rc.p.unit_id >= cat.building_count) continue;
+                    if (cat.buildings[rc.p.unit_id].creates_regen_per_tick > 0) {
+                        granja_emitida = true;   // eso es una granja
+                    }
+                }
+                step(*g2, box2.result, box2.result_count);
+                rt2.decision_epoch += 1u;
+                rt2.ai_sequence += box2.result_count;
+                ai_box_init(box2, 1);
+            } else {
+                step(*g2, nullptr, 0);
+            }
+        }
+        if (!granja_emitida) {
+            std::printf("La IA NO construyo granja con la comida agotada y madera de "
+                        "sobra: el candidato del 1.34 no se dispara\n");
+            ++g_fails;
+        }
+    }
+
     if (g_fails == 0) {
         std::printf("ai_epoch_policy OK\n");
         return 0;
