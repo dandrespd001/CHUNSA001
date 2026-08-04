@@ -117,13 +117,34 @@ inline BuildingDefinitionV1 make_site() {
     return d;
 }
 
+// Sprint 1.51: LA TORRE. Un edificio con arma. Nace INCOMPLETO
+// (build_time_ticks > 0) a proposito, porque una de las pruebas es justamente
+// que una torre a medio construir NO dispara.
+inline BuildingDefinitionV1 make_tower() {
+    BuildingDefinitionV1 d{};
+    d.id = 2; d.hp = 300; d.footprint_w = 1; d.footprint_h = 1;
+    d.build_time_ticks = 10;
+    d.cost[0] = 0; d.cost[1] = 0; d.cost[2] = 0;
+    d.dropoff_mask = 0; d.constructible = 1;
+    d.epoch_min = 1; d.epoch_max = 15;
+    d.attack = 25;
+    d.range_millitiles = 4000;   // 4 tiles
+    for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) d.trains[k] = INVALID_UNIT_ID;
+    d.train_count = 0;
+    for (uint32_t k = 0; k < PROD_TECHS_MAX; ++k) d.researches[k] = INVALID_TECH_ID;
+    d.research_count = 0;
+    for (uint32_t k = 0; k < BUILDING_REQCAP_MAX; ++k) d.required_capabilities[k] = INVALID_CAPABILITY_ID;
+    d.required_capabilities_count = 0;
+    return d;
+}
+
 static UnitDefinitionV1 g_units[2] = { make_citizen(), make_soldier() };
-static BuildingDefinitionV1 g_buildings[2] = { make_center(), make_site() };
+static BuildingDefinitionV1 g_buildings[3] = { make_center(), make_site(), make_tower() };
 
 inline DataCatalogV1 make_catalog() {
     DataCatalogV1 c{};
     c.unit_count = 2; c.units = g_units; c.unit_names = nullptr;
-    c.building_count = 2; c.buildings = g_buildings; c.building_names = nullptr;
+    c.building_count = 3; c.buildings = g_buildings; c.building_names = nullptr;
     c.tech_count = 0; c.techs = nullptr; c.tech_names = nullptr;
     c.capability_count = 0; c.capability_names = nullptr;
     return c;
@@ -876,7 +897,130 @@ static void test_zone_reach_is_measured_at_the_edge() {
     CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) == 0u);
 }
 
+// ============================================================================
+// Sprint 1.51 — LA TORRE: un edificio con arma se defiende.
+//
+// Aqui habia una premisa mia EQUIVOCADA que conviene dejar escrita: yo sostuve
+// en el diseno que combat_system "excluye a los ciudadanos, no a los
+// edificios", y por tanto que la torre era gratis. Falso. Los edificios llevan
+// unit_class = 255, asi que el guard `> 2` los excluia igual que a los
+// ciudadanos. Lo descubri implementando, no disenando.
+//
+// De rebote, la "trampa" que anuncie —que las torres echarian a andar al
+// entrar en aggro_system— TAMPOCO existia, por el mismo motivo: el aggro usa
+// ese mismo guard. La prueba 3 lo deja fijado por si alguien toca ese guard.
+// ============================================================================
+static void test_tower_shoots_when_complete() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(0u);
+    // Torre del jugador 0, COMPLETA (progress >= build_time_ticks = 10).
+    const EntityHandle torre = spawn_building(*g, 2u, CENTER_X, CENTER_Y, 10u, 0u);
+    CHECK(!handle_eq(torre, NULL_HANDLE));
+    g->attack[torre.index]   = 25;
+    g->range_mt[torre.index] = 4000;
+
+    // Enemigo del jugador 1 a 2 tiles: dentro de los 4 de alcance.
+    const EntityHandle victima = et_spawn(g->entities);
+    zero_components(*g, victima.index);
+    g->owner[victima.index] = 1u;
+    g->entity_kind[victima.index] = 0u;
+    g->unit_class[victima.index] = 1u;
+    g->hp[victima.index] = g->max_hp[victima.index] = 200;
+    g->pos_x[victima.index] = CENTER_X + 2 * FX_ONE_RAW;
+    g->pos_y[victima.index] = CENTER_Y;
+    g->tgt_x[victima.index] = g->pos_x[victima.index];
+    g->tgt_y[victima.index] = g->pos_y[victima.index];
+
+    step(*g, nullptr, 0u);
+    CHECK(g->hp[victima.index] < 200);   // la torre disparo
+}
+
+// La torre a medio construir NO dispara. Si defendiera desde el primer tick,
+// empezarla seria ya la defensa y construirla dejaria de ser una decision con
+// coste.
+static void test_tower_under_construction_does_not_shoot() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(0u);
+    const EntityHandle torre = spawn_building(*g, 2u, CENTER_X, CENTER_Y, 3u, 0u);  // 3 < 10
+    CHECK(!handle_eq(torre, NULL_HANDLE));
+    g->attack[torre.index]   = 25;
+    g->range_mt[torre.index] = 4000;
+
+    const EntityHandle victima = et_spawn(g->entities);
+    zero_components(*g, victima.index);
+    g->owner[victima.index] = 1u;
+    g->entity_kind[victima.index] = 0u;
+    g->unit_class[victima.index] = 1u;
+    g->hp[victima.index] = g->max_hp[victima.index] = 200;
+    g->pos_x[victima.index] = CENTER_X + 2 * FX_ONE_RAW;
+    g->pos_y[victima.index] = CENTER_Y;
+    g->tgt_x[victima.index] = g->pos_x[victima.index];
+    g->tgt_y[victima.index] = g->pos_y[victima.index];
+
+    step(*g, nullptr, 0u);
+    CHECK(g->hp[victima.index] == 200);  // intacta
+}
+
+// LA TORRE NO CAMINA. Con el enemigo FUERA de alcance (8 tiles) la torre no se
+// mueve un raw en varios ticks. Hoy pasa porque aggro_system excluye a los
+// edificios por unit_class=255; la prueba existe para que siga pasando si
+// alguien afloja ese guard, que es exactamente lo que yo estuve a punto de
+// pedir que se hiciera.
+static void test_tower_never_walks() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(0u);
+    const EntityHandle torre = spawn_building(*g, 2u, CENTER_X, CENTER_Y, 10u, 0u);
+    g->attack[torre.index]   = 25;
+    g->range_mt[torre.index] = 4000;
+    g->speed_mtpt[torre.index] = 400;   // aunque tuviera velocidad
+
+    const EntityHandle lejos = et_spawn(g->entities);
+    zero_components(*g, lejos.index);
+    g->owner[lejos.index] = 1u;
+    g->entity_kind[lejos.index] = 0u;
+    g->unit_class[lejos.index] = 1u;
+    g->hp[lejos.index] = g->max_hp[lejos.index] = 200;
+    g->pos_x[lejos.index] = CENTER_X + 8 * FX_ONE_RAW;
+    g->pos_y[lejos.index] = CENTER_Y;
+    g->tgt_x[lejos.index] = g->pos_x[lejos.index];
+    g->tgt_y[lejos.index] = g->pos_y[lejos.index];
+
+    const int64_t x0 = g->pos_x[torre.index], y0 = g->pos_y[torre.index];
+    for (int k = 0; k < 20; ++k) step(*g, nullptr, 0u);
+    CHECK(g->pos_x[torre.index] == x0);
+    CHECK(g->pos_y[torre.index] == y0);
+}
+
+// EL TESTIGO: un edificio INERME sigue sin hacer dano a nadie. La capacidad es
+// opcional y los 64 edificios del catalogo que no la declaran no cambian.
+static void test_unarmed_building_still_harmless() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(0u);
+    const EntityHandle centro = spawn_building(*g, 0u, CENTER_X, CENTER_Y, 0u, 0u);
+    CHECK(!handle_eq(centro, NULL_HANDLE));
+    CHECK(g->attack[centro.index] == 0);
+
+    const EntityHandle victima = et_spawn(g->entities);
+    zero_components(*g, victima.index);
+    g->owner[victima.index] = 1u;
+    g->entity_kind[victima.index] = 0u;
+    g->unit_class[victima.index] = 1u;
+    g->hp[victima.index] = g->max_hp[victima.index] = 200;
+    g->pos_x[victima.index] = CENTER_X;   // encima, distancia CERO
+    g->pos_y[victima.index] = CENTER_Y;
+    g->tgt_x[victima.index] = g->pos_x[victima.index];
+    g->tgt_y[victima.index] = g->pos_y[victima.index];
+
+    step(*g, nullptr, 0u);
+    CHECK(g->hp[victima.index] == 200);
+}
+
 int main() {
+    test_tower_shoots_when_complete();
+    test_tower_under_construction_does_not_shoot();
+    test_tower_never_walks();
+    test_unarmed_building_still_harmless();
+
     test_zone_reach_is_measured_at_the_edge();
     test_gather_happy_path();
     test_gather_rejections_in_order();

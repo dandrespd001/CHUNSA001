@@ -290,9 +290,21 @@ struct BuildingDefinitionV1 {
     // RecipeId hacia la tabla plana del catalogo.
     RecipeId recipes[RECIPES_PER_BUILDING_MAX];
     uint8_t  recipe_count;
-    // Sprint 1.18: los edificios tambien tienen armadura por tipo (no atacan,
-    // asi que no llevan attack_type).
+    // Sprint 1.18: los edificios tambien tienen armadura por tipo.
     int32_t  armor[DAMAGE_TYPE_COUNT];
+    // Sprint 1.51 (contrajuego a la guerra temprana): UN EDIFICIO PUEDE TENER
+    // ARMA. 0 = inerme, que es el valor por defecto y el comportamiento de
+    // siempre de los 64 edificios del catalogo.
+    //
+    // No hizo falta tocar el sistema de combate para esto, y merece quedar
+    // dicho por que: combat_system excluye a los CIUDADANOS (unit_class > 2),
+    // no a los edificios. Un edificio con ataque y alcance ya encajaba en su
+    // barrido; lo unico que faltaba era el dato. El comentario de arriba decia
+    // "no atacan, asi que no llevan attack_type" — deja de ser cierto para el
+    // ataque, aunque el tipo de dano sigue sin declararse: una torre pega dano
+    // de corte por defecto, como cualquier atacante sin tipo.
+    int32_t  attack;             // 0 = inerme
+    int32_t  range_millitiles;   // alcance del arma (1000 = 1 tile)
     // Deposito que este edificio CREA al completarse (nucleo de depositos
     // regenerativos). OPCIONAL con defecto 0, mismo patron que
     // population_provided (Sprint 1.14): `creates_amount == 0` significa
@@ -1271,6 +1283,26 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
         population_provided = static_cast<int32_t>(ppv->i);
     }
 
+    // Arma del edificio (Sprint 1.51). OPCIONAL con defecto 0, mismo patron
+    // que population_provided: los 64 edificios existentes no lo declaran y
+    // deben seguir cargando inermes.
+    //
+    // El alcance se acota a 64 tiles: mas alla es un dato erroneo, no una torre
+    // — y un alcance absurdo convertiria un edificio en artilleria de mapa
+    // entero sin que nadie lo notara al escribir el YAML.
+    int32_t bld_attack = 0;
+    if (const CveValue* av = obj.find("attack")) {
+        if (!av->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (av->i < 0 || av->i > 10000) fail(CatalogLoadCode::InvalidBuilding);
+        bld_attack = static_cast<int32_t>(av->i);
+    }
+    int32_t bld_range_mt = 0;
+    if (const CveValue* rv = obj.find("range_millitiles")) {
+        if (!rv->is_int()) fail(CatalogLoadCode::SchemaMismatch);
+        if (rv->i < 0 || rv->i > 64000) fail(CatalogLoadCode::InvalidBuilding);
+        bld_range_mt = static_cast<int32_t>(rv->i);
+    }
+
     // Deposito que crea el edificio al completarse. OPCIONAL con defecto 0,
     // mismo patron que population_provided: los 38 edificios existentes no
     // declaran estos campos y deben seguir cargando (`creates_amount == 0`
@@ -1395,6 +1427,8 @@ inline BuildingDefinitionV1 build_building_definition(const CveValue& obj, Build
     def.dropoff_mask = dropoff_mask;
     def.constructible = constructible;
     def.population_provided = population_provided;
+    def.attack = bld_attack;
+    def.range_millitiles = bld_range_mt;
     def.can_trade = can_trade;
     def.creates_resource_idx = creates_resource_idx;
     def.creates_amount = creates_amount;

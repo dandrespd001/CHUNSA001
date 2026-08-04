@@ -481,7 +481,11 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             g.unit_id[i] = INVALID_UNIT_ID;  // no es una unidad del catálogo de unidades
 
             g.hp[i] = g.max_hp[i] = def.hp;
-            g.attack[i] = 0; g.range_mt[i] = 0;
+            // Sprint 1.51: el arma del edificio sale del catalogo. 0 y 0 para
+            // los 64 edificios que no la declaran, que es como estaba escrito
+            // a pelo hasta ahora.
+            g.attack[i] = def.attack;
+            g.range_mt[i] = def.range_millitiles;
             g.unit_class[i] = 255u;  // edificio: nunca 0..3 (SPEC-004 §3)
             g.atk_cd[i] = 0;
             g.speed_mtpt[i] = 0;
@@ -1349,12 +1353,36 @@ inline void projectile_system(GameState& g) noexcept {
 // círculo exacto. No hay un límite fijo de 3x3: armas de alcance mayor que una
 // celda del spatial hash siguen encontrando blancos válidos.
 // Determinismo: el daño se aplica inmediatamente en orden ascendente de i.
+// Declaracion adelantada: la definicion vive mas abajo, junto al resto de
+// ayudantes de edificios, y combat_system la necesita para saber si una torre
+// esta terminada. Mover la definicion aqui arriba habria separado el ayudante
+// de sus hermanos por una razon de orden de compilacion, que es mal criterio
+// para ordenar un fichero.
+inline bool is_complete_owned_building(const GameState& g, uint32_t entity,
+                                       uint8_t owner) noexcept;
+
 inline void combat_system(GameState& g) noexcept {
     const EntityTable& t = g.entities;
     for (uint32_t i = 0; i < t.capacity; ++i) {
         if (!t.alive[i]) continue;
         if (g.hp[i] <= 0) continue;
-        if (g.unit_class[i] > 2) continue;  // ciudadanos (Sprint 0.3): no atacan
+        // Sprint 1.51 — LA TORRE. Aqui habia un solo guard, `unit_class > 2`,
+        // que metia en el mismo saco a los ciudadanos (3) y a los edificios
+        // (255). Yo escribi en el diseno que este sistema "excluye a los
+        // ciudadanos, NO a los edificios" y era FALSO: los excluia a los dos.
+        // Lo vi al implementarlo, no al disenarlo.
+        //
+        // Ahora un EDIFICIO CON ARMA si dispara. Los ciudadanos siguen sin
+        // atacar, que es la regla del Sprint 0.3 y no se toca.
+        //
+        // Y tiene que estar TERMINADO: una torre a medio construir que ya
+        // defiende convertiria el propio acto de empezarla en la defensa, y
+        // entonces construirla no seria una decision con coste. El mismo
+        // criterio de completitud que usa el resto del kernel.
+        const bool edificio_armado =
+            g.entity_kind[i] == 1u && g.attack[i] > 0
+            && is_complete_owned_building(g, i, g.owner[i]);
+        if (g.unit_class[i] > 2 && !edificio_armado) continue;
         if (g.fleeing[i]) { if (g.atk_cd[i] > 0) --g.atk_cd[i]; continue; }
         // ATK_COOLDOWN_TICKS es el número exacto de ticks ENTRE impactos:
         // ataque en t=0 => cd=10; en t=1..9 queda 9..1; en t=10 pasa a 0 y

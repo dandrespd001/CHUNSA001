@@ -14,6 +14,30 @@ Las dos vías del panel son **la misma ecuación por sus dos lados**:
 Juntas, la agresión temprana pasa a ser *una* línea entre varias en vez de la
 única. Van en el mismo sprint por eso, no por prisa.
 
+## §0-bis CORRECCION: dos cosas que escribi aqui eran FALSAS
+
+Lo descubri implementando, no disenando, y lo dejo escrito porque el documento
+circulo y porque el error es instructivo.
+
+**Escribi que `combat_system` "excluye a los ciudadanos, NO a los edificios".**
+Falso. Los edificios llevan `unit_class = 255`, asi que el guard `> 2` los
+excluia exactamente igual que a los ciudadanos. La torre NO era gratis: hacia
+falta relajar ese guard.
+
+**Y anuncie una "trampa": que las torres echarian a andar al entrar en el
+aggro.** Tampoco existia, por el mismo motivo — `aggro_system` usa ese mismo
+guard, asi que los edificios ya estaban fuera. Avise de un peligro imaginario y
+me perdi el obstaculo real.
+
+Los dos errores tienen la misma raiz: **lei el comentario del guard en vez de
+comprobar el valor**. El comentario decia "ciudadanos" y yo lo crei; el codigo
+decia `> 2` y los edificios son 255.
+
+Lo que SI se sostiene del diseno: la torre sigue siendo barata (una condicion
+en un guard, dos campos y una copia), la muralla sigue siendo gratis, y la
+guarnicion sigue siendo la cara. La decision no cambia; el trabajo era un poco
+mayor de lo que dije.
+
 ## §1 La torre: un campo, no un sistema
 
 `combat_system` excluye a los **ciudadanos** (`unit_class > 2`), **no a los
