@@ -84,6 +84,12 @@ add_executable(chunsa_test_aggro tests/unit/test_aggro.cpp)
 target_link_libraries(chunsa_test_aggro PRIVATE chunsa_sim_core)
 add_test(NAME aggro COMMAND chunsa_test_aggro)
 
+# --- Test Sprint 2026-08-04: el pánico permanente (zona muerta + acorralado) --
+add_executable(chunsa_test_moral tests/unit/test_moral.cpp)
+target_link_libraries(chunsa_test_moral PRIVATE chunsa_sim_core)
+add_test(NAME moral COMMAND chunsa_test_moral)
+set_tests_properties(moral PROPERTIES LABELS "fast")
+
 add_executable(chunsa_test_replay_v2 tests/unit/test_replay_v2.cpp)
 target_link_libraries(chunsa_test_replay_v2 PRIVATE chunsa_sim_core)
 add_test(NAME replay_v2 COMMAND chunsa_test_replay_v2)

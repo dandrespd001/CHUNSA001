@@ -44,17 +44,29 @@ inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xf081b518bffd1528ull;
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
 // Sprint 1.45: re-registrado por el bump V14→V15; end_tick=1227 intacto.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0xd24791cf54b896e9ull;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x0e0aa3328a25385cull;
+//
+// Sprint 2026-08-04 (pánico permanente): re-registro por CAMBIO DE
+// COMPORTAMIENTO, no de dominio — la zona muerta de la moral se cierra (todo
+// estado debe tener salida) y el acorralado se planta y pelea. No sube
+// CHECKSUM_ALGO_VERSION: el dominio hasheado no cambia, cambia la trayectoria.
+// winner=1 y fin <36000 siguen intactos; la partida termina 24 ticks antes
+// (1227 → 1203) porque la moral ya no congela a las unidades en pánico.
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0x38e1e69c96f6e122ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x6c57fe9ff02ca876ull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
 // Sprint 1.45: re-registrado por el bump V14→V15; end_tick=1123 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xf8cf9bf617a461c3ull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x3f589535174658ffull;
-inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
+//
+// Sprint 2026-08-04 (pánico permanente): re-registro por CAMBIO DE
+// COMPORTAMIENTO, mismo motivo que ai_skirmish — sin bump de
+// CHECKSUM_ALGO_VERSION (el dominio no cambia). winner=1 y fin <36000
+// intactos; end_tick 1123 → 1118, 5 ticks antes por la moral sin zona muerta.
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xd9aacf45961a5085ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x768450812606b778ull;
+inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1118u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
 // Sprint 1.7 §23: la auto-recolección acotada evita marchas a neutrales

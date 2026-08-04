@@ -1027,6 +1027,24 @@ inline void movement_v1(GameState& g) noexcept {
                 if (g.pos_y[i] < 0) g.pos_y[i] = 0;
                 if (g.pos_x[i] >= WORLD_RAW_MAX) g.pos_x[i] = WORLD_RAW_MAX - 1;
                 if (g.pos_y[i] >= WORLD_RAW_MAX) g.pos_y[i] = WORLD_RAW_MAX - 1;
+                // Acorralada (Arquitecto 2026-08-04): si tras el paso de huida
+                // la distancia al MISMO enemigo del que huía (best) NO ha
+                // aumentado, es que no consigue alejarse — la empujan contra el
+                // borde del mundo (clamps de arriba) o no hay a dónde ir. En
+                // vez de huir contra el clamp para siempre, se planta y pelea:
+                // deja de huir y la moral sube a MORALE_RALLY (a tope y no un
+                // poco: por debajo del rally, el tick siguiente volvería a
+                // entrar en pánico y el atasco solo cambiaría de nombre — una
+                // oscilación). Entero y determinista: se compara la distancia
+                // al cuadrado al mismo best, antes (best_d2) y después del paso.
+                FatalReason local_fatal = FatalReason::NONE;
+                const uint64_t d2_after = dist_sq_raw(
+                    Vec2Fx{Fx{g.pos_x[i]}, Fx{g.pos_y[i]}},
+                    Vec2Fx{Fx{g.pos_x[best]}, Fx{g.pos_y[best]}}, local_fatal);
+                if (d2_after <= best_d2) {
+                    g.fleeing[i] = 0;
+                    g.morale[i] = MORALE_RALLY;
+                }
             } else { g.vel_x[i]=0; g.vel_y[i]=0; }
             continue;
         }
@@ -1657,9 +1675,18 @@ inline void morale_system(GameState& g) noexcept {
             }
         }
 
+        // Todo estado debe tener salida, o el sistema admite estados
+        // absorbentes que congelan la partida. La rama original era
+        // `else if (enemies == 0)`: con enemigos cerca y números parejos no se
+        // ejecutaba NINGUNA rama y la moral quedaba congelada en valores como
+        // 26 — por encima del pánico (20), muy por debajo del rally (50),
+        // huyendo para siempre (diagnóstico del Arquitecto 2026-08-04).
+        // Aguantar la línea con números parejos es precisamente lo que
+        // sostiene la moral de una tropa: solo se pierde moral en desventaja
+        // clara.
         if (enemies > allies + 1) {
             g.morale[i] -= MORALE_DROP;
-        } else if (enemies == 0) {
+        } else {
             g.morale[i] += MORALE_REGEN;
         }
         if (g.morale[i] < 0) g.morale[i] = 0;
