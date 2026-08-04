@@ -840,7 +840,44 @@ static void test_completed_expansion_building_extends_allied_zone() {
     CHECK(g->citizen_task[1] == CITIZEN_TASK_GATHER);
 }
 
+// ============================================================================
+// 13) Sprint 1.45-bis: EL ALCANCE SE MIDE AL BORDE DE LA ZONA.
+//
+//     Un bosque cuyo CENTRO cae fuera del radio de auto-recoleccion (32 tiles)
+//     pero cuyo BORDE queda dentro SI es alcanzable. Sin esto el sistema seria
+//     incoherente consigo mismo: el aldeano tala en el borde, asi que medir la
+//     alcanzabilidad al centro le prohibiria trabajar un bosque que puede
+//     trabajar perfectamente. Un bosque grande ES mas alcanzable que uno
+//     pequeno, y esa es justo la propiedad que lo hace un bosque.
+//
+//     El testigo es el mismo deposito SIN radio: a esa misma distancia queda
+//     fuera, como siempre. La diferencia la hace la zona, no la distancia.
+// ============================================================================
+static void test_zone_reach_is_measured_at_the_edge() {
+    using namespace allied_zone_fixture;
+    auto g = make_state(1u);
+    // 36 tiles del edificio central: FUERA de los 32 de auto-recoleccion.
+    const int64_t lejos = CENTER_X + 36 * FX_ONE_RAW;
+    g->deposits[0] = dep_at(lejos, CENTER_Y, 1u, 2000);
+
+    // Puntual: fuera de alcance, como siempre.
+    CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) == 0u);
+
+    // El MISMO deposito convertido en bosque de 8 tiles de radio: su borde
+    // queda a 28 tiles, dentro de los 32. Pasa a ser alcanzable.
+    g->deposits[0].radius_raw     = 8 * FX_ONE_RAW;
+    g->deposits[0].initial_amount = 2000;
+    CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) != 0u);
+
+    // Y al talarlo hasta casi nada el radio se desploma, asi que el bosque
+    // vuelve a quedar FUERA de alcance. El alcance sigue al borde tambien
+    // cuando el borde retrocede.
+    g->deposits[0].remaining = 20;   // 1% -> radio ~10% del nominal
+    CHECK((detail::allied_auto_gather_deposit_mask(*g, 0u) & 1u) == 0u);
+}
+
 int main() {
+    test_zone_reach_is_measured_at_the_edge();
     test_gather_happy_path();
     test_gather_rejections_in_order();
     test_gather_cancels_build_target();

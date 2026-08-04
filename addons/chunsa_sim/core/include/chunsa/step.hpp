@@ -1705,7 +1705,23 @@ inline void allied_auto_gather_deposit_masks(
         for (uint32_t d = 0; d < g.n_deposits && d < ECO_MAX_DEPOSITS; ++d) {
             FatalReason local_fatal = FatalReason::NONE;
             const Vec2Fx deposit{Fx{g.deposits[d].x_raw}, Fx{g.deposits[d].y_raw}};
-            if (dist_sq_raw(deposit, building, local_fatal) > radius_sq) continue;
+            // Sprint 1.45-bis: el ALCANCE se mide al BORDE de la zona, igual
+            // que la llegada y que la eleccion de candidato. Sin esto el
+            // sistema quedaria incoherente consigo mismo: un bosque cuyo borde
+            // esta a tiro pero cuyo centro cae a 38 tiles seria inalcanzable
+            // pese a que el aldeano puede talarlo perfectamente. Un bosque
+            // grande ES mas alcanzable que uno pequeno; esa es justo la
+            // propiedad que lo hace un bosque y no una mina.
+            //
+            // Fallo de MI diseno, no del delegado: cambie llegada y seleccion
+            // al borde y me deje la alcanzabilidad midiendo al centro. Es
+            // exactamente como `eco_available_for` acabo siendo codigo muerto
+            // —probado y llamado por nadie—, asi que va con prueba.
+            const int64_t zona = eco_zone_radius(g.deposits[d]);
+            const uint64_t alcance = static_cast<uint64_t>(ECO_AUTO_GATHER_RADIUS_RAW)
+                                   + static_cast<uint64_t>(zona);
+            const uint64_t alcance_sq = (zona > 0) ? (alcance * alcance) : radius_sq;
+            if (dist_sq_raw(deposit, building, local_fatal) > alcance_sq) continue;
             // Sprint 1.28 (SPEC-007 §4): la RESERVA la abre la tecnologia, y
             // por jugador. Un yacimiento agotado deja de ser elegible para
             // quien no sabe extraer lo que queda, y sigue siendolo para quien
