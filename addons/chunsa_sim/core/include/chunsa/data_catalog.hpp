@@ -680,7 +680,12 @@ struct RawCursor {
     }
     uint16_t u16() {
         if (pos + 2 > len) fail(CatalogLoadCode::Bounds);
-        uint16_t v = static_cast<uint16_t>(p[pos]) | (static_cast<uint16_t>(p[pos + 1]) << 8);
+        // El static_cast de fuera no es adorno: `uint16 << 8` PROMOCIONA a int,
+        // asi que el OR es int y asignarlo a uint16_t es un estrechamiento. El
+        // valor siempre cabe, pero es el ultimo aviso de este tipo que quedaba
+        // en el codigo y MSVC con -Werror ya nos ha tumbado la CI tres veces.
+        const uint16_t v = static_cast<uint16_t>(
+            static_cast<uint16_t>(p[pos]) | (static_cast<uint16_t>(p[pos + 1]) << 8));
         pos += 2;
         return v;
     }

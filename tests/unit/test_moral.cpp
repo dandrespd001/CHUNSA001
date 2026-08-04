@@ -42,7 +42,11 @@ static void fill_spawn(RawCommand& c, uint32_t emitter, uint32_t seq,
                        uint32_t unit_class, uint32_t speed_mtpt) {
     std::memset(&c, 0, sizeof(RawCommand));
     c.target_tick  = 0;
-    c.emitter      = emitter;
+    // static_cast explicito: `emitter` es uint16_t en RawCommand y el parametro
+    // llega como uint32_t. MSVC avisa (C4244) donde gcc y clang callan, y con
+    // -Werror eso no rompe una prueba: rompe la CI entera de Windows. Ya nos
+    // costo una tarde en el sprint 1.43.
+    c.emitter      = static_cast<uint16_t>(emitter);
     c.type         = CommandType::SPAWN_UNIT;
     c.sequence     = seq;
     c.p.x_raw      = x_raw;
