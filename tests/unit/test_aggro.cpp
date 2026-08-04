@@ -3,9 +3,18 @@
 // tiles) deben perseguirse, entrar en combate y llegar a la aniquilación de
 // un bando — el estancamiento observado en la demo (supervivientes inertes
 // fuera de rango) es exactamente lo que este test previene. Autor: Arquitecto.
+//
+// ALCANCE DE CONTACTO (Sprint 2026-08-05): el contacto es propiedad del MUNDO,
+// no del arma. `range_millitiles` expresa el alcance MAS ALLA del contacto, y
+// el suelo es de un tile (MELEE_CONTACT_RAW). Sin el suelo, range_mt=0 hacia
+// el filtro de combate exigir d2==0 — el enemigo en la MISMA coordenada raw —
+// y seis de las nueve unidades del catalogo estaban asi: dos ejercitos podian
+// orbitar a 4,4 tiles cien mil ticks sin tocarse. Este montaje (GameState +
+// SPAWN_UNIT/SPAWN_CITIZEN + step) es el mas comodo para medir el suelo.
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 
 #include "chunsa/game_state.hpp"
 #include "chunsa/step.hpp"
@@ -76,6 +85,146 @@ static void run_scenario(GameState& g) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// ALCANCE DE CONTACTO (MELEE_CONTACT_RAW = 1 tile). El contacto es un SUELO,
+// no una barra libre: una unidad con range_mt=0 golpea hasta a un tile, y el
+// suelo no recorta a quien ya tenia alcance real ni convierte aldeanos en
+// soldados.
+//
+// Las cuatro pruebas comparten un montaje de DOS unidades enemigas separadas
+// `dist_raw` en el eje X (misma Y), con el owner 0 (indice bajo) en A. Ya han
+// dado UN step al volver (el del spawn), asi que el combate del primer tick ya
+// ocurrio; la 3 necesita ticks extra por el vuelo del proyectil.
+//
+// GameState vive en el heap (unique_ptr): son ~15 MB de arrays fijos y no
+// caben en el stack, como ya hace el run_scenario de este mismo archivo.
+struct ContactFixture {
+    std::unique_ptr<GameState> g;
+    uint32_t low = 0;   // owner 0, indice bajo
+    uint32_t high = 0;  // owner 1, indice alto
+};
+
+static ContactFixture make_contact_pair(int32_t atk_a, int32_t atk_b,
+                                        int32_t range_mt, int64_t dist_raw,
+                                        bool b_is_citizen = false) {
+    ContactFixture f;
+    f.g = std::make_unique<GameState>();
+    GameState& g = *f.g;
+    MatchConfig01A cfg{128u, 2u, 1u, 20u, 20u, 256u, 256u, 11ull, 1u};
+    gs_init(g, cfg);
+
+    const int64_t y = static_cast<int64_t>(122) * 65536 + 32768;
+    const int64_t xa = static_cast<int64_t>(100) * 65536 + 32768;
+    const int64_t xb = xa + dist_raw;
+
+    RawCommand batch[2];
+
+    std::memset(&batch[0], 0, sizeof(RawCommand));
+    batch[0].target_tick = 0;
+    batch[0].emitter = 0;
+    batch[0].type = CommandType::SPAWN_UNIT;
+    batch[0].sequence = 1u;
+    batch[0].p.x_raw = xa;
+    batch[0].p.y_raw = y;
+    batch[0].p.speed_mtpt = 50;
+    batch[0].p.hp = 100;
+    batch[0].p.attack = atk_a;
+    batch[0].p.range_mt = range_mt;
+    batch[0].p.unit_class = 1;
+    batch[0].p.unit_id = INVALID_UNIT_ID;
+
+    std::memset(&batch[1], 0, sizeof(RawCommand));
+    batch[1].target_tick = 0;
+    batch[1].emitter = 1;
+    batch[1].type = b_is_citizen ? CommandType::SPAWN_CITIZEN
+                                 : CommandType::SPAWN_UNIT;
+    batch[1].sequence = 1u;
+    batch[1].p.x_raw = xb;
+    batch[1].p.y_raw = y;
+    batch[1].p.speed_mtpt = 50;
+    if (b_is_citizen) {
+        // Camino debug de SPAWN_CITIZEN: hp=20, attack=0, unit_class=3
+        // cableados; el payload no aporta stats.
+        batch[1].p.hp = 0;
+        batch[1].p.attack = 0;
+        batch[1].p.range_mt = 0;
+        batch[1].p.unit_class = 0;
+    } else {
+        batch[1].p.hp = 100;
+        batch[1].p.attack = atk_b;
+        batch[1].p.range_mt = range_mt;
+        batch[1].p.unit_class = 1;
+    }
+    batch[1].p.unit_id = INVALID_UNIT_ID;
+
+    step(g, batch, 2);
+
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] == 0u) f.low = i;
+        else f.high = i;
+    }
+    return f;
+}
+
+// 1) EL FALLO LITERAL. Dos enemigos con range_mt=0 a MEDIA casilla. Tras un
+// step, la de indice bajo le ha hecho dano a la alta. Antes de este arreglo
+// nunca se tocaban: range_sq==0 exigia d2==0 (la MISMA coordenada raw).
+static void test_contact_half_tile_hits() {
+    ContactFixture f = make_contact_pair(20, 20, 0, FX_ONE_RAW / 2);
+    CHECK(f.low < f.high);
+    CHECK(f.g->entities.alive[f.low]);
+    CHECK(f.g->entities.alive[f.high]);
+    CHECK(f.g->hp[f.high] == 80);  // la baja le hizo 20: ANTES quedaba en 100
+    CHECK(f.g->hp[f.low] == 80);   // y la alta le devolvio 20 en el mismo tick
+
+    // Determinismo: corrida fresca identica -> mismo checksum.
+    ContactFixture f2 = make_contact_pair(20, 20, 0, FX_ONE_RAW / 2);
+    const uint64_t c1 = state_checksum_v1(*f.g);
+    const uint64_t c2 = state_checksum_v1(*f2.g);
+    CHECK(c1 == c2);
+}
+
+// 2) EL TESTIGO. Las mismas a DOS casillas: NO se hacen dano. El contacto es
+// un SUELO, no una barra libre.
+static void test_contact_two_tiles_no_hit() {
+    ContactFixture f = make_contact_pair(20, 20, 0, 2 * FX_ONE_RAW);
+    CHECK(f.g->hp[f.low] == 100);
+    CHECK(f.g->hp[f.high] == 100);
+}
+
+// 3) LA BALLISTA NO SE TOCA. Con range_mt=4000 (4 tiles) sigue golpeando a 3
+// tiles. El suelo no puede recortar a quien ya tenia alcance.
+//
+// CORRECCION del Arquitecto sobre el test del delegado: esperaba que el dano
+// tardara unos ticks "porque es de proyectil". No lo es. combat_system aplica
+// el dano INMEDIATAMENTE en el mismo tick, en orden ascendente de indice; los
+// proyectiles son otro sistema. El test fallaba por esa suposicion, no por el
+// arreglo. Se comprueba lo que de verdad importa: a 3 tiles, con alcance 4,
+// pega en el primer tick.
+static void test_contact_does_not_trim_real_range() {
+    ContactFixture f = make_contact_pair(20, 20, 4000, 3 * FX_ONE_RAW);
+    CHECK(f.g->hp[f.high] < 100);   // alcanza a 3 tiles, y en el acto
+    // Y el testigo del suelo: la MISMA distancia con alcance 0 no toca a nadie,
+    // porque 3 tiles pasa de largo del contacto de 1 tile.
+    ContactFixture sin_alcance = make_contact_pair(20, 20, 0, 3 * FX_ONE_RAW);
+    CHECK(sin_alcance.g->hp[sin_alcance.high] == 100);
+}
+
+// 4) EL ALDEANO. Un ciudadano (unit_class==3, SPAWN_CITIZEN) sigue sin atacar
+// a media casilla: el suelo de contacto no convierte a los aldeanos en
+// soldados. Como BLANCO sigue siendo vulnerable (SPEC-004 §7.1): el soldado
+// le pega, el ciudadano no le devuelve ni un punto.
+static void test_contact_citizen_still_does_not_attack() {
+    ContactFixture f = make_contact_pair(5, 0, 0, FX_ONE_RAW / 2,
+                                         /*b_is_citizen=*/true);
+    CHECK(f.g->unit_class[f.high] == 3u);       // el alto ES el ciudadano
+    CHECK(f.g->hp[f.high] == 15);               // el soldado le hizo 5
+    CHECK(f.g->hp[f.low] == 100);               // el ciudadano no ataco
+}
+
+// ---------------------------------------------------------------------------
+
 int main() {
     auto* g1 = new GameState();
     run_scenario(*g1);
@@ -110,6 +259,12 @@ int main() {
 
     std::printf("aggro: cav=%u art=%u checksum=%llx\n", cav, art,
                 (unsigned long long)checksum1);
+
+    // ALCANCE DE CONTACTO: las cuatro pruebas del suelo.
+    test_contact_half_tile_hits();
+    test_contact_two_tiles_no_hit();
+    test_contact_does_not_trim_real_range();
+    test_contact_citizen_still_does_not_attack();
 
     if (g_fails == 0) { std::printf("aggro: OK\n"); return 0; }
     std::printf("aggro: %d fallos\n", g_fails);

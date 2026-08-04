@@ -214,8 +214,19 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1118u;
 // terminando con vencedor y sin dispararse. La madera extra de los bosques no
 // era el cuello de botella de este escenario (lo es del banco, que arranca en
 // la época 1 y no se fija la época — ahí es donde se mide).
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xc1697c1f71ff52afull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x2c6bcaa22783b0f1ull;
-inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
+// Sprint 1.49 — re-registro por CAMBIO DE COMPORTAMIENTO, y del bueno: el
+// suelo de contacto (MELEE_CONTACT_RAW = 1 tile) hace que las armas cuerpo a
+// cuerpo GOLPEEN. Seis de las nueve unidades del catalogo tenian
+// range_millitiles: 0, y con eso el filtro de combate exigia d2==0 —el enemigo
+// en la MISMA coordenada raw—, asi que solo peleaban por coincidencia de
+// apilamiento.
+//
+// EL END_TICK BAJA DE 10473 A 9963, y esa direccion es la que confirma que el
+// arreglo es correcto: la partida se resuelve ANTES porque el combate por fin
+// conecta. Si hubiera subido, o si el vencedor hubiera cambiado, seria un
+// fallo. winner=1 intacto.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x1ca7d2a5866f503cull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xc3446802755bfaf7ull;
+inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 9963u;
 
 }  // namespace chunsa::determinism_baselines

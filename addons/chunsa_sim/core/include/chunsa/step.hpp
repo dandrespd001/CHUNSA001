@@ -24,6 +24,16 @@ inline constexpr uint32_t MORALE_RADIUS_CELLS = 1;  // celda + vecinas
 inline constexpr int32_t  AGGRO_RANGE_MT    = 10000;  // 10 tiles
 inline constexpr uint32_t AGGRO_RADIUS_CELLS = 5;
 
+// Alcance de CONTACTO. Un arma con alcance cero no es un arma: con range_mt=0
+// el filtro de combate exige d2==0, o sea que el enemigo este en la MISMA
+// coordenada raw. Seis de las nueve unidades del catalogo estaban asi, y por
+// eso dos ejercitos podian orbitar a 4,4 tiles cien mil ticks sin tocarse.
+//
+// El contacto es propiedad del MUNDO, no del arma: `range_millitiles` expresa
+// el alcance MAS ALLA del contacto. Un tile, el mismo valor con el que
+// ECO_ARRIVE_RADIUS_RAW y BUILD_ARRIVE_RADIUS_RAW dicen "he llegado".
+inline constexpr int64_t MELEE_CONTACT_RAW = FX_ONE_RAW;   // 1 tile
+
 // Construcción de edificios (Sprint 1.1, SPEC-004 §5): mismo radio de
 // llegada que la economía (alias explícito, no una constante nueva
 // independiente — comparten semántica "a un tile o menos del objetivo").
@@ -1352,7 +1362,8 @@ inline void combat_system(GameState& g) noexcept {
         if (g.atk_cd[i] > 0) --g.atk_cd[i];
         if (g.atk_cd[i] > 0) continue;
 
-        const int64_t range_raw = static_cast<int64_t>(g.range_mt[i]) * 65536 / 1000;
+        int64_t range_raw = static_cast<int64_t>(g.range_mt[i]) * 65536 / 1000;
+        if (range_raw < MELEE_CONTACT_RAW) range_raw = MELEE_CONTACT_RAW;
         const uint64_t range_sq = static_cast<uint64_t>(range_raw) * static_cast<uint64_t>(range_raw);
 
         // Las posiciones/rangos válidos de v1 caben holgadamente en int64_t.
