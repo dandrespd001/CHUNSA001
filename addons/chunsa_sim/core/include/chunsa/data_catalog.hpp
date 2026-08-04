@@ -621,22 +621,47 @@ inline bool utf8_nfc_safe_no_nul(const std::string& s) noexcept {
 // ---------------------------------------------------------------------------
 // CveValue — árbol genérico mínimo para decodificar CVE1 (SPEC-002 §6.2).
 // ---------------------------------------------------------------------------
+// Sprint 1.43 — PORTABILIDAD, cazado por la CI en clang.
+//
+// Esto era `std::vector<std::pair<std::string, CveValue>>` y GCC lo aceptaba.
+// Clang no, y tiene razon: `std::vector<T>` SI admite un T incompleto desde
+// C++17, pero `std::pair` NO esta en esa lista. Un `std::pair` instanciado con
+// el propio CveValue —que aun no esta completo— es comportamiento indefinido
+// por norma, y que GCC lo dejara pasar era suerte, no correccion.
+//
+// Se sustituye por un struct propio con los MISMOS nombres de campo
+// (`first`/`second`) para no tocar ni un solo sitio de uso.
+struct CveValue;
+struct CveMember;
+
 struct CveValue {
     uint8_t tag = 0;              // 0x01 false, 0x02 true, 0x10 int, 0x20 str, 0x30 arr, 0x40 obj
     int64_t i = 0;
     std::string s;
     std::vector<CveValue> arr;
-    std::vector<std::pair<std::string, CveValue>> obj;
+    std::vector<CveMember> obj;
 
-    const CveValue* find(const char* key) const noexcept {
-        for (const auto& kv : obj) if (kv.first == key) return &kv.second;
-        return nullptr;
-    }
+    // Declarado aqui y DEFINIDO tras CveMember: dentro del struct, CveMember
+    // todavia es incompleto y no se le pueden tocar los campos.
+    const CveValue* find(const char* key) const noexcept;
     bool is_int() const noexcept { return tag == 0x10u; }
     bool is_str() const noexcept { return tag == 0x20u; }
     bool is_arr() const noexcept { return tag == 0x30u; }
     bool is_obj() const noexcept { return tag == 0x40u; }
 };
+
+// Definido DESPUES de CveValue, que en este punto ya es completo. Los nombres
+// de campo imitan a std::pair a proposito: los sitios de uso no cambian.
+struct CveMember {
+    std::string first;
+    CveValue    second;
+};
+
+inline const CveValue* CveValue::find(const char* key) const noexcept {
+    for (const auto& kv : obj) if (kv.first == key) return &kv.second;
+    return nullptr;
+}
+
 
 // Cursor de lectura acotado; cualquier desbordamiento aborta vía LoadFail.
 struct RawCursor {
