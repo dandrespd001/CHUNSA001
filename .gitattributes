@@ -1,0 +1,28 @@
+# Terminadores de linea — no es cosmetica, es determinismo.
+#
+# Este proyecto compara ficheros BYTE A BYTE: los golden de determinismo, el
+# CHDB compilado y su sidecar de hash. Los runners de Windows llevan
+# core.autocrlf activado, asi que git convertia a CRLF al hacer checkout y el
+# golden dejaba de coincidir consigo mismo. El digest era identico y el fichero
+# distinto — un fallo que solo existia en Windows y solo en la comparacion.
+#
+# Con esto, el arbol de trabajo tiene LF en TODOS los sistemas.
+* text=auto eol=lf
+
+# Binarios: git no debe tocarlos ni intentar diferenciarlos como texto.
+*.chdb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.wav binary
+*.ogg binary
+*.ttf binary
+
+# El sidecar de contenido es JSON, pero se compara byte a byte contra la salida
+# del compilador, que SIEMPRE escribe \n. Se marca explicito para que ninguna
+# heuristica de git lo toque.
+*.chdb.content.json -text
+
+# Los .bat/.cmd son de Windows y ahi el CRLF es el correcto.
+*.bat text eol=crlf
+*.cmd text eol=crlf
