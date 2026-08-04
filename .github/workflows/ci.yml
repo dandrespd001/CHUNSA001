@@ -17,15 +17,21 @@ jobs:
           - { name: clang-portable, cc: clang, cxx: clang++, portable: "ON" }
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: py
+        with: { python-version: '3.12' }
       - name: Dependencias de Python del compilador de datos
         # `data_compile` y `schemas` importan pyyaml, jsonschema y referencing.
         # Sin esto, ctest reporta los dos como ERROR de carga del modulo y la CI
         # queda roja — que es EXACTAMENTE lo que llevaba pasando desde el 25 de
         # julio sin que nadie mirara. El fallo no era del codigo: era que el
         # runner no tenia con que ejecutarlo.
-        run: python3 -m pip install --upgrade pyyaml jsonschema referencing
+        run: ${{ steps.py.outputs.python-path }} -m pip install --upgrade pyyaml jsonschema referencing
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCHUNSA_WIDE128_FORCE_PORTABLE=${{ matrix.portable }}
+        # Python3_EXECUTABLE se pasa EXPLICITO, y no es adorno: el runner tiene
+        # varios interpretes, y `pip install` en uno no sirve de nada si CMake
+        # elige otro. Se le da el MISMO en el que acabamos de instalar.
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCHUNSA_WIDE128_FORCE_PORTABLE=${{ matrix.portable }} -DPython3_EXECUTABLE=${{ steps.py.outputs.python-path }}
       - name: Build
         run: cmake --build build -j
       - name: Golden vectors
@@ -45,15 +51,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: py
+        with: { python-version: '3.12' }
       - name: Dependencias de Python del compilador de datos
-        # `data_compile` y `schemas` importan pyyaml, jsonschema y referencing.
-        # Sin esto, ctest reporta los dos como ERROR de carga del modulo y la CI
-        # queda roja — que es EXACTAMENTE lo que llevaba pasando desde el 25 de
-        # julio sin que nadie mirara. El fallo no era del codigo: era que el
-        # runner no tenia con que ejecutarlo.
-        run: python3 -m pip install --upgrade pyyaml jsonschema referencing
+        # En Windows esto mordio de verdad: `python3 -m pip install` instalaba
+        # en un interprete y CMake descubria otro, asi que las dependencias
+        # estaban puestas y las pruebas seguian diciendo "No module named
+        # 'yaml'". Se fija el interprete con setup-python y se usa ESE, tanto
+        # para instalar como para configurar.
+        run: ${{ steps.py.outputs.python-path }} -m pip install --upgrade pyyaml jsonschema referencing
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=${{ steps.py.outputs.python-path }}
       - name: Build (verifica intrinsics _mul128/_div128 — Anexo B.1)
         run: cmake --build build --config Release -j
       - name: Golden vectors
