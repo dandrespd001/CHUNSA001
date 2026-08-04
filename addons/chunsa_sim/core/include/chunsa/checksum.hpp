@@ -101,7 +101,7 @@ namespace chunsa {
 // estado con 3..31 en cero usa CHUNSA_STATE_V9; no hay rutas condicionales por
 // contenido. La trayectoria sigue intacta y todos los baselines cambian solo
 // por este nuevo dominio.
-inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 14;  // Sprint 1.33: precios de mercado  // Sprint 1.28: 64 depositos y campos de granja/reserva  // Sprint 1.9C: RESOURCE_COUNT 32->64
+inline constexpr uint32_t CHECKSUM_ALGO_VERSION = 15;  // Sprint 1.45: bosques como zonas  // Sprint 1.33: precios de mercado  // Sprint 1.28: 64 depositos y campos de granja/reserva  // Sprint 1.9C: RESOURCE_COUNT 32->64
 inline constexpr uint64_t CHECKSUM_SEED = 0x4348554E5F535431ull;  // "CHUN_ST1"
 
 namespace detail {
@@ -275,6 +275,10 @@ inline uint64_t state_checksum_v1(const GameState& g) noexcept {
         h.u32(g.deposits[i].owner_building);
         h.i32(g.deposits[i].reserve);
         h.u32(g.deposits[i].reserve_capability);
+        // Sprint 1.45: al dominio, o dos partidas con bosques en distinto
+        // punto de encogimiento darian el mismo hash.
+        h.i64(g.deposits[i].radius_raw);
+        h.i32(g.deposits[i].initial_amount);
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         h.i64(g.dropoff_x[e]);

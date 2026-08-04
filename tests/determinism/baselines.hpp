@@ -23,29 +23,37 @@ inline constexpr long GOLDEN_VECTOR_CASES = 1074;
 // checksum.hpp recorre TODOS los ECO_MAX_DEPOSITS slots de deposits[] y ahora
 // son 64 en vez de 32. Determinismo intacto (doble corrida idéntica en los
 // seis gates) y end_ticks inalterados —1227, 1108, 10473—.
-inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x94c158cc7beec7dbull;
+//
+// Sprint 1.45 (bosques como zonas): CAMBIO DE DOMINIO, no de trayectoria.
+// El checksum sube a V15 (EcoDeposit gana radius_raw/initial_amount). Doble
+// corrida idéntica y alloc_delta=0, como siempre; solo cambia el digest.
+inline constexpr uint64_t G1_SYNTHETIC_STATE = 0x7cf54d12f5281c6full;
 
 // G3: savetest canónico sin IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load conserva la continuación.
-inline constexpr uint64_t G3_SAVETEST_STATE = 0x7d4810170185f1b4ull;
-inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xbde9ed9700644aa0ull;
+// Sprint 1.45: re-registrado por el bump V14→V15 (dominio, no trayectoria).
+inline constexpr uint64_t G3_SAVETEST_STATE = 0x630ddb81724ce9d0ull;
+inline constexpr uint64_t G3_SAVETEST_CONTINUATION = 0xcb1ecd05ec77cb71ull;
 
 // G4: savetest canónico con IA, save@200 y continuación hasta tick 400.
 // Cambió solo por el bump V8→V9; save/load con IA conserva la continuación.
-inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0x54f0a8e23fea803aull;
-inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0x5ffe5fe311d7d25aull;
+// Sprint 1.45: re-registrado por el bump V14→V15 (dominio, no trayectoria).
+inline constexpr uint64_t G4_SAVETEST_AI_STATE = 0x22fc67229df9cb57ull;
+inline constexpr uint64_t G4_SAVETEST_AI_CONTINUATION = 0xf081b518bffd1528ull;
 
 // SPEC-005 §8.3: skirmish militar sin ciudadanos.
 // Cambió solo por el bump V8→V9; winner=1 y end_tick=1226 intactos.
-inline constexpr uint64_t AI_SKIRMISH_STATE = 0xe6665b7f2f535c4full;
-inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x75edbbc17bf61dc4ull;
+// Sprint 1.45: re-registrado por el bump V14→V15; end_tick=1227 intacto.
+inline constexpr uint64_t AI_SKIRMISH_STATE = 0xd24791cf54b896e9ull;
+inline constexpr uint64_t AI_SKIRMISH_CONTINUATION = 0x0e0aa3328a25385cull;
 
 // SPEC-004 §7.1: skirmish con economía y ciudadanos vulnerables.
 // Sprint 1.7 §23: trayectoria nueva por zona aliada y depósito base del
 // fixture sintético; conserva economía real, winner=1 y fin <36000.
 // Sprint 1.8A: hashes cambiados solo por V8→V9; end_tick=1107 intacto.
-inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xab1b317fb019f36aull;
-inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x7cfb14d78ac92a17ull;
+// Sprint 1.45: re-registrado por el bump V14→V15; end_tick=1123 intacto.
+inline constexpr uint64_t AI_SKIRMISH_ECO_STATE = 0xf8cf9bf617a461c3ull;
+inline constexpr uint64_t AI_SKIRMISH_ECO_CONTINUATION = 0x3f589535174658ffull;
 inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 
 // SPEC-004 §20/§22: apertura económica completa con control de ciudadano.
@@ -175,8 +183,17 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 // hubiera disparado, habria significado que la IA se atasca esperando
 // poblacion — y eso si habria sido un fallo que corregir, no un baseline que
 // re-registrar.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x4da9e28883bc57f1ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x8ed639f6327212c9ull;
+//
+// Sprint 1.45 — re-registro por CAMBIO DE DOMINIO, no por comportamiento.
+// Suben SAVE_FORMAT_VERSION (19->20) y CHECKSUM_ALGO_VERSION (14->15) porque
+// EcoDeposit gana radius_raw/initial_amount (bosques como zonas) y ambos
+// entran al guardado y al checksum. end_tick sigue en 10473 y winner=1: la
+// partida se juega igual, cambia lo que se hashea. La comprobacion de que el
+// orden de seleccion de depositos NO se movio es justo que ningun end_tick
+// cambie: si la distancia al borde hubiera reordenado candidatos, la economia
+// de la apertura habria cambiado desde el tick 0.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x67b9b90047cef239ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xbb8abcf3878065acull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

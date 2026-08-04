@@ -105,6 +105,12 @@ struct EcoDeposit {
     // tener nada que hacer. Ahora la tecnologia REABRE el mapa.
     int32_t  reserve;              // 0 = no hay nada mas ahi abajo
     uint32_t reserve_capability;   // capacidad que la desbloquea
+    // --- Sprint 1.45: BOSQUES COMO ZONAS -----------------------------------
+    // radius_raw == 0 significa DEPOSITO PUNTUAL: es el comportamiento de
+    // siempre y el valor por defecto, asi que los yacimientos del mapa y las
+    // granjas no cambian en nada. > 0 lo convierte en una ZONA boscosa.
+    int64_t  radius_raw;      // radio a plena carga, en raw fixed (65536 = 1 tile)
+    int32_t  initial_amount;  // madera con la que nacio, para calcular el encogimiento
 };
 
 // Sentinela "esta reserva no la abre ninguna capacidad".
@@ -134,6 +140,55 @@ inline int32_t eco_available_for(const EcoDeposit& d, uint64_t player_caps) noex
 // desaparece, una granja agotada sigue ahi y vuelve a crecer.
 inline bool eco_deposit_is_farm(const EcoDeposit& d) noexcept {
     return d.owner_building != ECO_NO_OWNER;
+}
+
+// Radio ACTUAL de una zona boscosa: encoge conforme se tala.
+//
+// La relacion NO es lineal y la razon es geometrica: la madera de un bosque es
+// proporcional a su AREA, y el area va con el CUADRADO del radio. De ahi
+//     r = R0 * sqrt(restante / inicial)
+// que en enteros es r2 = R0^2 * restante / inicial, y r = isqrt_u64(r2).
+//
+// Consecuencia jugable, y es la correcta: el bosque aguanta grande mucho
+// tiempo y se desploma al final. Talado a la mitad conserva el 70% del radio.
+// Uno que encogiera lineal pareceria derretirse desde el primer hachazo.
+//
+// POR QUE NO DESBORDA, aunque el producto intermedio R0^2 * restante llegue a
+// ~2.2e21 con los extremos del contrato (R0 = 16 tiles = 1 048 576 raw,
+// restante = 2e9) — 71 bits, que desborda uint64_t de largo:
+//   · El mundo acota los depositos: WORLD_RAW_MAX = 2^29 raw por eje
+//     (vec2fx.hpp), asi que R0 < 2^29 y restante <= 2^31.
+//   · Se multiplica PRIMERO R0 * restante en 64 bits (<= 2^60, cabe), y ese
+//     producto se multiplica por R0 en 128 bits via w128_mul_i64 (<= 2^89,
+//     cabe en Wide128). La division final por initial_amount va tambien en 128
+//     bits (w128_div_i64) y devuelve r2 <= R0^2 < 2^58, que cabe en int64.
+//   · El floor es exactamente el de la formula R0^2 * restante / initial: no
+//     hay truncacion intermedia que desvie el resultado.
+//
+// LA COTA DE R0 SE COMPRUEBA AQUI, y es un anadido del Arquitecto sobre el
+// trabajo del delegado. Su razonamiento de arriba es correcto PERO se apoya en
+// que R0 < 2^29 "porque el mundo acota los depositos", y eso hoy NO es cierto
+// para este campo: las POSICIONES las valida el cargador, `radius_raw` es un
+// campo nuevo que todavia no valida nadie. Un mapa con un radio absurdo haria
+// desbordar `r0 * rem` en int64 con signo, que es comportamiento indefinido —
+// no un numero raro, UB. Mismo patron de defensa en profundidad que ya
+// documenta gs_init_economy_from_catalog sobre su clamp de n_deposits: la
+// garantia vive en OTRO fichero, asi que aqui se comprueba igual. Cuesta nada.
+inline constexpr int64_t ECO_MAX_ZONE_RADIUS_RAW = WORLD_RAW_MAX;  // 2^29
+
+inline int64_t eco_zone_radius(const EcoDeposit& d) noexcept {
+    if (d.radius_raw <= 0) return 0;              // puntual: nada cambia
+    if (d.initial_amount <= 0) return d.radius_raw;  // no hay con que escalar
+    if (d.remaining >= d.initial_amount) return d.radius_raw;  // a plena carga o mas
+    if (d.remaining <= 0) return 0;               // agotado: no hay zona
+    const int64_t r0    = d.radius_raw > ECO_MAX_ZONE_RADIUS_RAW
+                        ? ECO_MAX_ZONE_RADIUS_RAW : d.radius_raw;
+    const int64_t rem   = d.remaining;
+    const int64_t init  = d.initial_amount;
+    const int64_t r0rem = r0 * rem;               // < 2^60: cabe holgado
+    const Wide128 num   = w128_mul_i64(r0rem, r0);  // < 2^89: exacto en 128 bits
+    const W128DivI64 qr = w128_div_i64(num, init);
+    return static_cast<int64_t>(isqrt_u64(static_cast<uint64_t>(qr.quot)));
 }
 
 // Regeneracion de UN deposito, un tick. Aritmetica ENTERA pura: nada de coma
@@ -203,17 +258,42 @@ struct EcoCitizenOut {
     uint8_t  dropoff_resource_idx;
 };
 
+// Distancia al BORDE de una zona, sin sqrt por fuera de isqrt_u64:
+//     max(0, isqrt(d_sq) - radio)
+// Con radio 0 esto es isqrt(d_sq), la distancia de siempre — que es la clave
+// de que los mapas actuales no se muevan (ver eco_find_nearest_deposit).
+// d_sq == UINT64_MAX (depósito fuera de cota, dist_sq_raw marca WORLD_BOUNDS)
+// devuelve UINT64_MAX: un depósito así NUNCA gana, exactamente igual que
+// antes, cuando su d_sq no podía ser < que el mejor inicial.
+inline uint64_t eco_edge_distance(uint64_t d_sq, int64_t radio) noexcept {
+    if (d_sq == UINT64_MAX) return UINT64_MAX;
+    const uint64_t dist = isqrt_u64(d_sq);
+    if (radio <= 0) return dist;
+    const uint64_t r = static_cast<uint64_t>(radio);
+    return dist > r ? dist - r : 0;
+}
+
 // Depósito ELEGIBLE con remaining>0 más cercano a (x_raw,y_raw). El caller
 // expresa la zona aliada en `eligible_mask` (bit i = deposits[i] permitido);
-// economy.hpp permanece puro y sin conocer GameState/edificios. Desempate:
-// menor índice (recorrido ascendente, `d_sq < best_d_sq` estricto conserva el
-// primer mínimo). Sprint 1.6B (SPEC-004 §18): dos pasadas deterministas, mismo
-// criterio dist_sq/desempate en ambas:
+// economy.hpp permanece puro y sin conocer GameState/edificios. Sprint 1.6B
+// (SPEC-004 §18): dos pasadas deterministas, mismo criterio/desempate en ambas:
 //   1) si preferred_resource_idx != ECO_ANY_RESOURCE, solo depósitos vivos de
 //      ESE recurso; si hay alguno, gana (agotamiento -> reasignar al mismo
 //      recurso, SPEC-004 §18).
 //   2) si no se pidió preferencia, o la pasada 1 no encontró ninguno, cae al
 //      criterio de cualquier recurso vivo, siempre dentro de la misma máscara.
+//
+// Sprint 1.45 (bosques como zonas): el orden es de TRES claves —
+//   1) distancia al BORDE (entera, vía isqrt_u64): un bosque enorme al lado
+//      no pierde contra una mancha diminuta más allá.
+//   2) d_sq EXACTA: desempata sin truncar (isqrt trunca y dos depósitos
+//      pueden empatar tras truncar donde antes no empataban).
+//   3) índice más bajo — la regla de oro de siempre (el barrido ascendente +
+//      comparación estricta conserva el primer mínimo).
+// Con todos los radios a 0, d_borde == isqrt(d_sq) y, como isqrt es monótona,
+// (d_borde, d_sq, índice) ordena EXACTAMENTE como (d_sq, índice) de siempre:
+// cualquier empate que introduzca la truncación lo rompe la d_sq exacta, y
+// los empates de d_sq los rompe el índice. Los mapas actuales no se mueven.
 inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_deposits,
                                          int64_t x_raw, int64_t y_raw,
                                          uint8_t preferred_resource_idx,
@@ -223,15 +303,19 @@ inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_
     if (preferred_resource_idx != ECO_ANY_RESOURCE) {
         uint32_t best = ECO_NO_DEPOSIT;
         uint64_t best_d_sq = UINT64_MAX;
+        uint64_t best_d_borde = UINT64_MAX;
         for (uint32_t i = 0; i < n_deposits; ++i) {
             if (i >= ECO_MAX_DEPOSITS
                 || (eligible_mask & (uint64_t{1} << i)) == 0u) continue;
             if (deposits[i].remaining <= 0) continue;
             if (deposits[i].resource_idx != preferred_resource_idx) continue;
             Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
-            uint64_t d_sq = dist_sq_raw(here, there, f);
-            if (d_sq < best_d_sq) {
+            const uint64_t d_sq = dist_sq_raw(here, there, f);
+            const uint64_t d_borde = eco_edge_distance(d_sq, eco_zone_radius(deposits[i]));
+            if (d_borde < best_d_borde
+                || (d_borde == best_d_borde && d_sq < best_d_sq)) {
                 best_d_sq = d_sq;
+                best_d_borde = d_borde;
                 best = i;
             }
         }
@@ -240,14 +324,18 @@ inline uint32_t eco_find_nearest_deposit(const EcoDeposit* deposits, uint32_t n_
     }
     uint32_t best = ECO_NO_DEPOSIT;
     uint64_t best_d_sq = UINT64_MAX;
+    uint64_t best_d_borde = UINT64_MAX;
     for (uint32_t i = 0; i < n_deposits; ++i) {
         if (i >= ECO_MAX_DEPOSITS
             || (eligible_mask & (uint64_t{1} << i)) == 0u) continue;
         if (deposits[i].remaining <= 0) continue;
         Vec2Fx there{Fx{deposits[i].x_raw}, Fx{deposits[i].y_raw}};
-        uint64_t d_sq = dist_sq_raw(here, there, f);
-        if (d_sq < best_d_sq) {
+        const uint64_t d_sq = dist_sq_raw(here, there, f);
+        const uint64_t d_borde = eco_edge_distance(d_sq, eco_zone_radius(deposits[i]));
+        if (d_borde < best_d_borde
+            || (d_borde == best_d_borde && d_sq < best_d_sq)) {
             best_d_sq = d_sq;
+            best_d_borde = d_borde;
             best = i;
         }
     }
@@ -351,10 +439,17 @@ inline EcoCitizenOut eco_step_citizen(const EcoCitizenIn& in,
             out.assigned_deposit = idx;
         }
         const EcoDeposit& dep = deposits[out.assigned_deposit];
+        // Sprint 1.45 (bosques como zonas): se llega al BORDE, no al centro.
+        // La llegada es radio ACTUAL de la zona + un tile, comparada al
+        // cuadrado. Sin desborde: la zona vive en un mundo de 2^29 raw por
+        // eje, asi que zona <= 2^29 y llegada <= 2^29 + 2^16 < 2^30; su
+        // cuadrado < 2^60 cabe de sobra en int64.
+        const int64_t llegada = eco_zone_radius(dep) + ECO_ARRIVE_RADIUS_RAW;
+        const int64_t llegada_sq = llegada * llegada;
         Vec2Fx here{Fx{in.pos_x}, Fx{in.pos_y}};
         Vec2Fx there{Fx{dep.x_raw}, Fx{dep.y_raw}};
         uint64_t d_sq = dist_sq_raw(here, there, f);
-        if (d_sq <= static_cast<uint64_t>(arrive_r_sq)) {
+        if (d_sq <= static_cast<uint64_t>(llegada_sq)) {
             // Ya en radio: transición directa, sin movimiento este tick (1 tick de latencia aceptable).
             out.state = EcoState::HARVEST;
             out.vel_x = 0;

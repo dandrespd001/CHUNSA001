@@ -266,6 +266,11 @@ inline size_t gs_serialize(const GameState& g, uint8_t* buf, size_t cap) noexcep
         w.u32(g.deposits[i].owner_building);
         w.i32(g.deposits[i].reserve);
         w.u32(g.deposits[i].reserve_capability);
+        // Sprint 1.45: los bosques como zonas tambien se guardan. Sin ellos,
+        // un bosque reanudado volveria a ser un punto y su encogimiento se
+        // perdia.
+        w.i64(g.deposits[i].radius_raw);
+        w.i32(g.deposits[i].initial_amount);
     }
     // Sprint 1.33: precios de mercado. Sin guardarlos, una partida reanudada
     // volveria al precio base y el jugador recuperaria gratis un mercado que
@@ -547,6 +552,8 @@ inline bool gs_deserialize(GameState& g, const uint8_t* buf, size_t len) noexcep
         g.deposits[i].owner_building = r.u32();
         g.deposits[i].reserve = r.i32();
         g.deposits[i].reserve_capability = r.u32();
+        g.deposits[i].radius_raw = r.i64();      // Sprint 1.45: bosques como zonas
+        g.deposits[i].initial_amount = r.i32();
     }
     for (uint32_t e = 0; e < MAX_EMITTERS; ++e) {
         for (uint32_t k = 0; k < RESOURCE_COUNT; ++k) g.market_price_bp[e][k] = r.i32();

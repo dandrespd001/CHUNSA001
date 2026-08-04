@@ -272,6 +272,14 @@ add_executable(chunsa_test_farms tests/unit/test_farms.cpp)
 target_link_libraries(chunsa_test_farms PRIVATE chunsa_sim_core)
 add_test(NAME farms COMMAND chunsa_test_farms)
 
+# --- Test Sprint 1.45: bosques como zonas -------------------------------------
+# Un bosque es un deposito con centro, radio y madera, y el radio encoge al
+# talarlo. Con radius_raw == 0 todo es EXACTAMENTE como antes, que es lo que
+# garantiza la prueba de no-regresion (la mas importante del fichero).
+add_executable(chunsa_test_bosques tests/unit/test_bosques.cpp)
+target_link_libraries(chunsa_test_bosques PRIVATE chunsa_sim_core)
+add_test(NAME bosques COMMAND chunsa_test_bosques)
+
 # --- Test Sprint 1.33: mercado (SPEC-010) -------------------------------------
 # Con 36 recursos, quedarse sin uno es MAS probable que en AoE2, no menos. Sin
 # mercado eso es un callejon sin salida. La prueba 5 es la que importa: ir y
@@ -424,7 +432,7 @@ set_tests_properties(props golden gate_g1 gate_g3 gate_g4
                      buildings replay_v3 production_tech victory_ai_profile ai_layers
                      civ_deposits gather citizen_task resource_count ai_apertura
                      resource_catalog fog_view outcome_view affordability_view
-                     command_panel_view craft civ_start_epoch combat_damage tech_effects combat_orders projectiles ai_craft data_compile
+                     command_panel_view craft civ_start_epoch combat_damage tech_effects combat_orders projectiles ai_craft data_compile farms bosques
                      PROPERTIES LABELS "fast")
 
 # --- Guardián de artefactos compilados del demo ---
