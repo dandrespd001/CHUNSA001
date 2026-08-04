@@ -225,7 +225,78 @@ static void test_contact_citizen_still_does_not_attack() {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Sprint 1.50 — EL ATAQUE-MOVIMIENTO ENGANCHA AUNQUE SE ESTE MOVIENDO.
+//
+// aggro_system exigia que la unidad estuviera QUIETA (pos == tgt) para adquirir
+// objetivo. Las 40 unidades de p0 en el banco marchaban en ATTACK_MOVE hacia
+// waypoints de su propia base, asi que nunca estaban quietas y el aggro NO
+// disparaba jamas — con el enemigo a 4,4 tiles y rango de aggro 10.
+//
+// Un ataque-movimiento que no ataca mientras se mueve es un MOVE, y entonces la
+// orden no significa nada.
+//
+// El observable de "ha enganchado" es que aggro_system reescribe `tgt` hacia el
+// enemigo. Por eso el waypoint se pone al OESTE y el enemigo al ESTE: si engancha,
+// tgt cambia de sentido; si no, se queda donde estaba.
+// ---------------------------------------------------------------------------
+static ContactFixture make_marching_pair(uint8_t order_mode) {
+    // 3 tiles de separacion: fuera del contacto (1 tile) y dentro del aggro (10).
+    ContactFixture f = make_contact_pair(20, 20, 0, 3 * FX_ONE_RAW);
+    GameState& g = *f.g;
+    g.order_mode[f.low] = order_mode;
+    // Waypoint MUY al oeste: la unidad esta en marcha (pos != tgt) y en sentido
+    // contrario al enemigo.
+    g.tgt_x[f.low] = static_cast<int64_t>(10) * FX_ONE_RAW;
+    g.tgt_y[f.low] = g.pos_y[f.low];
+    step(g, nullptr, 0);
+    return f;
+}
+
+// 1) EL FALLO LITERAL: en ATTACK_MOVE y en marcha, engancha.
+static void test_attack_move_acquires_while_marching() {
+    ContactFixture f = make_marching_pair(ORDER_MODE_ATTACK_MOVE);
+    // El aggro reescribio el destino hacia el enemigo (al este), abandonando el
+    // waypoint del oeste. Antes de este arreglo tgt seguia en 10 tiles.
+    CHECK(f.g->tgt_x[f.low] > static_cast<int64_t>(10) * FX_ONE_RAW);
+}
+
+// 2) EL TESTIGO, y es lo que da valor a la prueba 1. En MOVE y en marcha, NO
+//    engancha: quien va a un sitio con MOVE no se para a pelear, y esa es justo
+//    la diferencia entre las dos ordenes. Si esta pasara con el arreglo roto,
+//    la 1 no probaria nada.
+static void test_move_does_not_acquire_while_marching() {
+    ContactFixture f = make_marching_pair(ORDER_MODE_MOVE);
+    CHECK(f.g->tgt_x[f.low] == static_cast<int64_t>(10) * FX_ONE_RAW);
+}
+
+// 3) ATTACK sigue excluido (SPEC-004 §24.4: con ATTACK activo manda el jugador
+//    y el aggro NO reasigna aunque pase otro enemigo mas cerca). El arreglo no
+//    puede romper esa regla.
+static void test_attack_order_still_not_reassigned() {
+    ContactFixture f = make_marching_pair(ORDER_MODE_ATTACK);
+    CHECK(f.g->tgt_x[f.low] == static_cast<int64_t>(10) * FX_ONE_RAW);
+}
+
+// 4) Y la unidad QUIETA sigue adquiriendo como siempre: el arreglo anade un
+//    caso, no sustituye el que habia.
+static void test_idle_still_acquires() {
+    ContactFixture f = make_contact_pair(20, 20, 0, 3 * FX_ONE_RAW);
+    GameState& g = *f.g;
+    g.order_mode[f.low] = ORDER_MODE_NONE;
+    g.tgt_x[f.low] = g.pos_x[f.low];   // quieta
+    g.tgt_y[f.low] = g.pos_y[f.low];
+    const int64_t antes = g.tgt_x[f.low];
+    step(g, nullptr, 0);
+    CHECK(g.tgt_x[f.low] != antes);    // se movio hacia el enemigo
+}
+
 int main() {
+    test_attack_move_acquires_while_marching();
+    test_move_does_not_acquire_while_marching();
+    test_attack_order_still_not_reassigned();
+    test_idle_still_acquires();
+
     auto* g1 = new GameState();
     run_scenario(*g1);
 

@@ -1573,7 +1573,13 @@ inline void aggro_system(GameState& g) noexcept {
         // SPEC-004 §24.4: con ATTACK activo el jugador mando, y el aggro NO
         // reasigna objetivo aunque pase otro enemigo mas cerca.
         if (g.order_mode[i] == ORDER_MODE_ATTACK) continue;
-        if (g.pos_x[i] != g.tgt_x[i] || g.pos_y[i] != g.tgt_y[i]) continue;  // ocupada
+        // Sprint 1.50: el ATAQUE-MOVIMIENTO engancha AUNQUE se este moviendo.
+        // Un attack-move que no ataca mientras se mueve es un MOVE, y entonces
+        // la orden no significa nada. MOVE conserva la exigencia de ociosidad
+        // —quien va a un sitio con MOVE no se para a pelear, y esa es justo la
+        // diferencia entre las dos ordenes— y ATTACK sigue excluido arriba.
+        if (g.order_mode[i] != ORDER_MODE_ATTACK_MOVE
+            && (g.pos_x[i] != g.tgt_x[i] || g.pos_y[i] != g.tgt_y[i])) continue;
 
         const uint32_t cell_i = sh_cell_index(g.shash, g.pos_x[i], g.pos_y[i]);
         const uint32_t cx = cell_i % g.shash.cells_x;
@@ -1626,8 +1632,11 @@ inline void aggro_system(GameState& g) noexcept {
         // Enemigo detectado fuera del rango de arma → aproximarse directamente
         // a un punto de standoff. Dentro de rango: quieta (combat_system ya le
         // dispara donde está).
-        // Este bloque solo corre ociosa; una orden MOVE_TO humana en curso sigue
-        // teniendo prioridad porque deja pos != tgt.
+        // Sprint 1.50: este comentario decia "este bloque solo corre ociosa" y
+        // el cambio de arriba lo dejo FALSO, asi que se corrige aqui: en
+        // ATTACK_MOVE corre tambien en marcha. Una orden MOVE_TO humana en
+        // curso sigue teniendo prioridad, que era lo que el comentario queria
+        // proteger — pero ahora por el modo de orden, no por la ociosidad.
         if (best != SH_EMPTY && best_d2 > range_sq) {
             const int64_t step_fx = (static_cast<int64_t>(g.speed_mtpt[i]) * FX_ONE_RAW) / 1000;
             if (step_fx <= 0) continue;
