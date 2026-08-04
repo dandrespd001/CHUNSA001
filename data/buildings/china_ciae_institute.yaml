@@ -1,0 +1,32 @@
+# Hereda de base:epoch14_workshop; sobrescribe lo que su cita justifica.
+extends: base:epoch14_workshop
+id: china:ciae_institute
+civ_id: china:yellow_river
+display_name_key: china:building.ciae_institute
+description_key: china:building.ciae_institute.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - china:epoch_14
+  - china:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.39-china-final
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, China Institute of Atomic Energy: «Founded in 1950», el instituto «conducts research in the fields of nuclear physics, nuclear engineering, radiochemistry, and in the development of nuclear technology», y es «the main research institute of the China National Nuclear Corporation (CNNC)»"
+        locator: "Founding, research focus and organisational status"
+        url: "https://en.wikipedia.org/wiki/China_Institute_of_Atomic_Energy"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Instituto Chino de Energia Atomica, epoca 14. Fundado en 1950, dentro de la ventana 1945-1980. Kind research porque lo que produce es conocimiento. AVISO DE ALCANCE: la fuente NO detalla que reactores opera, asi que el edificio no afirma ninguno — se cita lo que sostiene y nada mas."
+    reviewed_by:
+      - architect

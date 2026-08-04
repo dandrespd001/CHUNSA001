@@ -143,6 +143,46 @@ que es la **época 8**. Su ventana `[8,10]` la extiende el Arquitecto como
 decisión de diseño; la fuente **no** documenta la actividad del astillero entre
 1500 y 1700.
 
+### `[V]` Épocas 10-12 — Las Trece Factorías, y la elección honesta
+
+> «The "factories" were not workshops or manufacturing centres but the offices,
+> trading posts, and warehouses of foreign factors» · el sistema de Cantón operó
+> «from 1757 to 1842» · «The growth of European (particularly British) tea
+> consumption supplemented the port's heavy trade in silk and porcelain» · los
+> hongs tenían desde 1760 «a lucrative monopoly on foreign trade».
+
+https://en.wikipedia.org/wiki/Thirteen_Factories
+
+**Es la decisión de diseño más difícil del linaje chino.** Nuestra época 11 es
+la Industrial I europea —vapor, 1760-1840— y **China en ese momento no
+industrializa**. Fingir una fábrica de vapor habría sido falsear la historia por
+comodidad de simetría. Lo que China sí hace es concentrar **todo el comercio
+exterior del imperio** en un recinto, y eso tiene edificio.
+
+El nombre además engaña, y la fuente lo aclara: no eran fábricas.
+
+### `[V]` Época 14 — Instituto Chino de Energía Atómica
+
+> «Founded in 1950» · «conducts research in the fields of nuclear physics,
+> nuclear engineering, radiochemistry, and in the development of nuclear
+> technology» · es «the main research institute of the China National Nuclear
+> Corporation (CNNC)».
+
+https://en.wikipedia.org/wiki/China_Institute_of_Atomic_Energy
+
+**Aviso de alcance**: la fuente no detalla qué reactores opera, así que el
+edificio no afirma ninguno.
+
+### `[V]` Época 15 — Zhongguancun
+
+> Conocido como «Electronics Avenue» a principios de los ochenta · en 1988 el
+> gobierno lo nombró «Beijing High-Technology Industry Development Experimental
+> Zone» · de allí salieron Lenovo, Founder Group y Stone Group entre 1984 y
+> 1985 · «there were over 12,000 high-tech enterprises operating in
+> Zhongguancun's seven parks, with 489,000 technicians employed».
+
+https://en.wikipedia.org/wiki/Zhongguancun
+
 ## Lo que NO está verificado todavía
 
 **Época 1 — sin anclaje verificable, y no por falta de intentos.** El artículo
@@ -151,7 +191,7 @@ una nota de redirección sin contenido. Es la misma situación que tuvieron las
 celdas de época 15 antes de encontrar la Biblioteca de Alejandría: existe el
 tema, no existe el artículo con cuerpo. Se queda como andamiaje declarado.
 
-Las épocas **10, 11, 13, 14 y 15** siguen encargadas a MiniMax y llegarán como
+Sólo la época **13** sigue encargada a MiniMax y llegarán como
 **hipótesis**, no como procedencia: la investigación delegada anterior declaró
 —correctamente— que sin navegación web no puede transcribir literalmente.
 

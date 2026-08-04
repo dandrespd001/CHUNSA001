@@ -1,0 +1,31 @@
+# Hereda de base:epoch15_workshop; sobrescribe lo que su cita justifica.
+extends: base:epoch15_workshop
+id: china:zhongguancun
+civ_id: china:yellow_river
+display_name_key: china:building.zhongguancun
+description_key: china:building.zhongguancun.description
+kind: research
+dropoff_resources: []
+playable_period_ids:
+  - china:epoch_15
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.39-china-final
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Zhongguancun: fue conocido como «Electronics Avenue» a principios de los ochenta por sus mercados informaticos, y en 1988 el gobierno central lo nombro oficialmente «Beijing High-Technology Industry Development Experimental Zone»; de alli salieron Lenovo, Founder Group y Stone Group entre 1984 y 1985; segun el anuario estadistico de Pekin de 2004, «there were over 12,000 high-tech enterprises operating in Zhongguancun's seven parks, with 489,000 technicians employed»"
+        locator: "Naming, official designation, founding companies and scale"
+        url: "https://en.wikipedia.org/wiki/Zhongguancun"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Zhongguancun, epoca 15. La cifra de 12.000 empresas y 489.000 tecnicos es la que justifica que sea un edificio y no una anecdota. Y encaja sin estirar la fecha: «Electronics Avenue» es de principios de los ochenta y la epoca 15 empieza en 1980. Cierra el linaje chino en la misma clase de edificio con la que Egipto e Italia cierran el suyo —biblioteca y centro de computo— que es coherente: la epoca 15 se llama Informacion."
+    reviewed_by:
+      - architect

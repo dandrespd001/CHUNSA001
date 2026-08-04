@@ -1,0 +1,39 @@
+# Hereda de base:epoch10_workshop; sobrescribe lo que su cita justifica.
+extends: base:epoch10_workshop
+id: china:thirteen_factories
+civ_id: china:yellow_river
+display_name_key: china:building.thirteen_factories
+description_key: china:building.thirteen_factories.description
+epoch_window:
+  - 10
+  - 12
+kind: economic
+dropoff_resources:
+  - chunsa:gold
+  - chunsa:silk
+can_trade: true
+playable_period_ids:
+  - china:epoch_10
+  - china:epoch_11
+  - china:epoch_12
+provenance:
+  status: promoted
+  generator: human
+  task_id: Sprint-1.39-china-final
+  generated_on: "2026-08-03"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/VERIF_LINAJE_CHINO.md
+    sources:
+      - citation: "Wikipedia, Thirteen Factories: «The \"factories\" were not workshops or manufacturing centres but the offices, trading posts, and warehouses of foreign factors»; el sistema de Canton opero «from 1757 to 1842» con los mercaderes occidentales restringidos a Guangzhou; «The growth of European (particularly British) tea consumption supplemented the port's heavy trade in silk and porcelain»; y los hongs, desde 1760, tenian «a lucrative monopoly on foreign trade»"
+        locator: "What they were, Canton System dates, goods and the Cohong monopoly"
+        url: "https://en.wikipedia.org/wiki/Thirteen_Factories"
+        accessed_on: "2026-08-03"
+  balance_design:
+    author: architect
+    rationale: "Las Trece Factorias, epocas 10-12. TRES COSAS. Primera: el nombre engana y la fuente lo aclara —no eran fabricas, eran oficinas y almacenes— asi que es can_trade y no un taller. Segunda, y es la decision de diseno que importa: es la eleccion HONESTA para la epoca 11 china. Nuestra epoca 11 es la Industrial I europea, vapor de 1760 a 1840, y China en ese momento NO industrializa. Fingir una fabrica de vapor habria sido falsear la historia por comodidad de simetria. Lo que China hace en ese periodo es concentrar TODO el comercio exterior del imperio en un recinto amurallado, y eso si tiene edificio. Tercera: cubre tres epocas con un solo record porque el sistema duro de 1757 a 1842 y eso atraviesa nuestras epocas 10 y 11 sin partirse."
+    reviewed_by:
+      - architect

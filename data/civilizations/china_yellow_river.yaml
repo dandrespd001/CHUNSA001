@@ -88,12 +88,9 @@ unit_ids:
   - china:hunter
   - china:work_crew
 building_ids:
+  - china:ciae_institute
   - china:dwelling
-  - china:epoch_10_works
-  - china:epoch_11_works
   - china:epoch_13_works
-  - china:epoch_14_works
-  - china:epoch_15_works
   - china:farm
   - china:flint_workshop
   - china:han_blast_furnace
@@ -107,8 +104,10 @@ building_ids:
   - china:planted_grove
   - china:settlement_center
   - china:shang_foundry
+  - china:thirteen_factories
   - china:woodblock_workshop
   - china:yangshao_granary
+  - china:zhongguancun
 tech_ids:
   - china:millet_cultivation
   - china:song_coke_smelting
