@@ -771,7 +771,12 @@ inline AiTradeV1 ai_find_trade(const GameState& g, uint8_t player) noexcept {
                 missing = rr;
             }
             if (!clean || missing == 0xFFu) continue;
-            const int32_t deficit = rec.input[missing] - g.player_stock[player][missing];
+            // int64_t y no int32_t: `player_stock` ES int64_t, asi que la
+            // resta ya lo es, y meterla en un int32_t es un truncado que MSVC
+            // avisa (C4244) con razon. El tipo honesto es el ancho de la
+            // operacion; el filtro de la linea siguiente acota el valor util a
+            // (0, MARKET_LOT] de todos modos.
+            const int64_t deficit = rec.input[missing] - g.player_stock[player][missing];
             if (deficit <= 0 || deficit > MARKET_LOT) continue;
             int32_t precio = g.market_price_bp[player][missing];
             if (precio == 0) precio = MARKET_BASE_BP;           // sin inicializar = base

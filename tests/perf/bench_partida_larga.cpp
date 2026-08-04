@@ -194,7 +194,10 @@ inline void dump_economy(const GameState& g, const DataCatalogV1& cat,
                     static_cast<long long>(g.deposits[d].y_raw));
     }
     for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
-        const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, p);
+        // cast explicito: `p` es uint32_t y la funcion toma uint8_t (MSVC
+        // C4244). kN_PLAYERS es 2.
+        const uint64_t mask =
+            detail::allied_auto_gather_deposit_mask(g, static_cast<uint8_t>(p));
         std::printf("  jugador %u: mascara auto-gather=%016llx\n",
                     p, static_cast<unsigned long long>(mask));
         for (uint32_t i = 0; i < g.entities.capacity; ++i) {
