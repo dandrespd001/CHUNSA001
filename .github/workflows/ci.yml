@@ -17,6 +17,13 @@ jobs:
           - { name: clang-portable, cc: clang, cxx: clang++, portable: "ON" }
     steps:
       - uses: actions/checkout@v4
+      - name: Dependencias de Python del compilador de datos
+        # `data_compile` y `schemas` importan pyyaml, jsonschema y referencing.
+        # Sin esto, ctest reporta los dos como ERROR de carga del modulo y la CI
+        # queda roja — que es EXACTAMENTE lo que llevaba pasando desde el 25 de
+        # julio sin que nadie mirara. El fallo no era del codigo: era que el
+        # runner no tenia con que ejecutarlo.
+        run: python3 -m pip install --upgrade pyyaml jsonschema referencing
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCHUNSA_WIDE128_FORCE_PORTABLE=${{ matrix.portable }}
       - name: Build
@@ -38,6 +45,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Dependencias de Python del compilador de datos
+        # `data_compile` y `schemas` importan pyyaml, jsonschema y referencing.
+        # Sin esto, ctest reporta los dos como ERROR de carga del modulo y la CI
+        # queda roja — que es EXACTAMENTE lo que llevaba pasando desde el 25 de
+        # julio sin que nadie mirara. El fallo no era del codigo: era que el
+        # runner no tenia con que ejecutarlo.
+        run: python3 -m pip install --upgrade pyyaml jsonschema referencing
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build (verifica intrinsics _mul128/_div128 — Anexo B.1)
