@@ -484,7 +484,23 @@ def _semantic(records, profile, errors, source_root=None, compiled=False):
             if civ_id in civs and ident not in civs[civ_id]["building_ids"]:
                 _err(errors, "E_REFERENCE", kind, ident, "/civ_id", "building missing from civ.building_ids")
             for field, expected in (("trains", ("unit",)), ("researches", ("tech",))):
-                for pos, target in enumerate(record[field]): ref(kind, ident, target, expected, f"/{field}/{pos}")
+                for pos, target in enumerate(record[field]):
+                    got = ref(kind, ident, target, expected, f"/{field}/{pos}")
+                    # FUGA ENTRE CIVILIZACIONES. Comprobar que la tecnologia
+                    # EXISTE no basta: hay que comprobar que es SUYA. Sin esto,
+                    # china:settlement_center listaba rome:road_engineering —un
+                    # edificio chino concediendo una capacidad romana— y el
+                    # compilador lo aceptaba sin rechistar, porque la tech
+                    # existia. El dato estuvo mal desde que se creo la tercera
+                    # civilizacion y nadie lo vio.
+                    #
+                    # Que las civilizaciones sean distintas es la premisa del
+                    # proyecto; una fuga asi la vacia en silencio, que es la
+                    # peor forma de romperla.
+                    if field == "researches" and got is not None:
+                        if civ_id not in got["available_to"]:
+                            _err(errors, "E_CIV_LEAK", kind, ident, f"/{field}/{pos}",
+                                 f"tech {target} is not available to civ {civ_id}")
             for field in ("required_capabilities", "grants_capabilities"):
                 for pos, value in enumerate(record[field]): declared(kind, ident, value, capabilities, f"/{field}/{pos}", "capability")
             resource_cost_refs(kind, ident, record["resource_costs"],

@@ -27,8 +27,19 @@ dropoff_resources:
   - chunsa:stone
 trains:
   - china:work_crew
-researches:
-  - rome:road_engineering
+# FUGA ENTRE CIVILIZACIONES, corregida el 2026-08-04. Aqui ponia
+# `rome:road_engineering`: un edificio CHINO concediendo una tecnologia romana,
+# que ademas es `available_to: rome:republic_imperial` y otorga la capacidad
+# `rome:maintain_public_infrastructure`. Copia y pega al crear la tercera
+# civilizacion, y nadie lo vio hasta que se auditaron los datos de tecnologia.
+#
+# Se deja VACIO y no se sustituye por una tecnologia china cualquiera: las dos
+# que tiene China viven donde les toca —millet_cultivation en el campamento
+# paleolitico, song_coke_smelting en el alto horno Han— y meter una aqui solo
+# para no dejar el hueco seria inventarse diseno para tapar un error.
+#
+# El hueco es real y esta declarado: el centro chino no investiga nada todavia.
+researches: []
 required_capabilities: []
 grants_capabilities: []
 recipes: []
