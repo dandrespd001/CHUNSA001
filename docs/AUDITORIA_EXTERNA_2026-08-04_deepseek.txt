@@ -1,0 +1,1025 @@
+[0m
+> auditor · ds/deepseek-v4-flash
+[0m
+[0m$ [0mgit log --oneline -20
+58a6f56 Sprint 1.43: la CI caza un fallo de portabilidad real que GCC toleraba
+dbeb607 Sprint 1.42: el proyecto NO compilaba en Release, y la CI llevaba 10 dias roja
+9997978 Sprint 1.41: las granjas por fin se construyen — y el muro se mueve a la madera
+e9db3c9 Plan de desatasco: las cuatro causas estan ENCADENADAS
+bfe0cb1 Sprint 1.40: banco de partida larga — y la partida NO llega a la epoca 15
+bfe5630 Sprint 1.39: China cierra sus celdas, y la decision mas dificil del linaje
+c8410ba Sprint 1.38: dos celdas chinas mas, y la investigacion troceada demuestra su valor
+2927307 Sprint 1.37: dos de las tres celdas atascadas, cerradas — y un error de orquestacion mio
+47a2442 Sprint 1.36: la IA elige QUE tecnologia investigar, no la primera que ve
+8157c26 Sprint 1.35: la IA usa el mercado — delegado, y la prueba muerde
+013f791 Sprint 1.34: la IA construye granjas — delegado, verificado y con prueba propia
+b354cb6 Sprint 1.33: mercado — trueque con precio movil
+049e30c Sprint 1.32: saturacion por deposito — amontonar deja de ser optimo
+a3d1867 Sprint 1.31: cuatro celdas chinas ascendidas, y tres son "China llego antes"
+d3f8a3f Sprint 1.30: China, la tercera civilizacion — y la prueba de fuego pasada
+914a894 SPEC-TRAYECTORIA: el contrato que desbloquea la tercera civilizacion
+3483c80 Sprint 1.29: la tecnologia y las herramientas suben la produccion
+52ea560 Sprint 1.28 (6/6): bosque plantado, flotacion, y la reserva deja de ser codigo muerto
+10a6a22 Sprint 1.28 (5/5): las granjas funcionan, y la comida deja de agotarse
+5b562fa Sprint 1.28 (4/n): un edificio puede declarar el deposito que crea
+[0m
+[0m$ [0mls -la
+total 472
+drwxr-xr-x 1 adquiod adquiod    540 ago  4 11:49 .
+drwxr-xr-x 1 adquiod adquiod    620 jul 28 16:14 ..
+drwxr-xr-x 1 adquiod adquiod     20 jul 17 08:19 addons
+drwxr-xr-x 1 adquiod adquiod     52 jul 16 10:14 assets
+drwxr-xr-x 1 adquiod adquiod   2300 ago  4 11:49 build
+drwxr-xr-x 1 adquiod adquiod   1358 jul 29 17:47 build-asan
+drwxr-xr-x 1 adquiod adquiod   1934 jul 31 11:39 build-gcc
+drwxr-xr-x 1 adquiod adquiod    140 ago  3 09:05 build-godot
+drwxr-xr-x 1 adquiod adquiod    988 jul 24 16:39 build-portable
+drwxr-xr-x 1 adquiod adquiod   1358 jul 29 17:47 build-ubsan
+drwxr-xr-x 1 adquiod adquiod     44 ago  3 09:55 .claude
+-rw-r--r-- 1 adquiod adquiod  25469 ago  4 10:25 CMakeLists.txt
+drwxr-xr-x 1 adquiod adquiod    330 jul 31 14:55 data
+drwxr-xr-x 1 adquiod adquiod    272 jul 30 09:50 demo
+drwxr-xr-x 1 adquiod adquiod   2776 ago  4 10:48 docs
+-rw-r--r-- 1 adquiod adquiod   5403 jul 17 08:45 fuzz.sav
+-rw-r--r-- 1 adquiod adquiod  56674 jul 17 08:45 g5.curp
+-rw-r--r-- 1 adquiod adquiod  56674 jul 17 22:59 g5v.curp
+drwxr-xr-x 1 adquiod adquiod    200 ago  4 11:49 .git
+drwxr-xr-x 1 adquiod adquiod     18 jul 16 10:14 .github
+-rw-r--r-- 1 adquiod adquiod    724 ago  3 09:59 .gitignore
+-rw-r--r-- 1 adquiod adquiod   1086 jul 17 08:19 LICENSE
+drwxr-xr-x 1 adquiod adquiod     16 jul 16 16:24 mods
+drwxr-xr-x 1 adquiod adquiod     16 jul 16 16:24 mod-template
+drwxr-xr-x 1 adquiod adquiod     64 jul 30 17:47 .pytest_cache
+-rw-r--r-- 1 adquiod adquiod   1766 jul 17 08:19 README.md
+-rw-r--r-- 1 adquiod adquiod 174735 jul 28 11:23 savetest.sav
+drwxr-xr-x 1 adquiod adquiod     16 jul 16 16:24 scenes
+drwxr-xr-x 1 adquiod adquiod     70 jul 16 10:14 scripts
+drwxr-xr-x 1 adquiod adquiod     72 jul 28 18:08 scripts_ci
+drwxr-xr-x 1 adquiod adquiod     62 jul 17 08:37 tests
+-rw-r--r-- 1 adquiod adquiod 141118 jul 22 15:34 test_state.sav
+drwxr-xr-x 1 adquiod adquiod    172 jul 17 14:51 third_party_build
+drwxr-xr-x 1 adquiod adquiod     82 jul 31 16:38 tools
+[0m
+[0m$ [0mls -la addons/chunsa_sim/core/include/chunsa/
+total 676
+drwxr-xr-x 1 adquiod adquiod    718 ago  3 16:13 .
+drwxr-xr-x 1 adquiod adquiod     12 jul 17 08:19 ..
+-rw-r--r-- 1 adquiod adquiod  91152 ago  4 11:10 ai_stub.hpp
+-rw-r--r-- 1 adquiod adquiod  19331 ago  3 14:32 checksum.hpp
+-rw-r--r-- 1 adquiod adquiod   9993 jul 23 16:30 cli_run.hpp
+-rw-r--r-- 1 adquiod adquiod   4048 ago  3 12:06 combat_damage.hpp
+-rw-r--r-- 1 adquiod adquiod   7656 ago  3 14:29 commands.hpp
+-rw-r--r-- 1 adquiod adquiod 128256 ago  4 11:44 data_catalog.hpp
+-rw-r--r-- 1 adquiod adquiod  11700 jul 28 10:55 driver.hpp
+-rw-r--r-- 1 adquiod adquiod  20425 ago  3 12:47 economy.hpp
+-rw-r--r-- 1 adquiod adquiod   6967 jul 17 08:19 entity_table.hpp
+-rw-r--r-- 1 adquiod adquiod   1326 jul 17 08:26 fatal.hpp
+-rw-r--r-- 1 adquiod adquiod   7986 jul 17 08:19 fixed64.hpp
+-rw-r--r-- 1 adquiod adquiod   6301 jul 17 22:20 flow_field.hpp
+-rw-r--r-- 1 adquiod adquiod  33625 ago  4 11:19 game_state.hpp
+-rw-r--r-- 1 adquiod adquiod   3994 ago  3 14:28 market.hpp
+-rw-r--r-- 1 adquiod adquiod  13150 jul 23 16:30 replay.hpp
+-rw-r--r-- 1 adquiod adquiod   1139 jul 31 11:19 resources.hpp
+-rw-r--r-- 1 adquiod adquiod   4670 jul 17 08:19 rng.hpp
+-rw-r--r-- 1 adquiod adquiod  11269 ago  3 14:32 save_io.hpp
+-rw-r--r-- 1 adquiod adquiod  30298 ago  3 14:32 serialize.hpp
+-rw-r--r-- 1 adquiod adquiod   9669 jul 17 08:43 sha256.hpp
+-rw-r--r-- 1 adquiod adquiod  15145 jul 28 10:55 skirmish_apertura.hpp
+-rw-r--r-- 1 adquiod adquiod  16962 jul 29 09:34 skirmish_eco.hpp
+-rw-r--r-- 1 adquiod adquiod  14267 jul 31 17:17 skirmish.hpp
+-rw-r--r-- 1 adquiod adquiod  12876 jul 17 08:43 snapshot_ring.hpp
+-rw-r--r-- 1 adquiod adquiod   6223 jul 17 08:19 spatial_hash.hpp
+-rw-r--r-- 1 adquiod adquiod 126311 ago  3 14:30 step.hpp
+-rw-r--r-- 1 adquiod adquiod   5391 jul 17 08:19 vec2fx.hpp
+-rw-r--r-- 1 adquiod adquiod   5145 jul 17 22:58 vision.hpp
+-rw-r--r-- 1 adquiod adquiod  12015 jul 17 08:19 wide128.hpp
+[0m
+[0m$ [0mgit log --oneline -5 -- addons/chunsa_sim/core/include/chunsa/economy.hpp addons/chunsa_sim/core/include/chunsa/market.hpp addons/chunsa_sim/core/include/chunsa/ai_stub.hpp addons/chunsa_sim/core/include/chunsa/step.hpp
+9997978 Sprint 1.41: las granjas por fin se construyen — y el muro se mueve a la madera
+47a2442 Sprint 1.36: la IA elige QUE tecnologia investigar, no la primera que ve
+8157c26 Sprint 1.35: la IA usa el mercado — delegado, y la prueba muerde
+013f791 Sprint 1.34: la IA construye granjas — delegado, verificado y con prueba propia
+b354cb6 Sprint 1.33: mercado — trueque con precio movil
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/economy.hpp
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/market.hpp
+[0m
+[0m$ [0mwc -l addons/chunsa_sim/core/include/chunsa/step.hpp
+2425 addons/chunsa_sim/core/include/chunsa/step.hpp
+[0m
+[0m✱ [0mGrep "TRADE|market_buy_gold|market_sell_gold|market_price_after|trade"[90m in addons/chunsa_sim/core/include/chunsa · 40 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [offset=740, limit=100][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/checksum.hpp
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/game_state.hpp
+[0m✱ [0mGrep "using UnitId|using BuildingId|typedef.*UnitId|typedef.*BuildingId|using ResourceId|typedef.*ResourceId|using CivId|typedef.*CivId|using RecipeId|typedef.*RecipeId"[90m in addons/chunsa_sim/core/include/chunsa · 5 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/fixed64.hpp
+[0m✱ [0mGrep "gatherers_here|harvest_per_tick|recovery_bp|farm|Farm|FARM"[90m in addons/chunsa_sim/core/include/chunsa/step.hpp · 36 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=130, offset=1740][0m
+[0m✱ [0mGrep "player_tech_bonus|StatEffectV1|auto_gather|allied_auto_gather_deposit_masks"[90m in addons/chunsa_sim/core/include/chunsa/step.hpp · 34 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=75, offset=1155][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=75, offset=1686][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/combat_damage.hpp
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=120, offset=1870][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=160, offset=690][0m
+[0m✱ [0mGrep "struct RecipeV1|input\[|struct BuildingDefinitionV1|cost\[|train_count|trains\[|creates_amount|creates_resource_idx|creates_regen_per_tick|creates_cap|recipe_count|recipes\["[90m in addons/chunsa_sim/core/include/chunsa/data_catalog.hpp · 100 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=130, offset=1475][0m
+[0m✱ [0mGrep "ai_step|AI_MAX_COMMANDS|ai_player =|for.*ai_player|uint8_t ai_player"[90m in addons/chunsa_sim/core/include/chunsa · 32 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=80, offset=1014][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=70, offset=1715][0m
+[0m✱ [0mGrep "ai_box_init|\.ai_player =|ai_player\b.*=|ai_job|AiJobBox"[90m in addons/chunsa_sim/core/include/chunsa · 34 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/data_catalog.hpp[90m [limit=130, offset=860][0m
+[0m
+[0m$ [0mgit show 58a6f56 --stat; echo ====; git show dbeb607 --stat
+commit 58a6f56d742d91b8991ff703e703070cdf5562fc
+Author: dandrespd001 <dandrespd001@gmail.com>
+Date:   Tue Aug 4 11:49:36 2026 -0500
+
+    Sprint 1.43: la CI caza un fallo de portabilidad real que GCC toleraba
+    
+    Primera ejecucion de CI en diez dias tras subir los 172 commits, y sirvio para
+    lo que existe: encontro algo que en local nunca habria aparecido.
+    
+    EL FALLO. `CveValue` —el nodo del formato CVE del catalogo— se contenia a si
+    mismo asi:
+    
+        std::vector<std::pair<std::string, CveValue>> obj;
+    
+    GCC lo aceptaba. Clang no, y CLANG TIENE RAZON: `std::vector<T>` si admite un T
+    incompleto desde C++17, pero `std::pair` NO esta en esa lista. Un `std::pair`
+    instanciado con el propio CveValue, que en ese punto aun no esta completo, es
+    comportamiento indefinido por norma. Que GCC lo dejara pasar era suerte, no
+    correccion.
+    
+    Se sustituye por un `CveMember` propio con los MISMOS nombres de campo
+    —`first` y `second`— para no tocar ni un solo sitio de uso, definido DESPUES de
+    CveValue. Y `find()` pasa a declararse dentro y definirse fuera, porque dentro
+    del struct CveMember todavia es incompleto y no se le pueden tocar los campos.
+    
+    VERIFICADO EN LAS TRES CONFIGURACIONES que la CI usa y que aqui no mirabamos:
+      gcc Release              49/49
+      clang Release portable   49/49
+      RelWithDebInfo (la de siempre)  compila limpio
+    
+    POR QUE ESTO NO SE VEIA. En local solo se construia RelWithDebInfo con GCC. La
+    CI prueba cuatro combinaciones de compilador y backend mas Windows MSVC — y
+    llevaba diez dias roja sin que nadie mirara, porque trabajabamos en local y no
+    subiamos.
+    
+    Es el mismo patron que ya aparecio dos veces esta semana: el banco de partida
+    larga destapo que todo lo que mediamos era CORTO, y esto destapa que todo lo
+    que compilabamos era la MISMA configuracion. Verde en un sitio no dice nada
+    sobre el otro.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01Ci2B6FyE6RgWdbV2KJaURq
+
+ .../core/include/chunsa/data_catalog.hpp           | 35 ++++++++++++++++++----
+ 1 file changed, 30 insertions(+), 5 deletions(-)
+zsh:1: === not found
+[0m
+[0m$ [0mgit show dbeb607 --stat
+commit dbeb607799ed2dfb4cdec7e9e3e596f1c888507b
+Author: dandrespd001 <dandrespd001@gmail.com>
+Date:   Tue Aug 4 11:26:01 2026 -0500
+
+    Sprint 1.42: el proyecto NO compilaba en Release, y la CI llevaba 10 dias roja
+    
+    Al ir a actualizar el repositorio aparecieron dos cosas que nadie miraba.
+    
+    1) NO COMPILABAMOS EN RELEASE. Aqui solo se construia RelWithDebInfo, y la CI
+       usa Release. Resultado: 35 errores de compilacion y 13 pruebas que ni
+       siquiera se construian. Todos de -Werror=stringop-overflow, un aviso que GCC
+       SOLO emite con optimizacion — por eso llevabamos ciegos.
+    
+       La causa real no es cosmetica: `zero_components` y varios fixtures indexan
+       arrays con el indice devuelto por `et_spawn` SIN comprobar que sea valido.
+       La reserva de entidades puede agotarse y devolver un handle invalido, y
+       entonces se escribe FUERA del array. En un kernel cuyo determinismo depende
+       de que nada de eso pase, la guarda no es una concesion al compilador: es
+       correccion.
+    
+    2) LA CI LLEVA ROJA DESDE EL 25 DE JULIO. Diez dias. No lo vimos porque
+       trabajamos en local y nunca subimos: hay 171 commits sin empujar. Fallaba en
+       `data_compile`, que desde entonces se arreglo por otras vias.
+    
+    3) Y UN TERCER RIESGO QUE HABRIA APARECIDO AL SUBIR: la CI corre `ctest` sin
+       filtro, asi que ejecutaria los bancos de rendimiento. bench_step compara
+       tiempos de PARED contra referencias medidas en ESTA maquina; un runner de
+       GitHub es otra maquina y otra carga, asi que habria fallado de forma
+       aleatoria. Una prueba que falla sola se acaba ignorando, que es peor que no
+       tenerla. La CI pasa a excluir la etiqueta `perf` en Linux y en Windows.
+    
+    Verificado en build Release limpio, como hace la CI: 51/51 con los bancos,
+    49/49 sin ellos.
+    
+    LA LECCION: teniamos 51 pruebas verdes y una CI roja que nadie miraba. Lo verde
+    en local no dice nada sobre otra configuracion de compilacion. Es el mismo
+    patron que el banco de partida larga destapo hace dos sprints: todo lo que
+    mediamos era lo mismo, una y otra vez.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01Ci2B6FyE6RgWdbV2KJaURq
+
+ .github/workflows/ci.yml                             | 10 ++++++++--
+ addons/chunsa_sim/core/include/chunsa/game_state.hpp | 10 ++++++++++
+ tests/unit/test_ai_apertura.cpp                      | 18 ++++++++++++++++++
+ tests/unit/test_ai_craft.cpp                         | 19 +++++++++++++++++++
+ tests/unit/test_population_housing.cpp               |  6 ++++++
+ 5 files changed, 61 insertions(+), 2 deletions(-)
+[0m
+[0m$ [0mgit show 9997978 --stat
+commit 9997978c32992a47428bb553429749c1aa4dc410
+Author: dandrespd001 <dandrespd001@gmail.com>
+Date:   Tue Aug 4 11:13:56 2026 -0500
+
+    Sprint 1.41: las granjas por fin se construyen — y el muro se mueve a la madera
+    
+    Primer arreglo del plan de desatasco, con el banco de partida larga como juez.
+    Dos cambios y una correccion a mi propio plan.
+    
+    MI ORDEN DEL PLAN ESTABA MAL, y la medicion lo demostro. Puse como causa A "los
+    aldeanos ociosos vuelven al trabajo" y lo implemente: un ciudadano parado se
+    pone a recolectar aunque ningun recurso baje del umbral. Compilo y el resultado
+    fue IDENTICO — epoca 3/4, cero granjas, cajas congeladas en 970 y 170.
+    
+    El arreglo es correcto y quedo, pero es INERTE: no hay deposito al que
+    redirigir. Los que quedan estan en el centro del mapa, fuera del radio de
+    recoleccion de ambas bases. Redirigir aldeanos no sirve cuando no hay nada
+    alcanzable a lo que mandarlos.
+    
+    Eso mueve la granja de causa B a causa A, porque una granja CREA SU PROPIO
+    DEPOSITO junto a la base. Es la unica fuente que no depende de que quede algo
+    cerca.
+    
+    EL ARREGLO QUE SI DESATASCA: `ai_food_in_ground`. El gatillo del 1.34 miraba
+    caja mas depositos alcanzables, y ese borde rompia el sistema entero — si la
+    caja no se puede gastar, el outlook no baja nunca. Ahora mira SOLO lo que queda
+    en el suelo, que es lo que dice si tu INGRESO se ha parado. Un jugador con mil
+    de comida y ningun yacimiento esta en ruina; uno con cien y tres yacimientos
+    llenos, no.
+    
+    RESULTADO MEDIDO, y es progreso real:
+      antes: granjas pedidas 0 y 0 · comida de p1 congelada en 1005
+      ahora: granjas pedidas 5 y 5, cinco en pie en p1 · comida de p1 de 1005 a
+             10.984 en el tick 120.000
+    
+    La comida deja de ser el problema. El sistema de comida renovable del 1.28 por
+    fin se alcanza en el escenario para el que se hizo.
+    
+    Y EL MURO SE MUEVE, que es exactamente lo que un arreglo bueno hace: ahora la
+    madera de p1 esta en 0 y la de p0 en 5. Las epocas incluso BAJAN respecto a la
+    medicion anterior (p0 de 3 a 2, p1 de 4 a 3) porque la madera que antes se
+    guardaba ahora se gasta en granjas.
+    
+    Eso no es una regresion, es el cuello de botella real quedando al descubierto:
+    el bosque plantado —la fuente renovable de madera— es de epoca [7,15], y no se
+    puede llegar a la epoca 7 sin madera. Mismo pollo y huevo que la comida, un
+    nivel mas arriba.
+    
+    AI_ALGO_VERSION 11->12. Suite 51/51, apertura en 10473 con winner 1.
+    
+    DOS DELEGACIONES FALLARON antes de esto, las dos perdiendose explorando
+    `ai_stub.hpp`, que ya tiene 1400 lineas. El patron es claro y queda anotado: el
+    contrato pequeno funciona cuando el trabajo es localizable, y falla cuando
+    exige entender un fichero grande. Para eso hay que dar el bloque de codigo
+    exacto en el contrato, no un puntero.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01Ci2B6FyE6RgWdbV2KJaURq
+
+ addons/chunsa_sim/core/include/chunsa/ai_stub.hpp | 61 ++++++++++++++++++++++-
+ tests/determinism/baselines.hpp                   |  4 +-
+ 2 files changed, 61 insertions(+), 4 deletions(-)
+[0m
+[0m$ [0mgit show 9997978 -- addons/chunsa_sim/core/include/chunsa/ai_stub.hpp | head -200
+commit 9997978c32992a47428bb553429749c1aa4dc410
+Author: dandrespd001 <dandrespd001@gmail.com>
+Date:   Tue Aug 4 11:13:56 2026 -0500
+
+    Sprint 1.41: las granjas por fin se construyen — y el muro se mueve a la madera
+    
+    Primer arreglo del plan de desatasco, con el banco de partida larga como juez.
+    Dos cambios y una correccion a mi propio plan.
+    
+    MI ORDEN DEL PLAN ESTABA MAL, y la medicion lo demostro. Puse como causa A "los
+    aldeanos ociosos vuelven al trabajo" y lo implemente: un ciudadano parado se
+    pone a recolectar aunque ningun recurso baje del umbral. Compilo y el resultado
+    fue IDENTICO — epoca 3/4, cero granjas, cajas congeladas en 970 y 170.
+    
+    El arreglo es correcto y quedo, pero es INERTE: no hay deposito al que
+    redirigir. Los que quedan estan en el centro del mapa, fuera del radio de
+    recoleccion de ambas bases. Redirigir aldeanos no sirve cuando no hay nada
+    alcanzable a lo que mandarlos.
+    
+    Eso mueve la granja de causa B a causa A, porque una granja CREA SU PROPIO
+    DEPOSITO junto a la base. Es la unica fuente que no depende de que quede algo
+    cerca.
+    
+    EL ARREGLO QUE SI DESATASCA: `ai_food_in_ground`. El gatillo del 1.34 miraba
+    caja mas depositos alcanzables, y ese borde rompia el sistema entero — si la
+    caja no se puede gastar, el outlook no baja nunca. Ahora mira SOLO lo que queda
+    en el suelo, que es lo que dice si tu INGRESO se ha parado. Un jugador con mil
+    de comida y ningun yacimiento esta en ruina; uno con cien y tres yacimientos
+    llenos, no.
+    
+    RESULTADO MEDIDO, y es progreso real:
+      antes: granjas pedidas 0 y 0 · comida de p1 congelada en 1005
+      ahora: granjas pedidas 5 y 5, cinco en pie en p1 · comida de p1 de 1005 a
+             10.984 en el tick 120.000
+    
+    La comida deja de ser el problema. El sistema de comida renovable del 1.28 por
+    fin se alcanza en el escenario para el que se hizo.
+    
+    Y EL MURO SE MUEVE, que es exactamente lo que un arreglo bueno hace: ahora la
+    madera de p1 esta en 0 y la de p0 en 5. Las epocas incluso BAJAN respecto a la
+    medicion anterior (p0 de 3 a 2, p1 de 4 a 3) porque la madera que antes se
+    guardaba ahora se gasta en granjas.
+    
+    Eso no es una regresion, es el cuello de botella real quedando al descubierto:
+    el bosque plantado —la fuente renovable de madera— es de epoca [7,15], y no se
+    puede llegar a la epoca 7 sin madera. Mismo pollo y huevo que la comida, un
+    nivel mas arriba.
+    
+    AI_ALGO_VERSION 11->12. Suite 51/51, apertura en 10473 con winner 1.
+    
+    DOS DELEGACIONES FALLARON antes de esto, las dos perdiendose explorando
+    `ai_stub.hpp`, que ya tiene 1400 lineas. El patron es claro y queda anotado: el
+    contrato pequeno funciona cuando el trabajo es localizable, y falla cuando
+    exige entender un fichero grande. Para eso hay que dar el bloque de codigo
+    exacto en el contrato, no un puntero.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01Ci2B6FyE6RgWdbV2KJaURq
+
+diff --git a/addons/chunsa_sim/core/include/chunsa/ai_stub.hpp b/addons/chunsa_sim/core/include/chunsa/ai_stub.hpp
+index 5c2de8b..d9a7b6d 100644
+--- a/addons/chunsa_sim/core/include/chunsa/ai_stub.hpp
++++ b/addons/chunsa_sim/core/include/chunsa/ai_stub.hpp
+@@ -53,7 +53,7 @@ namespace chunsa {
+ // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
+ // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
+ // exactamente el caso que exige el bump.
+-inline constexpr uint32_t AI_ALGO_VERSION     = 11;  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
++inline constexpr uint32_t AI_ALGO_VERSION     = 12;  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+ inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
+ inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
+ inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
+@@ -553,6 +553,34 @@ inline BuildingId ai_find_farm_type(const DataCatalogV1& cat, CivId civ,
+ // del mapa estan llenos — un umbral sobre player_stock a secas construiria
+ // granjas con 3000 de comida en el suelo. El outlook solo baja cuando la
+ // comida DEL MAPA de verdad escasea.
++// Sprint 1.41 (plan de desatasco): la comida QUE QUEDA EN EL SUELO y es
++// alcanzable. Antes esta funcion sumaba tambien la caja, y el banco de partida
++// larga demostro que ese borde rompe el sistema entero:
++//
++//   Cuando los depositos se vacian, la caja ya esta llena (970) y NO SE GASTA
++//   —entrenar exige cuartel en epoca, subir exige dos edificios— asi que el
++//   outlook nunca baja del umbral, la granja nunca se pide, y el sistema de
++//   comida renovable del 1.28 queda inalcanzable EXACTAMENTE en el escenario
++//   que existe para resolver.
++//
++// La caja no dice nada sobre si tu INGRESO se ha parado, que es lo que importa
++// para decidir si plantar. Un jugador con mil de comida y ningun yacimiento
++// esta en ruina; uno con cien y tres yacimientos llenos, no.
++//
++// Se conserva `ai_food_outlook` con la caja incluida por si alguien la
++// necesita, y se anade la que de verdad decide.
++inline int64_t ai_food_in_ground(const GameState& g, uint8_t player) noexcept {
++    int64_t total = 0;
++    const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, player);
++    for (uint32_t d = 0; d < g.n_deposits; ++d) {
++        if (((mask >> d) & 1u) == 0u) continue;
++        if (g.deposits[d].resource_idx != RESOURCE_INDEX_FOOD) continue;
++        const int32_t avail = eco_available_for(g.deposits[d], g.player_caps[player][0]);
++        if (avail > 0) total += avail;
++    }
++    return total;
++}
++
+ inline int64_t ai_food_outlook(const GameState& g, uint8_t player) noexcept {
+     int64_t total = g.player_stock[player][RESOURCE_INDEX_FOOD];
+     const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, player);
+@@ -1090,6 +1118,32 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
+             if (deficit > 0 && deficit > best_deficit) { best_deficit = deficit; best_r = static_cast<int32_t>(r); }
+         }
+ 
++        // Sprint 1.41 (plan de desatasco, causa A) — UN ALDEANO PARADO NO
++        // CUESTA MENOS QUE UNO TRABAJANDO.
++        //
++        // El banco de partida larga lo midio: al agotarse los depositos
++        // cercanos, los aldeanos pasan a ocioso y NADIE los vuelve a mirar,
++        // con recursos todavia en el suelo. La razon es este bucle: solo se
++        // pide recolectar cuando un recurso baja del umbral, y con la caja en
++        // 970 de comida ningun umbral se cruza. Resultado medido: la partida
++        // congelada desde el tick 18.012, sin cambiar nada en 100.000 ticks.
++        //
++        // El arreglo NO toca el umbral existente: anade el caso que faltaba.
++        // Si nadie esta por debajo del umbral PERO hay un ciudadano ocioso, se
++        // le manda a por el recurso del que menos haya. Es la decision obvia
++        // —trabajar en algo es mejor que no trabajar— y es la que ningun
++        // criterio de umbral puede tomar, porque los umbrales solo hablan de
++        // escasez y esto va de OCIOSIDAD.
++        //
++        // Desempate por indice de recurso ascendente, como el resto.
++        if (best_r < 0 && eco.has_idle) {
++            int64_t menor = 0;
++            for (uint8_t r = 0; r <= RESOURCE_INDEX_STONE; ++r) {
++                const int64_t tengo = g.player_stock[ai_player][r];
++                if (best_r < 0 || tengo < menor) { menor = tengo; best_r = static_cast<int32_t>(r); }
++            }
++        }
++
+         if (best_r >= 0) {
+             const uint8_t need_r = static_cast<uint8_t>(best_r);
+             bool     do_redirect = false;
+@@ -1248,7 +1302,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
+         AiFreeCellV1 farm_cell{};
+         {
+             if (macro.has_anchor
+-                && ai_food_outlook(g, ai_player) < AI_FARM_FOOD_OUTLOOK_THRESHOLD) {
++                && ai_food_in_ground(g, ai_player) < AI_FARM_FOOD_OUTLOOK_THRESHOLD) {
++                // Sprint 1.41: mira lo que queda EN EL SUELO, no la caja. El
++                // banco demostro que incluir la caja hace el gatillo
++                // inalcanzable: si no se puede gastar, no baja nunca.
+                 const BuildingId ft = ai_find_farm_type(cat, ai_civ, epoch);
+                 if (ft != INVALID_BUILDING_ID) {
+                     // ¿Hay ya una granja EN OBRA? Barrido ascendente.
+[0m
+[0m✱ [0mGrep "\.hp|\.attack|\.range_mt|\.unit_class"[90m in addons/chunsa_sim/core/include/chunsa · 100 matches[0m
+[0m✱ [0mGrep "c.p.hp|c.p.attack|c.p.range_mt|c.p.unit_class|p\.hp\b|p\.attack\b"[90m in addons/chunsa_sim/core/include/chunsa/step.hpp · 21 matches[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/data_catalog.hpp[90m [limit=75, offset=1255][0m
+[0m
+[0m$ [0mrg -n "g\.[a-z_]+\[[a-z_0-9]+\]" addons/chunsa_sim/core/include/chunsa/ai_stub.hpp | rg -v "\[i\]|\[j\]|\[k\]|\[r\]|\[bi\]|\[rr\]|\[player\]|\[ai_player\]|\[d\]|\[w\]|\[b\]|\[e\]|\[t\]|\[g\.building_id|\[g\.eco_assigned|\[macro\.|\[in\.|\[udef|\[bdef|\[def|\[hd|\[fd|\[rec|\[td" | head -60
+313:        if (g.owner[site] != ai_player) continue;
+314:        if (g.entity_kind[site] != 1u) continue;
+315:        if (g.building_id[site] >= g.catalog->building_count) continue;
+317:        if (g.build_progress[site] >= bdef.build_time_ticks) continue;  // ya completo
+322:            if (g.owner[worker] != ai_player) continue;
+323:            if (g.unit_class[worker] != 3u) continue;
+324:            if (g.build_target[worker] == site) { assigned = true; break; }
+374:                         && (g.deposits[dep].remaining > 0);
+383:        const uint8_t r = g.deposits[dep].resource_idx;
+881:                    if (g.cost_grid[idx] == FF_WALL) { free_ok = false; break; }
+1091:                 static_cast<int64_t>(g.bld_anchor_tx[unassigned_site]),
+1092:                 static_cast<int64_t>(g.bld_anchor_ty[unassigned_site]),
+1179:                        g, need_r, g.pos_x[redirect_idx], g.pos_y[redirect_idx]);
+1413:                        if (g.owner[oi] != ai_player) continue;
+1414:                        if (g.research_tech[oi] == tid) { in_progress = true; break; }
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=115, offset=300][0m
+[0m
+[0m$ [0mrg -n "reserve|eco_available_for" addons/chunsa_sim/core/include/chunsa/*.hpp | rg -v "// "
+addons/chunsa_sim/core/include/chunsa/checksum.hpp:276:        h.i32(g.deposits[i].reserve);
+addons/chunsa_sim/core/include/chunsa/checksum.hpp:277:        h.u32(g.deposits[i].reserve_capability);
+addons/chunsa_sim/core/include/chunsa/game_state.hpp:362:        g.deposits[i].reserve_capability = ECO_NO_CAPABILITY;
+addons/chunsa_sim/core/include/chunsa/game_state.hpp:595:        g.deposits[i].reserve_capability = ECO_NO_CAPABILITY;
+addons/chunsa_sim/core/include/chunsa/step.hpp:1711:            if (eco_available_for(g.deposits[d], g.player_caps[owner][0]) <= 0) continue;
+addons/chunsa_sim/core/include/chunsa/step.hpp:1936:        nd.reserve = 0;
+addons/chunsa_sim/core/include/chunsa/step.hpp:1937:        nd.reserve_capability = ECO_NO_CAPABILITY;
+addons/chunsa_sim/core/include/chunsa/ai_stub.hpp:578:        const int32_t avail = eco_available_for(g.deposits[d], g.player_caps[player][0]);
+addons/chunsa_sim/core/include/chunsa/ai_stub.hpp:590:        const int32_t avail = eco_available_for(g.deposits[d], g.player_caps[player][0]);
+addons/chunsa_sim/core/include/chunsa/economy.hpp:123:inline int32_t eco_available_for(const EcoDeposit& d, uint64_t player_caps) noexcept {
+addons/chunsa_sim/core/include/chunsa/economy.hpp:125:    if (d.reserve <= 0) return 0;
+addons/chunsa_sim/core/include/chunsa/economy.hpp:126:    if (d.reserve_capability == ECO_NO_CAPABILITY) return 0;
+addons/chunsa_sim/core/include/chunsa/economy.hpp:128:    const bool tiene = ((player_caps >> d.reserve_capability) & 1ull) != 0ull;
+addons/chunsa_sim/core/include/chunsa/economy.hpp:129:    return tiene ? d.reserve : 0;
+addons/chunsa_sim/core/include/chunsa/serialize.hpp:267:        w.i32(g.deposits[i].reserve);
+addons/chunsa_sim/core/include/chunsa/serialize.hpp:268:        w.u32(g.deposits[i].reserve_capability);
+addons/chunsa_sim/core/include/chunsa/serialize.hpp:548:        g.deposits[i].reserve = r.i32();
+addons/chunsa_sim/core/include/chunsa/serialize.hpp:549:        g.deposits[i].reserve_capability = r.u32();
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:734:            v.arr.reserve(n);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:743:            v.obj.reserve(n);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:997:    out.reserve(arr->arr.size());
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1715:    const uint32_t reserved = c.u32();
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1716:    if (reserved != 0u) fail(CatalogLoadCode::SchemaMismatch);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1767:    impl->unit_ids.reserve(dir[1].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1768:    impl->units.reserve(dir[1].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1769:    impl->unit_names.reserve(dir[1].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1771:    impl->pending_unit_civ.reserve(dir[1].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1774:    impl->building_ids.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1775:    impl->buildings.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1776:    impl->building_names.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1777:    impl->pending_building_trains.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1778:    impl->pending_building_researches.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1779:    impl->pending_building_reqcaps.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1782:    impl->pending_building_civ.reserve(dir[2].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1789:    impl->tech_ids.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1790:    impl->techs.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1791:    impl->tech_names.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1792:    impl->pending_tech_prereqs.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1793:    impl->pending_tech_mutex.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1794:    impl->pending_tech_grants_caps.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1797:    impl->pending_tech_available_to.reserve(dir[3].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1805:    impl->ai_profile_ids.reserve(dir[6].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1806:    impl->ai_profiles.reserve(dir[6].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1807:    impl->ai_profile_names.reserve(dir[6].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1814:    impl->civ_ids.reserve(dir[4].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1829:        impl->resource_ids.reserve(dir[7].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1830:        impl->resource_indices.reserve(dir[7].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1831:        impl->resource_display_name_keys.reserve(dir[7].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1832:        impl->resources.reserve(dir[7].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1833:        impl->resource_names.reserve(dir[7].count);
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:1985:                impl->capability_ids.reserve(caps->arr.size());
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:2070:                    impl->map_resource_spawns.reserve(spawns->arr.size());
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:2307:    impl->civ_names.reserve(impl->civ_ids.size());
+addons/chunsa_sim/core/include/chunsa/data_catalog.hpp:2351:    impl->binding_bytes.reserve(2 + 2 + 2 + impl->package_id.size() + 32);
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=75, offset=1283][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=75, offset=524][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=70, offset=846][0m
+[0m
+[0m$ [0mrg -n "emitter|MAX_EMITTERS" addons/chunsa_sim/core/include/chunsa/step.hpp | head -50
+147:inline void receipt(GameState& g, uint16_t emitter, uint64_t seq, RejectReason r) noexcept {
+148:    if (emitter < MAX_EMITTERS) {
+149:        mailbox_push(g.mailbox[emitter], CommandReceipt{seq, g.tick, r});
+196:        const GameState& g, uint16_t emitter,
+199:        if (g.player_stock[emitter][resource] < cost[resource]) return false;
+205:        GameState& g, uint16_t emitter,
+208:        g.player_stock[emitter][resource] -= cost[resource];
+227:            g.owner[i] = static_cast<uint8_t>(c.emitter);
+258:                g.owner[i] = static_cast<uint8_t>(c.emitter);
+279:            g.owner[i] = static_cast<uint8_t>(c.emitter);
+322:                g.owner[i] = static_cast<uint8_t>(c.emitter);
+341:            g.owner[i] = static_cast<uint8_t>(c.emitter);
+384:                if (g.player_epoch[c.emitter] < def.epoch_min || g.player_epoch[c.emitter] > def.epoch_max) {
+390:                    if (word >= CAP_WORDS || ((g.player_caps[c.emitter][word] >> bit) & 1u) == 0u) {
+402:                if (g.player_civ[c.emitter] != INVALID_CIV_ID
+403:                    && def.civ_id != g.player_civ[c.emitter]) {
+445:                && !resource_costs_affordable(g, c.emitter, def.cost)) {
+460:                deduct_resource_costs(g, c.emitter, def.cost);
+470:            g.owner[i] = static_cast<uint8_t>(c.emitter);
+501:            if (g.owner[ci] != c.emitter) return RejectReason::NOT_OWNER;
+511:                if (g.owner[j] != c.emitter) continue;
+534:            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+553:            if (g.player_epoch[c.emitter] < udef.epoch_min || g.player_epoch[c.emitter] > udef.epoch_max) {
+563:            if (g.player_civ[c.emitter] != INVALID_CIV_ID
+564:                && udef.civ_id != g.player_civ[c.emitter]) {
+574:            if (g.pop_used[c.emitter] + pop_cost > player_pop_cap(g, c.emitter)) {
+578:            if (!resource_costs_affordable(g, c.emitter, udef.cost)) {
+582:            deduct_resource_costs(g, c.emitter, udef.cost);
+585:            g.pop_used[c.emitter] += pop_cost;
+593:            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+608:            if (g.owner[bi] != c.emitter) return RejectReason::NOT_OWNER;
+629:                if (tw < TECH_WORDS && ((g.player_techs[c.emitter][tw] >> tb) & 1u) != 0u) {
+635:                if (g.owner[j] != c.emitter) continue;
+642:                const bool has = (pw < TECH_WORDS) && (((g.player_techs[c.emitter][pw] >> pb) & 1u) != 0u);
+648:                const bool has = (mw < TECH_WORDS) && (((g.player_techs[c.emitter][mw] >> mb) & 1u) != 0u);
+652:            if (tdef.epoch > g.player_epoch[c.emitter]) return RejectReason::ILLEGAL_STATE;
+656:            if (g.player_civ[c.emitter] != INVALID_CIV_ID
+657:                && tdef.civ_id != g.player_civ[c.emitter]) {
+663:            if (!resource_costs_affordable(g, c.emitter, tdef.cost)) {
+667:            deduct_resource_costs(g, c.emitter, tdef.cost);
+683:            const uint8_t cur_epoch = g.player_epoch[c.emitter];
+692:                    if (g.owner[j] != c.emitter) continue;
+704:            const uint8_t initial = g.epoch_initial[c.emitter];
+708:            if (g.player_stock[c.emitter][0] < EPOCH_COST_A
+709:                || g.player_stock[c.emitter][1] < EPOCH_COST_B
+710:                || g.player_stock[c.emitter][2] < EPOCH_COST_ME) {
+714:            g.player_stock[c.emitter][0] -= EPOCH_COST_A;
+715:            g.player_stock[c.emitter][1] -= EPOCH_COST_B;
+716:            g.player_stock[c.emitter][2] -= EPOCH_COST_ME;
+717:            g.player_epoch[c.emitter] = cur_epoch + 1u;
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=70, offset=90][0m
+[0m
+[0m$ [0mrg -n "emitter >= MAX_EMITTERS|emitter < MAX_EMITTERS|validate.*emitter|emitter.*validate|RawCommand|ingest|accept_command|command_.*accept" addons/chunsa_sim/core/include/chunsa/step.hpp addons/chunsa_sim/core/include/chunsa/commands.hpp | head -40
+addons/chunsa_sim/core/include/chunsa/commands.hpp:102:struct RawCommand {
+addons/chunsa_sim/core/include/chunsa/step.hpp:148:    if (emitter < MAX_EMITTERS) {
+addons/chunsa_sim/core/include/chunsa/step.hpp:2252:// Ejecuta el tick t = g.tick con el corte de ingesta `batch` (RawCommands
+addons/chunsa_sim/core/include/chunsa/step.hpp:2254:inline StepResult step(GameState& g, const RawCommand* batch, uint32_t n) noexcept {
+addons/chunsa_sim/core/include/chunsa/step.hpp:2260:        // (3) Normalizar RawCommands → agenda canónica.
+addons/chunsa_sim/core/include/chunsa/step.hpp:2262:            const RawCommand& rc = batch[k];
+addons/chunsa_sim/core/include/chunsa/step.hpp:2263:            if (rc.emitter >= MAX_EMITTERS) { ++res.rejected; continue; }
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=120, offset=2252][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/step.hpp[90m [limit=55, offset=2371][0m
+[0m
+[0m$ [0mrg -n "market_price_bp|n_deposits|regen_milli|regen_accum|owner_building|creates_|n_projectiles" addons/chunsa_sim/core/include/chunsa/serialize.hpp
+253:    w.u32(g.n_deposits);
+263:        w.i32(g.deposits[i].regen_milli_per_tick);
+264:        w.i32(g.deposits[i].regen_accum);
+266:        w.u32(g.deposits[i].owner_building);
+274:        for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) w.i32(g.market_price_bp[e][r]);
+325:    w.u32(g.n_projectiles);
+326:    for (uint32_t k = 0; k < g.n_projectiles && k < PROJECTILE_HARD_CAP; ++k) {
+535:    g.n_deposits = r.u32();
+536:    if (r.fail || g.n_deposits > ECO_MAX_DEPOSITS) return false;
+544:        g.deposits[i].regen_milli_per_tick = r.i32();
+545:        g.deposits[i].regen_accum = r.i32();
+547:        g.deposits[i].owner_building = r.u32();
+552:        for (uint32_t k = 0; k < RESOURCE_COUNT; ++k) g.market_price_bp[e][k] = r.i32();
+635:    g.n_projectiles = r.u32();
+636:    if (g.n_projectiles > PROJECTILE_HARD_CAP) return false;
+637:    for (uint32_t k = 0; k < g.n_projectiles; ++k) {
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/serialize.hpp[90m [limit=40, offset=250][0m
+[0m
+[0m$ [0mcat > /tmp/opencode/market_check.cpp <<'EOF'
+#include <cstdint>
+#include <cstdio>
+using namespace std;
+static int64_t sell(int32_t p){ return (100LL*p)/10000LL; }
+static int64_t buy(int32_t p){
+    const int64_t base = 100LL*p;
+    const int64_t con = (base*13000LL)/10000LL;
+    return (con + 9999)/10000LL;
+}
+static int32_t clamp(int64_t v){ if(v<2000)return 2000; if(v>40000)return 40000; return (int32_t)v; }
+int main(){
+    bool bad=false;
+    for(int32_t p=2000;p<=40000;++p){
+        int64_t s=sell(p), b=buy(p);
+        if(b<=s){ printf("BUY<=SELL at %d: sell=%lld buy=%lld\n",p,s,b); bad=true; }
+        // round trip: buy at p, sell at p+300 (clamped)
+        int32_t q=clamp((int64_t)p+300);
+        int64_t net=sell(q)-buy(p);
+        if(net>=0){ printf("BUY->SELL non-loss at %d: net=%lld\n",p,net); bad=true; }
+        // sell at p, buy back at p-300 (clamped)
+        int32_t r=clamp((int64_t)p-300);
+        int64_t net2=sell(p)-buy(r);
+        if(net2>=0){ printf("SELL->BUY non-loss at %d: net=%lld\n",p,net2); bad=true; }
+    }
+    printf(bad?"FAIL\n":"ALL INVARIANTS HOLD (2000..40000)\n");
+    printf("sample: p=2000 sell=%lld buy=%lld | p=40000 sell=%lld buy=%lld\n", sell(2000),buy(2000),sell(40000),buy(40000));
+    return 0;
+}
+EOF
+g++ -O2 -o /tmp/opencode/market_check /tmp/opencode/market_check.cpp && /tmp/opencode/market_check
+ALL INVARIANTS HOLD (2000..40000)
+sample: p=2000 sell=20 buy=26 | p=40000 sell=400 buy=520
+[0m
+[0m$ [0mls build 2>/dev/null | head; ls build-gcc 2>/dev/null | head; cat CMakeLists.txt | rg -n "project\(|CXX_STANDARD|Release|RelWithDebInfo" | head
+chunsa_bench_partida_larga
+chunsa_bench_step
+chunsa_sim_cli
+chunsa_test_affordability_view
+chunsa_test_aggro
+chunsa_test_ai_apertura
+chunsa_test_ai_craft
+chunsa_test_ai_epoch_policy
+chunsa_test_ai_layers
+chunsa_test_ai_skirmish
+chunsa_bench_step
+chunsa_sim_cli
+chunsa_test_affordability_view
+chunsa_test_aggro
+chunsa_test_ai_apertura
+chunsa_test_ai_craft
+chunsa_test_ai_layers
+chunsa_test_ai_skirmish
+chunsa_test_ai_skirmish_apertura
+chunsa_test_ai_skirmish_eco
+4:project(chunsa_sim LANGUAGES CXX)
+6:set(CMAKE_CXX_STANDARD 20)
+7:set(CMAKE_CXX_STANDARD_REQUIRED ON)
+[0m
+Let me verify the market invariants exhaustively and check the build/tests.
+[0m$ [0mls build | rg -i "test|ctest" | head -30
+chunsa_test_affordability_view
+chunsa_test_aggro
+chunsa_test_ai_apertura
+chunsa_test_ai_craft
+chunsa_test_ai_epoch_policy
+chunsa_test_ai_layers
+chunsa_test_ai_skirmish
+chunsa_test_ai_skirmish_apertura
+chunsa_test_ai_skirmish_eco
+chunsa_test_buildings
+chunsa_test_citizen_task
+chunsa_test_civ_deposits
+chunsa_test_civ_start_epoch
+chunsa_test_combat
+chunsa_test_combat_damage
+chunsa_test_combat_orders
+chunsa_test_command_panel_view
+chunsa_test_craft
+chunsa_test_data_blob
+chunsa_test_economy
+chunsa_test_epoch_playability
+chunsa_test_farms
+chunsa_test_ff
+chunsa_test_flow_move
+chunsa_test_fog_view
+chunsa_test_gather
+chunsa_test_idle_view
+chunsa_test_market
+chunsa_test_morale
+chunsa_test_outcome_view
+[0m
+[0m$ [0mcd build && ctest --no-tests=error 2>&1 | tail -20
+46/51 Test #46: ai_craft .........................   Passed    0.03 sec
+      Start 47: bench_step
+47/51 Test #47: bench_step .......................   Passed    0.21 sec
+      Start 48: bench_partida_larga
+48/51 Test #48: bench_partida_larga ..............   Passed   16.27 sec
+      Start 49: affordability_view
+49/51 Test #49: affordability_view ...............   Passed    0.01 sec
+      Start 50: data_compile
+50/51 Test #50: data_compile .....................   Passed    7.91 sec
+      Start 51: demo_chdb_sincronizado
+51/51 Test #51: demo_chdb_sincronizado ...........   Passed    0.01 sec
+
+100% tests passed out of 51
+
+Label Time Summary:
+fast    =  10.44 sec*proc (39 tests)
+perf    =  16.48 sec*proc (2 tests)
+slow    =  15.61 sec*proc (4 tests)
+
+Total Test time (real) =  42.58 sec
+[0m
+[0m$ [0mrg -n "train_count|recipe_count|required_capabilities_count|PROD_TRAINS_MAX|RECIPES_PER_BUILDING_MAX|CAPABILITIES_MAX" addons/chunsa_sim/core/include/chunsa/data_catalog.hpp | head -30
+225:inline constexpr uint32_t RECIPES_PER_BUILDING_MAX = 8;
+238:inline constexpr uint32_t PROD_TRAINS_MAX = 8;
+266:    UnitId   trains[PROD_TRAINS_MAX];
+267:    uint8_t  train_count;
+271:    uint8_t  required_capabilities_count;
+291:    RecipeId recipes[RECIPES_PER_BUILDING_MAX];
+292:    uint8_t  recipe_count;
+447:    uint32_t recipe_count;
+1341:        if (rec->arr.size() > RECIPES_PER_BUILDING_MAX) fail(CatalogLoadCode::InvalidBuilding);
+1402:    def.train_count = 0;
+1404:    def.required_capabilities_count = 0;
+1405:    for (uint32_t k = 0; k < PROD_TRAINS_MAX; ++k) def.trains[k] = INVALID_UNIT_ID;
+2022:                for (uint32_t rk = 0; rk < RECIPES_PER_BUILDING_MAX; ++rk) {
+2025:                def.recipe_count = 0;
+2028:                    def.recipes[def.recipe_count++] = rdef_new.id;
+2185:        if (trains_raw.size() > PROD_TRAINS_MAX) fail(CatalogLoadCode::InvalidBuilding);
+2186:        bd.train_count = static_cast<uint8_t>(trains_raw.size());
+2204:        bd.required_capabilities_count = static_cast<uint8_t>(reqcaps_raw.size());
+2391:    cat.recipe_count = static_cast<uint32_t>(impl->recipes.size());
+[0m
+[0m$ [0mls tests/unit/ | head -60
+test_affordability_view.cpp
+test_aggro.cpp
+test_ai_apertura.cpp
+test_ai_craft.cpp
+test_ai_epoch_policy.cpp
+test_ai_layers.cpp
+test_ai_skirmish_apertura.cpp
+test_ai_skirmish.cpp
+test_ai_skirmish_eco.cpp
+test_buildings.cpp
+test_citizen_task.cpp
+test_civ_deposits.cpp
+test_civ_start_epoch.cpp
+test_combat.cpp
+test_combat_damage.cpp
+test_combat_orders.cpp
+test_command_panel_view.cpp
+test_craft.cpp
+test_data_blob.cpp
+test_economy.cpp
+test_epoch_playability.cpp
+test_farms.cpp
+test_flow_field.cpp
+test_flow_move.cpp
+test_fog_view.cpp
+test_gather.cpp
+test_idle_view.cpp
+test_market.cpp
+test_morale.cpp
+test_outcome_view.cpp
+test_pagination_view.cpp
+test_population_housing.cpp
+test_production_tech.cpp
+test_projectiles.cpp
+test_props.cpp
+test_replay_v2.cpp
+test_replay_v3.cpp
+test_resource_catalog.cpp
+test_resource_count.cpp
+test_ring.cpp
+test_state.cpp
+test_tech_effects.cpp
+test_victory_ai_profile.cpp
+[0m
+[0m$ [0mrg -n "destroy|recycle|reusa|rebuild|reconstru|owner_building|vuelve|indice" tests/unit/test_farms.cpp | head -20
+148:        mina.owner_building = ECO_NO_OWNER;
+150:        granja.owner_building = 7u;
+238:        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+249:        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+262:        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+272:    //     aldeano vuelve al llegar a 50; con uno mayor, no.
+274:        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+289:        EcoDeposit dep{}; dep.remaining = 1000; dep.owner_building = ECO_NO_OWNER;
+376:    // 22) Cota: cero o negativo no divide por cero ni devuelve basura.
+[0m
+[0m→ [0mRead tests/unit/test_farms.cpp[90m [limit=120, offset=1][0m
+[0m→ [0mRead tests/unit/test_farms.cpp[90m [limit=45, offset=344][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/save_io.hpp[90m [limit=100, offset=150][0m
+[0m
+[0m$ [0mrg -n "rng|Rng|random|seed" addons/chunsa_sim/core/include/chunsa/step.hpp | head; echo ---; rg -n "rng|Rng|random" addons/chunsa_sim/core/include/chunsa/rng.hpp | head
+---
+26:// rng_draw. El byte bajo reserva el contador de reintentos del propio slot,
+38:inline constexpr uint64_t rng_draw(uint64_t seed,
+52:enum class RngStream : uint32_t {
+68:inline uint32_t rng_range(uint64_t seed,
+85:        x = rng_draw(seed, stream_id, tick, entity_index,
+95:inline constexpr int64_t rng_fx01_raw(uint64_t seed,
+100:    return (int64_t)(rng_draw(seed, stream_id, tick, entity_index,
+[0m
+[0m→ [0mRead tests/unit/test_civ_deposits.cpp[90m [limit=80][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/entity_table.hpp
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/data_catalog.hpp[90m [limit=70, offset=420][0m
+[0m
+[0m$ [0mcat > /tmp/opencode/farm_bug.cpp <<'EOF'
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include "chunsa/game_state.hpp"
+#include "chunsa/step.hpp"
+
+using namespace chunsa;
+
+static MatchConfig01A make_cfg() {
+    MatchConfig01A cfg{};
+    cfg.max_entities = 32;
+    cfg.player_count = 2;
+    cfg.human_input_delay_ticks = 0;
+    cfg.max_future_command_ticks = 20;
+    cfg.checksum_every_ticks = 1;
+    cfg.map_tiles_x = 256; cfg.map_tiles_y = 256;
+    cfg.seed = 1ull;
+    return cfg;
+}
+
+int main() {
+    // Farm building definition (hand-built, like skirmish fixtures).
+    BuildingDefinitionV1 farm{};
+    farm.footprint_w = 2; farm.footprint_h = 2;
+    farm.build_time_ticks = 0;          // completes immediately
+    farm.creates_amount = 500;
+    farm.creates_resource_idx = 0;      // food
+    farm.creates_regen_per_tick = 50;   // millesimas
+    farm.creates_cap = 500;
+    DataCatalogV1 cat{};
+    cat.building_count = 1;
+    cat.buildings = &farm;
+
+    auto g = std::make_unique<GameState>();
+    gs_init(*g, make_cfg());
+    gs_bind_catalog(*g, cat);
+    gs_init_epoch_from_catalog(*g);
+    // NOTE: not calling gs_init_economy_from_catalog -> legacy 6 deposits.
+
+    std::printf("n_deposits inicial = %u\n", g->n_deposits);
+
+    // 1) Spawn farm building, mark complete (build_time=0), run farm_system.
+    EntityHandle h = et_spawn(g->entities);
+    std::printf("farm spawn index = %u\n", h.index);
+    g->entity_kind[h.index] = 1u;
+    g->building_id[h.index] = 0u;
+    g->owner[h.index] = 1u;
+    g->build_progress[h.index] = 0u; // >= build_time_ticks(0)
+    g->pos_x[h.index] = 40*65536; g->pos_y[h.index] = 40*65536;
+
+    detail::farm_system(*g);
+    std::printf("despues de alta: n_deposits = %u, dep[6].owner=%u rem=%d regen=%d\n",
+        g->n_deposits,
+        g->n_deposits > 6 ? g->deposits[6].owner_building : 999u,
+        g->n_deposits > 6 ? g->deposits[6].remaining : -1,
+        g->n_deposits > 6 ? g->deposits[6].regen_milli_per_tick : -1);
+
+    // 2) Destroy the building: mark dead + recycle (as Step step 6 does).
+    et_mark_dead(g->entities, h.index);
+    et_release_index(g->entities, h.index);
+    detail::farm_system(*g);   // (b) should kill the deposit
+    std::printf("despues de destruir: dep[6].owner=%u rem=%d regen=%d (queda bloqueando?)\n",
+        g->deposits[6].owner_building, g->deposits[6].remaining, g->deposits[6].regen_milli_per_tick);
+
+    // 3) Rebuild a NEW farm; free-list reuse -> same index.
+    EntityHandle h2 = et_spawn(g->entities);
+    std::printf("farm respawn index = %u (mismo? %s)\n", h2.index, h2.index == h.index ? "SI" : "NO");
+    g->entity_kind[h2.index] = 1u;
+    g->building_id[h2.index] = 0u;
+    g->owner[h2.index] = 1u;
+    g->build_progress[h2.index] = 0u;
+    g->pos_x[h2.index] = 60*65536; g->pos_y[h2.index] = 60*65536;
+
+    detail::farm_system(*g);
+    std::printf("despues de re-alta: n_deposits = %u\n", g->n_deposits);
+    // Find how many deposits own building h2.index
+    int own = 0;
+    for (uint32_t d = 0; d < g->n_deposits; ++d) if (g->deposits[d].owner_building == h2.index) ++own;
+    std::printf("depositos vivos con owner=%u (funcionales rem>0): %d\n", h2.index, own);
+    int func = 0;
+    for (uint32_t d = 0; d < g->n_deposits; ++d)
+        if (g->deposits[d].owner_building == h2.index && g->deposits[d].remaining > 0) ++func;
+    std::printf("=> deposito FUNCIONAL (remaining>0) para la granja nueva: %d  %s\n",
+        func, func == 0 ? "BUG: la granja reconstruida queda muerta" : "ok");
+
+    // 4) Regenera en el tick siguiente?
+    detail::farm_system(*g);
+    std::printf("tras otro tick: dep[6].remaining = %d\n", g->deposits[6].remaining);
+    return 0;
+}
+EOF
+g++ -std=c++20 -I addons/chunsa_sim/core/include -I third_party/xxhash -o /tmp/opencode/farm_bug /tmp/opencode/farm_bug.cpp 2>&1 | head -20
+(no output)
+[0m
+[0m$ [0m/tmp/opencode/farm_bug
+n_deposits inicial = 6
+farm spawn index = 0
+despues de alta: n_deposits = 7, dep[6].owner=0 rem=500 regen=50
+despues de destruir: dep[6].owner=0 rem=0 regen=0 (queda bloqueando?)
+farm respawn index = 0 (mismo? SI)
+despues de re-alta: n_deposits = 7
+depositos vivos con owner=0 (funcionales rem>0): 1
+=> deposito FUNCIONAL (remaining>0) para la granja nueva: 0  BUG: la granja reconstruida queda muerta
+tras otro tick: dep[6].remaining = 0
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/vec2fx.hpp
+[0m
+[0m$ [0mrg -n "ai_resolve_profile" addons/chunsa_sim/core/include/chunsa/ai_stub.hpp
+240:inline AiProfileV1 ai_resolve_profile(const GameState& g) noexcept {
+1082:    const AiProfileV1 profile = ai_resolve_profile(g);
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=35, offset=240][0m
+[0m
+[0m$ [0mrg -n "TECH_HARD_CAP|CAP_HARD_CAP" addons/chunsa_sim/core/include/chunsa/data_catalog.hpp | head
+208:// UnitId/BuildingId). Caps del kernel (PROD_*_MAX, TECH_*_MAX, TECH_HARD_CAP,
+209:// CAP_HARD_CAP) son MÁS ESTRICTOS que los del schema/blob (65535) — mismo
+246:inline constexpr uint32_t TECH_HARD_CAP = 256;
+247:inline constexpr uint32_t CAP_HARD_CAP = 256;
+1784:    // mismo motivo. dir[3] es la sección tech (kind=4). TECH_HARD_CAP es un
+1788:    if (dir[3].count > TECH_HARD_CAP) fail(CatalogLoadCode::Bounds);
+1813:    // TECH_HARD_CAP/CAP_HARD_CAP — mismo espíritu que ai-profile).
+1984:                if (caps->arr.size() > CAP_HARD_CAP) fail(CatalogLoadCode::Bounds);
+[0m
+[0m$ [0mrg -n "cfg\.|g\.cfg|MatchConfig01A" addons/chunsa_sim/core/include/chunsa/serialize.hpp | head
+135:    // (a) MatchConfig01A — orden canónico exacto
+136:    w.u32(g.cfg.max_entities);
+137:    w.u8 (g.cfg.player_count);
+138:    w.u16(g.cfg.human_input_delay_ticks);
+139:    w.u16(g.cfg.max_future_command_ticks);
+140:    w.u16(g.cfg.checksum_every_ticks);
+141:    w.u32(g.cfg.map_tiles_x);
+142:    w.u32(g.cfg.map_tiles_y);
+143:    w.u64(g.cfg.seed);
+144:    w.u8 (g.cfg.allow_debug_stat_payload);  // Sprint 0.4 (SPEC-002 §8.3)
+[0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=75, offset=1605][0m
+[0m→ [0mRead addons/chunsa_sim/core/include/chunsa/ai_stub.hpp[90m [limit=50, offset=950][0m
+[0m
+[0m$ [0mrg -n "reserve|remaining" addons/chunsa_sim/core/include/chunsa/step.hpp | rg -iv "// |eco_available|deposits\[out|remaining <= 0|reserve_capability = ECO|nd\.reserve|dep\.reserve" 
+1931:        nd.remaining = bd.creates_amount;
+1952:        dep.remaining = 0;
+[0m
+# Auditoría adversarial del kernel CHUNSA — informe
+
+Método: revisión manual de `economy.hpp`, `market.hpp`, el `case TRADE` de `step.hpp`, `farm_system` y las rutas de IA que tocan depósitos/mercado, más verificación empírica (compilé un harness contra los headers para el caso de granja) y prueba exhaustiva de la aritmética del mercado para todos los precios válidos. Suite 51/51 verde.
+
+---
+
+## Hallazgos
+
+### F1 — SERIO — `step.hpp:1920-1924` + `step.hpp:1945-1954` (farm_system)
+**Qué está mal:** cuando el edificio dueño de una granja muere, su depósito se apaga (`remaining=0`, `regen=0`) pero **nunca se limpia `owner_building`**; y el alta considera "ya tiene depósito" con `deposits[d].owner_building == i` sin comprobar si ese depósito sigue vivo. Una granja reconstruida en un slot reciclado queda muerta para siempre.
+
+**Escenario concreto:** granja en el índice 4 → el enemigo la destruye → en el tick siguiente la `free-list` LIFO (`entity_table.hpp:143-151`) reutiliza el índice 4 para el `PLACE_BUILDING` siguiente (la IA siempre reconstruye) → `farm_system` ve el depósito muerto con `owner_building==4`, `ya=true`, y no crea uno nuevo. El edificio completa sus 300 ticks de obra sin depósito funcional jamás. **Lo reproduje con un harness propio: `n_deposits` se queda en 7 y el depósito del slot 6 queda en `remaining=0, regen=0` tras re-alta.** Es determinista (no rompe checksum), pero bloquea en silencio una mecánica cabecera del Sprint 1.28/1.34.
+
+### F2 — MENOR — `economy.hpp:229,246` + `step.hpp:1711` (reserva mineral inerte)
+**Qué está mal:** `eco_available_for` (la "reserva que reabre la mina") se usa para la máscara de zona aliada y para el outlook de la IA, pero `eco_find_nearest_deposit` —la única ruta de asignación— filtra `deposits[i].remaining <= 0` directamente. Un depósito con `remaining==0` y reserva desbloqueada aparece en la máscara pero **nunca se asigna para recolectar**, y ningún sistema transfiere `reserve → remaining`.
+
+**Escenario concreto:** catálogo con un spawn que declara reserva; el jugador investiga la capacidad que la abre; el depósito está agotado pero con reserva > 0. La máscara lo incluye, el outlook de comida de la IA lo cuenta, pero el aldeano en SEEK lo salta (línea 229) y la tecnología no produce ningún efecto observable. La "flotación" del Sprint 1.28 es hoy código muerto.
+
+### F3 — MENOR — `ai_stub.hpp:1755` / `ai_stub.hpp:715-726` (ai_player sin validar tras load)
+**Qué está mal:** `ai_deserialize` lee `b.ai_player = r.u8()` sin comprobar `< MAX_EMITTERS`, y `ai_execute` indexa con él `g.player_epoch[player]`, `g.player_stock[player][…]`, `g.player_caps[player][0]`, `g.market_price_bp[player][…]` (ai_find_trade 719/776). Con un valor ≥16 son lecturas fuera del array.
+
+**Escenario concreto:** partida guardada cuyo `AiJobBox.ai_player` vale 200 (solo alcanzable forjando un save con digest SHA-256 válido; los drivers usan `ai_box_init(box, 1)`). La IA decide sobre basura y emite comandos con `emitter=200`, que `step.hpp:2263` rechaza. Solo lecturas, nunca escritura. Riesgo defensivo, no explotable en operación normal.
+
+### F4 — MENOR — `step.hpp:789-790` (TRADE no reclampa el precio)
+**Qué está mal:** el `case TRADE` confía en que `market_price_bp` siempre está en `{0} ∪ [2000, 40000]`. Si un estado cargado trajera un precio en `[1, 1999]` (p.ej. 5), `market_buy_gold(5)=1` permitiría comprar un lote por 1 de oro y venderlo a 20 tras el clamp — recursos de la nada.
+
+**Escenario concreto:** precio almacenado = 5 (solo posible por save manipulado; el kernel solo produce 0→base o valores ya clampeados). El redondeo hacia arriba de `market_buy_gold` NO protege contra esto: el bug es que el precio no se valida antes de usarse. Inalcanzable con la aritmética actual; nit defensivo.
+
+---
+
+## Áreas sin hallazgo (y qué comprobé)
+
+**economy.hpp — desbordamiento / división por cero:** no encontré ninguno alcanzable. `eco_saturated_rate` devuelve antes para `n <= 6`, y en el único call site (`economy.hpp:383`) `gatherers_here` es un contador que siempre incluye al propio aldeano (n≥1); los tests 22 cubren n=0 y n=-3. Los productos (`rate*6`, `ganado*(10000+recovery)`) están acotados por los caps del loader (`amount ∈ [-1000,1000]`, `TECH_HARD_CAP=256`, `creates_regen ≤ 100000`, `creates_* ≤ 1000000`): el peor caso `rate` ≈ 1,03M → `*6` ≈ 6,2M, sin desbordar int32. `regen_accum` nunca pasa de ~101k. **Aritmética determinista, entera, sin float.**
+
+**market.hpp + TRADE — recursos de la nada:** no encontré forma. Verifiqué por fuerza bruta **todos** los precios de 2000 a 40000: `buy > sell` en cada uno (la horquilla del 30% domina el paso del 3% y todo redondeo), y **ambos** sentidos de ida y vuelta pierden siempre (`net < 0` en 38.001×3 comprobaciones). El emisor se valida en `step.hpp:2263`, `ridx != oro` en `:785`, stock/oro suficientes en `:794/:803`. Intermedios en int64, sin overflow. **"Ir y volver SIEMPRE pierde" se cumple.**
+
+**ai_stub — lecturas fuera de cota con entradas válidas:** barrido completo; todos los bucles se acotan por `g.entities.capacity` con chequeo de `alive`, los índices de catálogo se validan contra `*_count`, `ai_find_free_cell` clampa contra `FF_AXIS`/mapa, y `ai_resolve_profile` valida el id antes de indexar. Las decisiones dependen solo de `(g, player)`; recorridos ascendentes con desempate por índice bajo. Sin dependencias de orden que rompan el determinismo.
+
+**farm_system — OOB / ECO_MAX_DEPOSITS:** no puede desbordar. El alta solo escribe tras `n_deposits >= ECO_MAX_DEPOSITS` (`step.hpp:1925`); los bucles (a)(b)(c) se acotan por `n_deposits ≤ 64`; el índice del dueño se comprueba contra `t.capacity`. Límite de diseño: al llegar a 64 depósitos, las granjas extra se quedan sin depósito en silencio (no liberan slot nunca).
+
+---
+
+## Respuestas a las preguntas concretas
+
+1. **Checksum con no-enteros / campos faltantes:** ningún `Hasher::array` recibe un no-entero — verifiqué los 25 call sites, todos arrays integrales; los structs (`deposits`, `attack_target`, `projectiles`) se hashean campo a campo. **Gap real (documentado, pre-existente):** los ítems de la agenda NO hashean `hp/attack/range_mt/unit_class` (`checksum.hpp:189-199`), y esos cuatro SÍ se consumen en `SPAWN_UNIT` (`step.hpp:270-283`); una divergencia en un SPAWN pendiente pasaría inadvertida. Además la nota en `checksum.hpp:142-146` es factualmente falsa: `std::is_integral_v<bool>` es **true**, así que el assert no excluye `bool`; hoy no se hashea ningún `bool` (solo hay uint8), así que sin impacto.
+
+2. **`eco_saturated_rate` divide por n — ¿puede ser 0/negativo?:** No. En el único call site n ≥ 1, y la función retorna antes para `n ≤ 6` (por tanto también para 0 y negativos). Sin división por cero.
+
+3. **¿Precio donde comprar salga más barato que vender?:** No existe. `buy(p)=ceil(13p/1000)` > `sell(p)=floor(p/100)` para todo `p ∈ [2000, 40000]`, y las dos direcciones de ida y vuelta pierden. Comprobado exhaustivamente.
+
+4. **¿`farm_system` puede desbordar ECO_MAX_DEPOSITS o indexar fuera?:** No — cota dura en `:1925`, bucles acotados por `n_deposits`, dueño validado contra `capacity`. El problema real de `farm_system` no es de cota sino el **F1** (granja reconstruida en slot reciclado, muerta para siempre).
+
+---
+
+**Resumen:** 4 hallazgos (1 SERIO funcional, 3 MENOR). Ningún fallo BLOQUEANTE de determinismo en los cambios de los últimos 20 commits: la aritmética es entera y determinista, el mercado no crea recursos, y las cotas de arrays están bien puestas. El defecto serio es **F1**, reproducible y silencioso, en la mecánica que el propio proyecto acaba de desbloquear en el Sprint 1.41.
+FIN

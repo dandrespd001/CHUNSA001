@@ -1951,6 +1951,18 @@ inline void farm_system(GameState& g) noexcept {
         }
         dep.remaining = 0;
         dep.regen_milli_per_tick = 0;
+        // Sprint 1.44 — hallazgo F1 de la auditoria externa, y era un fallo
+        // mio de verdad. Apagar el deposito no bastaba: hay que SOLTAR el
+        // dueno. La free-list de entidades es LIFO, asi que el indice de la
+        // granja destruida se reutiliza enseguida; si el deposito seguia
+        // apuntando a ese indice, el edificio NUEVO que lo ocupara heredaba un
+        // deposito muerto —y, peor, el alta lo daba por "ya registrado" y no le
+        // creaba el suyo.
+        //
+        // Al soltarlo queda como un yacimiento agotado del mapa: inerte, sin
+        // regeneracion y sin dueno. Es lo correcto — el campo ya no es de
+        // nadie.
+        dep.owner_building = ECO_NO_OWNER;
     }
 
     // (c) Regeneracion, un tick. Los yacimientos del mapa tienen regen 0 y no

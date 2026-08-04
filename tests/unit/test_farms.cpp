@@ -379,6 +379,24 @@ int main() {
         CHECK(eco_saturated_rate(ECO_HARVEST_PER_TICK, -3) == ECO_HARVEST_PER_TICK);
     }
 
+
+    // 23) HALLAZGO F1 DE LA AUDITORIA EXTERNA. Al morir la granja, su deposito
+    //     debe SOLTAR el dueno, no solo apagarse.
+    //
+    //     Por que importa: la free-list de entidades es LIFO, asi que el indice
+    //     de la granja destruida se reutiliza enseguida. Si el deposito seguia
+    //     apuntando a ese indice, el edificio NUEVO que lo ocupara heredaba un
+    //     deposito muerto — y el alta lo daba por "ya registrado" y no le creaba
+    //     el suyo. Un jugador construiria una granja y no producirian nada, sin
+    //     que nada se lo dijera.
+    {
+        EcoDeposit d{};
+        d.remaining = 0;
+        d.regen_milli_per_tick = 0;
+        d.owner_building = ECO_NO_OWNER;   // asi lo deja farm_system al soltarlo
+        CHECK(!eco_deposit_is_farm(d));    // ya no es de nadie
+    }
+
     if (g_fails == 0) {
         std::printf("farms OK\n");
         return 0;
