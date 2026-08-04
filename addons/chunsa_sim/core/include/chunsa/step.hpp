@@ -571,7 +571,14 @@ inline RejectReason apply_command(GameState& g, const ScheduledCommand& c) noexc
             // Sprint 1.14: el tope ya no es la constante regalada, sino lo que
             // el jugador HAYA CONSTRUIDO. POP_CAP_V1 sigue dentro, como cota
             // dura, en player_pop_cap.
-            if (g.pop_used[c.emitter] + pop_cost > player_pop_cap(g, c.emitter)) {
+            // El cast es explícito a propósito: `emitter` es uint16_t y
+            // `player_pop_cap` toma uint8_t. MSVC avisa (C4244) donde gcc y
+            // clang callan, y con -Werror eso tumba TODA la matriz de Windows.
+            // La conversión es segura y está probada arriba: el despacho
+            // rechaza cualquier orden con `emitter >= MAX_EMITTERS`, y
+            // MAX_EMITTERS es 16.
+            if (g.pop_used[c.emitter] + pop_cost
+                > player_pop_cap(g, static_cast<uint8_t>(c.emitter))) {
                 return RejectReason::ILLEGAL_STATE;
             }
 
