@@ -53,7 +53,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 11;  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 12;  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -553,6 +553,34 @@ inline BuildingId ai_find_farm_type(const DataCatalogV1& cat, CivId civ,
 // del mapa estan llenos — un umbral sobre player_stock a secas construiria
 // granjas con 3000 de comida en el suelo. El outlook solo baja cuando la
 // comida DEL MAPA de verdad escasea.
+// Sprint 1.41 (plan de desatasco): la comida QUE QUEDA EN EL SUELO y es
+// alcanzable. Antes esta funcion sumaba tambien la caja, y el banco de partida
+// larga demostro que ese borde rompe el sistema entero:
+//
+//   Cuando los depositos se vacian, la caja ya esta llena (970) y NO SE GASTA
+//   —entrenar exige cuartel en epoca, subir exige dos edificios— asi que el
+//   outlook nunca baja del umbral, la granja nunca se pide, y el sistema de
+//   comida renovable del 1.28 queda inalcanzable EXACTAMENTE en el escenario
+//   que existe para resolver.
+//
+// La caja no dice nada sobre si tu INGRESO se ha parado, que es lo que importa
+// para decidir si plantar. Un jugador con mil de comida y ningun yacimiento
+// esta en ruina; uno con cien y tres yacimientos llenos, no.
+//
+// Se conserva `ai_food_outlook` con la caja incluida por si alguien la
+// necesita, y se anade la que de verdad decide.
+inline int64_t ai_food_in_ground(const GameState& g, uint8_t player) noexcept {
+    int64_t total = 0;
+    const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, player);
+    for (uint32_t d = 0; d < g.n_deposits; ++d) {
+        if (((mask >> d) & 1u) == 0u) continue;
+        if (g.deposits[d].resource_idx != RESOURCE_INDEX_FOOD) continue;
+        const int32_t avail = eco_available_for(g.deposits[d], g.player_caps[player][0]);
+        if (avail > 0) total += avail;
+    }
+    return total;
+}
+
 inline int64_t ai_food_outlook(const GameState& g, uint8_t player) noexcept {
     int64_t total = g.player_stock[player][RESOURCE_INDEX_FOOD];
     const uint64_t mask = detail::allied_auto_gather_deposit_mask(g, player);
@@ -1090,6 +1118,32 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             if (deficit > 0 && deficit > best_deficit) { best_deficit = deficit; best_r = static_cast<int32_t>(r); }
         }
 
+        // Sprint 1.41 (plan de desatasco, causa A) — UN ALDEANO PARADO NO
+        // CUESTA MENOS QUE UNO TRABAJANDO.
+        //
+        // El banco de partida larga lo midio: al agotarse los depositos
+        // cercanos, los aldeanos pasan a ocioso y NADIE los vuelve a mirar,
+        // con recursos todavia en el suelo. La razon es este bucle: solo se
+        // pide recolectar cuando un recurso baja del umbral, y con la caja en
+        // 970 de comida ningun umbral se cruza. Resultado medido: la partida
+        // congelada desde el tick 18.012, sin cambiar nada en 100.000 ticks.
+        //
+        // El arreglo NO toca el umbral existente: anade el caso que faltaba.
+        // Si nadie esta por debajo del umbral PERO hay un ciudadano ocioso, se
+        // le manda a por el recurso del que menos haya. Es la decision obvia
+        // —trabajar en algo es mejor que no trabajar— y es la que ningun
+        // criterio de umbral puede tomar, porque los umbrales solo hablan de
+        // escasez y esto va de OCIOSIDAD.
+        //
+        // Desempate por indice de recurso ascendente, como el resto.
+        if (best_r < 0 && eco.has_idle) {
+            int64_t menor = 0;
+            for (uint8_t r = 0; r <= RESOURCE_INDEX_STONE; ++r) {
+                const int64_t tengo = g.player_stock[ai_player][r];
+                if (best_r < 0 || tengo < menor) { menor = tengo; best_r = static_cast<int32_t>(r); }
+            }
+        }
+
         if (best_r >= 0) {
             const uint8_t need_r = static_cast<uint8_t>(best_r);
             bool     do_redirect = false;
@@ -1248,7 +1302,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         AiFreeCellV1 farm_cell{};
         {
             if (macro.has_anchor
-                && ai_food_outlook(g, ai_player) < AI_FARM_FOOD_OUTLOOK_THRESHOLD) {
+                && ai_food_in_ground(g, ai_player) < AI_FARM_FOOD_OUTLOOK_THRESHOLD) {
+                // Sprint 1.41: mira lo que queda EN EL SUELO, no la caja. El
+                // banco demostro que incluir la caja hace el gatillo
+                // inalcanzable: si no se puede gastar, no baja nunca.
                 const BuildingId ft = ai_find_farm_type(cat, ai_civ, epoch);
                 if (ft != INVALID_BUILDING_ID) {
                     // ¿Hay ya una granja EN OBRA? Barrido ascendente.
