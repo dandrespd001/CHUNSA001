@@ -326,6 +326,17 @@ target_link_libraries(chunsa_bench_step PRIVATE chunsa_sim_core)
 add_test(NAME bench_step COMMAND chunsa_bench_step)
 set_tests_properties(bench_step PROPERTIES LABELS "perf" TIMEOUT 300)
 
+# --- Sprint 1.37: banco de partida LARGA (¿se llega a la época 15?) ---------
+# NO es una prueba de comportamiento: informa, no juzga, devuelve 0 salvo
+# error de carga del catálogo. Mismo patrón que bench_step: etiqueta `perf`,
+# FUERA del ciclo de PR porque tarda (120000 ticks de partida IA vs IA).
+add_executable(chunsa_bench_partida_larga tests/perf/bench_partida_larga.cpp)
+target_link_libraries(chunsa_bench_partida_larga PRIVATE chunsa_sim_core)
+target_compile_definitions(chunsa_bench_partida_larga PRIVATE
+    CHUNSA_GOLDEN_CHDB_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/compiled/chunsa_base.chdb")
+add_test(NAME bench_partida_larga COMMAND chunsa_bench_partida_larga)
+set_tests_properties(bench_partida_larga PROPERTIES LABELS "perf" TIMEOUT 600)
+
 # --- Test Sprint 1.8E: política pura de asequibilidad del HUD ------------------
 add_executable(chunsa_test_affordability_view tests/unit/test_affordability_view.cpp)
 target_link_libraries(chunsa_test_affordability_view PRIVATE chunsa_sim_core)
