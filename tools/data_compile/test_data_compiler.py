@@ -282,7 +282,7 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(blob[:8], b"CHNSDB1\0")
             self.assertEqual(
                 struct.unpack_from("<HHIIIIIQ", blob, 8),
-                (1, 1, 2, 0, 8, 24, 0, len(blob)),
+                (1, 2, 3, 0, 8, 24, 0, len(blob)),
             )
             cursor = 232
             for pos, (kind, version, count, offset, size) in enumerate(entries, 1):
@@ -290,12 +290,12 @@ class CompilerTests(unittest.TestCase):
                 self.assertEqual(count, 1)
             self.assertEqual(cursor, len(blob))
             content_hash = stdout.splitlines()[0].split(":", 1)[1]
-            expected = (f'{{"algorithm":"sha256","algorithm_version":1,"blob_format":"1.1",'
-                        f'"content_hash":"{content_hash}","schema_set_version":2}}\n').encode()
+            expected = (f'{{"algorithm":"sha256","algorithm_version":1,"blob_format":"1.2",'
+                        f'"content_hash":"{content_hash}","schema_set_version":3}}\n').encode()
             self.assertEqual(out.with_name(out.name + ".content.json").read_bytes(), expected)
             self.assertRegex(stdout, r"^content_hash=sha256-v1:[0-9a-f]{64}\nrecords unit=1 building=1 tech=1 civ=1 map=1 ai-profile=1 resource=1\n$")
             rc, plain, err = self.invoke(["inspect", str(out)])
-            self.assertEqual((rc, err), (0, "")); self.assertIn("CHDB 1.1 flags=0", plain)
+            self.assertEqual((rc, err), (0, "")); self.assertIn("CHDB 1.2 flags=0", plain)
             rc, encoded, err = self.invoke(["inspect", str(out), "--json"])
             self.assertEqual((rc, err), (0, "")); self.assertEqual(json.loads(encoded)["counts"]["manifest"], 1)
             self.assertEqual(self.invoke([])[0], 2)
@@ -306,10 +306,44 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual(rc, 2); self.assertIn("must name different files", stderr)
             self.assertFalse(same.exists())
 
+    def test_map_spawn_radius_millitiles_is_defaulted_in_the_blob(self):
+        # Sprint 1.46: radius_millitiles es OPCIONAL en el esquema (sin él un
+        # depósito es puntual, el comportamiento de siempre), pero el blob lo
+        # materializa SIEMPRE con 0 por defecto: el loader lee un contrato
+        # único. Los 12 depósitos originales no pueden cambiar de
+        # comportamiento — aquí, un spawn sin el campo queda con radio 0.
+        td, root = self.make_root()
+        with td:
+            game_map = self.read(root, "map")
+            game_map.update({
+                "width_tiles": 3, "height_tiles": 1,
+                "terrain_rle": [{"terrain": "plain", "run": 3}],
+                "cost_rle": [{"cost": 1, "run": 3}],
+                "resource_spawns": [
+                    {"kind": "resource", "id": "chunsa:food",
+                     "x_millitiles": 1500, "y_millitiles": 100, "amount": 100},
+                    {"kind": "resource", "id": "chunsa:food",
+                     "x_millitiles": 2500, "y_millitiles": 100, "amount": 100,
+                     "radius_millitiles": 7000},
+                ],
+            })
+            self.write(root, "map", game_map)
+            out, _ = self.compile_valid(root)
+            _, records = compiler.parse_blob(out.read_bytes())
+            map_number = next(
+                number for kind, _, number, _ in compiler.KIND_INFO
+                if kind == "map")
+            spawns = records[map_number][0]["resource_spawns"]
+            self.assertEqual([spawn["amount"] for spawn in spawns], [100, 100])
+            self.assertEqual(
+                [spawn["radius_millitiles"] for spawn in spawns], [0, 7000])
+            self.assertEqual(
+                [spawn["x_millitiles"] for spawn in spawns], [1500, 2500])
+
     def test_sources_use_normative_tuple_order(self):
         sources = [
-            {"citation":"Zulu", "locator":"1"},
-            {"citation":"Alpha", "url":"https://example.test/a", "accessed_on":"2026-07-22"},
+            {"citation": "Zulu", "locator": "1"},
+            {"citation": "Alpha", "url": "https://example.test/a", "accessed_on": "2026-07-22"},
         ]
         normalized = compiler._normalize({"sources": sources})["sources"]
         self.assertEqual([source["citation"] for source in normalized], ["Alpha", "Zulu"])

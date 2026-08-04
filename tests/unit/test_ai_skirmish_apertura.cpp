@@ -94,7 +94,8 @@ std::unique_ptr<GameState> make_apertura_state(const DataCatalogV1& cat,
     // Pre-flight duro del escenario: un estado con otro número de depósitos
     // no es una apertura válida y no debe producir ruido derivado en el resto
     // de asertos.
-    if (g->n_deposits != 22u) return nullptr;
+    // Sprint 1.46: +6 bosques (4 propios espejados + 2 neutrales) → 28.
+    if (g->n_deposits != 28u) return nullptr;
     return g;
 }
 
@@ -112,7 +113,7 @@ static bool test_apertura_preflight() {
     auto g = make_apertura_state(store.catalog(), setup, 20260724ull);
     CHECK(g != nullptr);
     if (g == nullptr) {
-        std::printf("apertura pre-flight: se esperaban 22 depositos reales (1.22: +lino x2, +lana x2)\n");
+        std::printf("apertura pre-flight: se esperaban 28 depositos reales (1.22: +lino x2, +lana x2; 1.46: +6 bosques)\n");
         return false;
     }
     return true;

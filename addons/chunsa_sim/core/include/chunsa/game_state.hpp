@@ -597,6 +597,12 @@ inline void gs_init_economy_from_catalog(GameState& g) noexcept {
         g.deposits[i].y_raw = cat.map_resource_spawns[i].y_raw;
         g.deposits[i].resource_idx = cat.map_resource_spawns[i].resource_idx;
         g.deposits[i].remaining = cat.map_resource_spawns[i].amount;
+        // Sprint 1.46: los bosques del mapa llegan aquí. radius_raw == 0 es un
+        // depósito puntual (comportamiento de siempre); initial_amount se
+        // rellena SIEMPRE, también para los puntuales: es la cantidad con la
+        // que nació el depósito y no cuesta nada tenerla.
+        g.deposits[i].radius_raw = cat.map_resource_spawns[i].radius_raw;
+        g.deposits[i].initial_amount = cat.map_resource_spawns[i].amount;
     }
     // Slots [n, ECO_MAX_DEPOSITS) pueden conservar el patrón legacy fijo que
     // gs_init_economy ya escribió (si n < 6); se limpian explícitamente para

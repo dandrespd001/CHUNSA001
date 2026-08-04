@@ -192,8 +192,18 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1123u;
 // orden de seleccion de depositos NO se movio es justo que ningun end_tick
 // cambie: si la distancia al borde hubiera reordenado candidatos, la economia
 // de la apertura habria cambiado desde el tick 0.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x67b9b90047cef239ull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xbb8abcf3878065acull;
+//
+// Sprint 1.46 — re-registro por CAMBIO DE DOMINIO, no por comportamiento, y
+// a diferencia del 1.45 ESTA vez el dominio SI cambia de verdad. El mapa gana
+// 6 bosques con radius_millitiles (22 -> 28 depositos), asi que la partida se
+// juega distinta desde el tick 0 y el CHDB sube a formato 1.2 / schema_set 3.
+// Los hashes se mueven (67b9b900 -> c1697c1f, bb8abcf3 -> 2c6bcaa2) POR ESO.
+// El end_tick sigue en 10473 y winner=1: la apertura (época 5 fijada) sigue
+// terminando con vencedor y sin dispararse. La madera extra de los bosques no
+// era el cuello de botella de este escenario (lo es del banco, que arranca en
+// la época 1 y no se fija la época — ahí es donde se mide).
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0xc1697c1f71ff52afull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x2c6bcaa22783b0f1ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 10473u;
 
 }  // namespace chunsa::determinism_baselines

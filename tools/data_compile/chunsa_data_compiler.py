@@ -38,8 +38,8 @@ KIND_INFO = (("manifest", "manifest.yaml", 1, 1), ("unit", "units", 2, 65535),
 KIND_BY_DIR = {x[1]: x for x in KIND_INFO[1:]}
 RESOURCE_COUNT = 64
 BLOB_FORMAT_MAJOR = 1
-BLOB_FORMAT_MINOR = 1
-SCHEMA_SET_VERSION = 2
+BLOB_FORMAT_MINOR = 2
+SCHEMA_SET_VERSION = 3
 DIRECTORY_ENTRY_SIZE = 24
 HEADER_SIZE = 40
 BOOTSTRAP_RESOURCE_INDICES = {
@@ -298,6 +298,13 @@ def _compiled_records(records):
     indices = _resource_index_map(record["id"] for record in compiled["resource"])
     for record in compiled["resource"]:
         record["index"] = indices[record["id"]]
+    # Sprint 1.46: los bosques son un depósito con radio, y `radius_millitiles`
+    # es OPCIONAL a propósito (sin él, un depósito es puntual, el comportamiento
+    # de siempre). Se materializa aquí con 0 por defecto para que el blob lleve
+    # SIEMPRE el campo y el loader tenga un contrato único que leer.
+    for record in compiled["map"]:
+        for spawn in record.get("resource_spawns", []):
+            spawn.setdefault("radius_millitiles", 0)
     return compiled
 
 
@@ -646,7 +653,7 @@ def _normalize(value, key=None):
                 for field in ("citation", "locator", "url", "accessed_on")))
         if key in sets: return sorted(vals, key=cve_encode)
         if key == "starting_positions": return sorted(vals, key=lambda x:x["slot"])
-        if key == "resource_spawns": return sorted(vals, key=lambda x:(x["y_millitiles"],x["x_millitiles"],0 if x["kind"]=="resource" else 1,_utf8_key(x["id"]),x["amount"]))
+        if key == "resource_spawns": return sorted(vals, key=lambda x:(x["y_millitiles"],x["x_millitiles"],0 if x["kind"]=="resource" else 1,_utf8_key(x["id"]),x["amount"],x.get("radius_millitiles",0)))
         return vals
     return value
 

@@ -410,6 +410,9 @@ struct ResourceSpawnV1 {
     uint8_t resource_idx;  // 0=A, 1=B, 2=Me
     int64_t x_raw, y_raw;  // raw = x_millitiles * FX_ONE_RAW / 1000 (exacto en enteros)
     int32_t amount;
+    // Sprint 1.46: bosques como zonas. Mismo dominio que x/y: raw =
+    // radius_millitiles * FX_ONE_RAW / 1000. 0 = depósito puntual.
+    int64_t radius_raw;
 };
 
 struct DataCatalogV1 {
@@ -1691,7 +1694,9 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
         fmt_major == 1 && fmt_minor == 0 && schema_set == 1;
     const bool resource_format =
         fmt_major == 1 && fmt_minor == 1 && schema_set == 2;
-    if (!legacy_format && !resource_format) {
+    const bool forest_format =
+        fmt_major == 1 && fmt_minor == 2 && schema_set == 3;
+    if (!legacy_format && !resource_format && !forest_format) {
         fail(CatalogLoadCode::UnsupportedVersion);
     }
 
@@ -2075,9 +2080,11 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                         const CveValue* x_v = item.find("x_millitiles");
                         const CveValue* y_v = item.find("y_millitiles");
                         const CveValue* amt_v = item.find("amount");
+                        const CveValue* radius_v = item.find("radius_millitiles");
                         if (!kind_v || !kind_v->is_str() || !id_v || !id_v->is_str()
                             || !x_v || !x_v->is_int() || !y_v || !y_v->is_int()
-                            || !amt_v || !amt_v->is_int()) {
+                            || !amt_v || !amt_v->is_int()
+                            || (radius_v && !radius_v->is_int())) {
                             fail(CatalogLoadCode::SchemaMismatch);
                         }
                         // Compatibilidad de lectura CHDB 1.0: el schema viejo
@@ -2093,16 +2100,22 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                             fail(CatalogLoadCode::InvalidMap);
                         }
                         // Rangos estructurales del schema (map.schema.json):
-                        // x/y_millitiles 0..2^31-1, amount 1..1000000.
+                        // x/y_millitiles 0..2^31-1, amount 1..1000000,
+                        // radius_millitiles 0..2^31-1 (opcional; 0 = puntual).
                         if (x_v->i < 0 || x_v->i > 2147483647ll) fail(CatalogLoadCode::InvalidMap);
                         if (y_v->i < 0 || y_v->i > 2147483647ll) fail(CatalogLoadCode::InvalidMap);
                         if (amt_v->i < 1 || amt_v->i > 1000000) fail(CatalogLoadCode::InvalidMap);
+                        if (radius_v && (radius_v->i < 0 || radius_v->i > 2147483647ll)) {
+                            fail(CatalogLoadCode::InvalidMap);
+                        }
                         ResourceSpawnV1 rs{};
                         rs.resource_idx = ridx;
                         // Conversión exacta en enteros (SPEC-004 §16):
                         // raw = mt * FX_ONE_RAW / 1000.
                         rs.x_raw = (x_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
                         rs.y_raw = (y_v->i * static_cast<int64_t>(FX_ONE_RAW)) / 1000;
+                        rs.radius_raw = (radius_v ? radius_v->i : 0)
+                            * static_cast<int64_t>(FX_ONE_RAW) / 1000;
                         // P1 de la auditoría Opus (Sprint 1.6B): el rango del
                         // schema (2^31-1 mt ≈ 262x la cota del mundo) NO implica
                         // que el raw resultante esté DENTRO del mundo. Un blob
@@ -2114,6 +2127,16 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
                         // no degradar en caliente.
                         if (rs.x_raw < 0 || rs.x_raw >= WORLD_RAW_MAX
                             || rs.y_raw < 0 || rs.y_raw >= WORLD_RAW_MAX) {
+                            fail(CatalogLoadCode::InvalidMap);
+                        }
+                        // Sprint 1.46: la cota del RADIO. El kernel clampa
+                        // radius_raw a ECO_MAX_ZONE_RADIUS_RAW como defensa en
+                        // profundidad (economy.hpp §1.45), pero aquí un radio
+                        // que el kernel tendría que recortar en silencio es un
+                        // dato MALO: el mundo no cabe en él. Mismo principio
+                        // que el P1 de arriba: se rechaza el catálogo entero.
+                        if (rs.radius_raw < 0
+                            || rs.radius_raw > ECO_MAX_ZONE_RADIUS_RAW) {
                             fail(CatalogLoadCode::InvalidMap);
                         }
                         rs.amount = static_cast<int32_t>(amt_v->i);
@@ -2316,7 +2339,7 @@ inline DataCatalogStorageV1::Impl* load_impl(const uint8_t* bytes, size_t size,
     }
 
     // ---- resource_names + display_name_key estable (Sprint 1.8C) ----------
-    if (resource_format) {
+    if (resource_format || forest_format) {
         if (impl->resources.size() != impl->resource_ids.size()
                 || impl->resources.size()
                     != impl->resource_display_name_keys.size()) {
