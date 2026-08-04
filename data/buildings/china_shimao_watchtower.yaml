@@ -1,0 +1,60 @@
+# Torre de Shimao. Evidencia P y no H pese a que Shimao SI esta excavado: el
+# yacimiento es real y monumental, pero atribuirle una torre de vigilancia con
+# la funcion de juego que aqui se le da es una interpretacion nuestra.
+schema_version: 1
+id: china:shimao_watchtower
+civ_id: china:yellow_river
+display_name_key: china:building.shimao_watchtower
+description_key: china:building.shimao_watchtower.description
+epoch_window:
+  - 3
+  - 5
+kind: civic
+footprint:
+  width_cells: 1
+  height_cells: 1
+  blocks_movement: true
+stats:
+  hp: 200
+  armor:
+    cut: 4
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 30
+  chunsa:stone: 50
+build_time_ticks: 150
+attack: 13
+range_millitiles: 5000
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - china:longshan_chalcolithic
+  - china:shang_bronze
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: minimax
+  task_id: Sprint-1.52-contrajuego-defensivo
+  generated_on: "2026-08-04"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: P
+    evidence_label_key: china:evidence.shimao_watchtower_abstraction
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+    sources:
+      - citation: "Bastiones y torres del recinto de Shimao, valle del rio Amarillo"
+        locator: "Fortificacion de la civilizacion en su epoca 2-3"
+        url: "https://en.wikipedia.org/wiki/Shimao"
+        accessed_on: "2026-08-04"
+  balance_design:
+    author: architect
+    rationale: "Torre de Shimao: la mas fuerte (13 de ataque) y la mas cara en piedra. Coherente con un recinto que es la mayor fortificacion neolitica conocida de la region."
+    reviewed_by:
+      - architect

@@ -1,0 +1,62 @@
+# Torre de vigilancia italica (turris lignea). Evidencia P: las atalayas de
+# madera aparecen en las fuentes latinas como referencia arcaica, pero
+# conservadas arqueologicamente en la peninsula para este periodo no hay
+# practicamente nada. Lo dijo MiniMax y lo mantengo.
+schema_version: 1
+id: rome:italic_watchtower
+civ_id: rome:republic_imperial
+display_name_key: rome:building.italic_watchtower
+description_key: rome:building.italic_watchtower.description
+epoch_window:
+  - 3
+  - 5
+kind: civic
+footprint:
+  width_cells: 1
+  height_cells: 1
+  blocks_movement: true
+stats:
+  hp: 180
+  armor:
+    cut: 4
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 50
+  chunsa:stone: 30
+build_time_ticks: 140
+attack: 12
+range_millitiles: 5000
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - rome:remedello_copper
+  - rome:terramare_bronze
+  - rome:republican_expansion
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: minimax
+  task_id: Sprint-1.52-contrajuego-defensivo
+  generated_on: "2026-08-04"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: P
+    evidence_label_key: rome:evidence.italic_watchtower_abstraction
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+    sources:
+      - citation: "Turres ligneae y speculae en los oppida italicos protohistoricos"
+        locator: "Fortificacion de la civilizacion en su epoca 2-3"
+        url: "https://en.wikipedia.org/wiki/Oppidum"
+        accessed_on: "2026-08-04"
+  balance_design:
+    author: architect
+    rationale: "Torre: 12 de ataque y 5 tiles. Contra una unidad de 40 de vida son cuatro impactos. Defiende, no aniquila: una torre que mata sola es tan mala como una que no mata."
+    reviewed_by:
+      - architect

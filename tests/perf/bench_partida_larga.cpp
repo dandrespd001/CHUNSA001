@@ -123,6 +123,37 @@ inline FarmGroveCount count_farms_groves(const GameState& g, uint32_t player,
     return out;
 }
 
+// Sprint 1.52: censo de DEFENSAS. Se cuentan por separado las que disparan
+// (attack > 0) y las que solo estorban (murallas, attack == 0 pero
+// blocks_movement). La distincion importa: son dos intenciones distintas de la
+// IA y hoy solo una existe.
+struct DefenseCount {
+    uint32_t torres = 0;      // COMPLETAS y vivas
+    uint32_t torres_obra = 0; // en construccion
+    uint32_t muros = 0;       // defensivos sin arma, completos
+};
+
+inline DefenseCount count_defenses(const GameState& g, uint32_t player,
+                                   const DataCatalogV1& cat) {
+    DefenseCount out{};
+    for (uint32_t i = 0; i < g.entities.capacity; ++i) {
+        if (!g.entities.alive[i]) continue;
+        if (g.owner[i] != player) continue;
+        if (g.entity_kind[i] != 1u) continue;
+        if (g.building_id[i] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bd = cat.buildings[g.building_id[i]];
+        const bool completo =
+            static_cast<uint32_t>(g.build_progress[i]) >= bd.build_time_ticks;
+        if (bd.attack > 0) {
+            if (completo) ++out.torres; else ++out.torres_obra;
+        } else if (bd.footprint_w == 1 && bd.footprint_h == 1 && completo
+                   && bd.constructible != 0u) {
+            ++out.muros;   // huella 1x1 construible sin arma: muralla
+        }
+    }
+    return out;
+}
+
 // ---- Replicación del barrido `research_ok` (ai_stub.hpp, candidato TECH) ----
 //
 // INSTRUMENTACIÓN EXTERNA DE SOLO LECTURA: copia exacta de los filtros del
@@ -134,6 +165,53 @@ inline FarmGroveCount count_farms_groves(const GameState& g, uint32_t player,
 // (6) prerequisitos, (7) exclusión mutua, (8) asequibilidad (ai_afford). Lo
 // que pasa TODOS los filtros se cuenta en `eligible`. `cost_short` desglosa
 // los fallos de (8) por recurso corto.
+// Sprint 1.52 — por que la IA NO levanta torres. Mismo metodo que el desglose
+// de investigacion: replicar los filtros del candidato y CONTAR, en vez de
+// suponer. "Cero torres" puede significar seis cosas distintas y solo una es
+// interesante.
+struct DefenseWhy {
+    uint64_t sin_anchor = 0;
+    uint64_t sin_enemigo = 0;   // el gatillo no se dispara
+    uint64_t sin_tipo = 0;      // no hay torre de esta civ/epoca
+    uint64_t en_obra = 0;       // ya hay una levantandose
+    uint64_t ya_tiene = 0;      // llego al tope AI_DEFENSE_MAX
+    uint64_t no_paga = 0;       // no llega de recursos
+    uint64_t sin_sitio = 0;     // no hay celda libre
+    uint64_t candidata = 0;     // paso todos los filtros
+};
+
+inline void scan_defense_reasons(const GameState& g, uint8_t player,
+                                 const DataCatalogV1& cat, uint8_t epoch,
+                                 DefenseWhy& out) {
+    AiMacroStateV1 macro{};
+    ai_scan_macro(g, player, macro);
+    if (!macro.has_anchor) { ++out.sin_anchor; return; }
+    if (!ai_enemy_near_base(g, player, macro.anchor_x, macro.anchor_y)) {
+        ++out.sin_enemigo; return;
+    }
+    const BuildingId dt = ai_find_defense_type(cat, g.player_civ[player], epoch);
+    if (dt == INVALID_BUILDING_ID) { ++out.sin_tipo; return; }
+    uint32_t completas = 0; bool obra = false;
+    for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+        if (!g.entities.alive[j]) continue;
+        if (g.owner[j] != player) continue;
+        if (g.entity_kind[j] != 1u) continue;
+        if (g.building_id[j] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bd_j = cat.buildings[g.building_id[j]];
+        if (bd_j.attack <= 0) continue;
+        if (static_cast<uint32_t>(g.build_progress[j]) < bd_j.build_time_ticks) obra = true;
+        else ++completas;
+    }
+    if (obra) { ++out.en_obra; return; }
+    if (completas >= AI_DEFENSE_MAX) { ++out.ya_tiene; return; }
+    const BuildingDefinitionV1& dd = cat.buildings[dt];
+    if (!ai_afford(g, player, dd.cost)) { ++out.no_paga; return; }
+    const AiFreeCellV1 celda = ai_find_free_cell(g, macro.anchor_tx, macro.anchor_ty,
+                                                 dd.footprint_w, dd.footprint_h);
+    if (!celda.found) { ++out.sin_sitio; return; }
+    ++out.candidata;
+}
+
 struct ResearchWhy {
     uint64_t epoch = 0;         // tdef.epoch > época actual
     uint64_t prereq = 0;        // prerequisitos sin cumplir
@@ -411,6 +489,7 @@ int main() {
     uint8_t epoch_max[2] = {g->player_epoch[0], g->player_epoch[1]};
     Counters cnt[2] = {};
     ResearchWhy why[2] = {};
+    DefenseWhy why_def[2] = {};
 
     // Snapshot de TODO el stock (no solo comida/madera) de ambos jugadores en
     // un tick dado: instrumentación de solo lectura, no decide nada.
@@ -485,6 +564,10 @@ int main() {
                               g->player_epoch[0], why[0]);
         scan_research_reasons(*g, static_cast<uint8_t>(1u), cat,
                               g->player_epoch[1], why[1]);
+        scan_defense_reasons(*g, static_cast<uint8_t>(0u), cat,
+                             g->player_epoch[0], why_def[0]);
+        scan_defense_reasons(*g, static_cast<uint8_t>(1u), cat,
+                             g->player_epoch[1], why_def[1]);
 
         // Subidas de época: registrar el tick exacto del salto.
         for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
@@ -514,6 +597,20 @@ int main() {
     // Por qué no se investiga: desglose de descartes del barrido replicado de
     // `research_ok`. `coste` es el único motivo que puede hablar del recurso
     // corto; los demás (epoca/prereqs/mutex/ya/en_curso) son estructurales.
+    for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
+        std::printf("bench_partida_larga: P%u barrido DEFENSA: sin_anchor=%llu "
+                    "sin_enemigo=%llu sin_tipo=%llu en_obra=%llu ya_tiene=%llu "
+                    "NO_PAGA=%llu sin_sitio=%llu | CANDIDATA=%llu\n",
+                    p,
+                    static_cast<unsigned long long>(why_def[p].sin_anchor),
+                    static_cast<unsigned long long>(why_def[p].sin_enemigo),
+                    static_cast<unsigned long long>(why_def[p].sin_tipo),
+                    static_cast<unsigned long long>(why_def[p].en_obra),
+                    static_cast<unsigned long long>(why_def[p].ya_tiene),
+                    static_cast<unsigned long long>(why_def[p].no_paga),
+                    static_cast<unsigned long long>(why_def[p].sin_sitio),
+                    static_cast<unsigned long long>(why_def[p].candidata));
+    }
     for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
         std::printf("bench_partida_larga: P%u barrido investigacion: "
                     "epoca=%llu prereqs=%llu mutex=%llu coste=%llu | "
@@ -573,6 +670,40 @@ int main() {
                 static_cast<unsigned long long>(cnt[1].ordered_groves));
     const FarmGroveCount fg0 = count_farms_groves(*g, 0u, cat);
     const FarmGroveCount fg1 = count_farms_groves(*g, 1u, cat);
+    {
+        // Sprint 1.52: por que la IA NO levanta torres. Mismo metodo que el
+        // desglose de investigacion: replicar los filtros y contar, en vez de
+        // suponer. Cero torres puede significar seis cosas distintas.
+        uint32_t con_arma = 0, constr = 0, en_epoca = 0;
+        for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
+            const BuildingDefinitionV1& bd = cat.buildings[bt];
+            if (bd.attack <= 0) continue;
+            ++con_arma;
+            if (bd.constructible == 0u) continue;
+            ++constr;
+            if (bd.epoch_min <= g->player_epoch[0] && g->player_epoch[0] <= bd.epoch_max) {
+                ++en_epoca;
+                std::printf("bench_partida_larga:   torre candidata bid=%u ep=[%u,%u] "
+                            "atk=%d rango=%d coste=[%d,%d,%d]\n",
+                            bt, static_cast<unsigned>(bd.epoch_min),
+                            static_cast<unsigned>(bd.epoch_max),
+                            bd.attack, bd.range_millitiles,
+                            bd.cost[0], bd.cost[1], bd.cost[2]);
+            }
+        }
+        std::printf("bench_partida_larga: torres en catalogo: con_arma=%u construibles=%u "
+                    "en_epoca_de_p0(%u)=%u\n",
+                    con_arma, constr,
+                    static_cast<unsigned>(g->player_epoch[0]), en_epoca);
+    }
+    {
+        const DefenseCount d0 = count_defenses(*g, 0u, cat);
+        const DefenseCount d1 = count_defenses(*g, 1u, cat);
+        std::printf("bench_partida_larga: DEFENSAS p0={torres=%u obra=%u muros=%u} "
+                    "p1={torres=%u obra=%u muros=%u}\n",
+                    d0.torres, d0.torres_obra, d0.muros,
+                    d1.torres, d1.torres_obra, d1.muros);
+    }
     std::printf("bench_partida_larga: granjas EN PIE p0=%u p1=%u | bosques EN PIE p0=%u p1=%u\n",
                 fg0.farms, fg1.farms, fg0.groves, fg1.groves);
     std::printf("bench_partida_larga: comida en caja p0=%lld p1=%lld | madera p0=%lld p1=%lld\n",

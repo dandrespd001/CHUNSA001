@@ -1,0 +1,60 @@
+# Torre de recinto predinastica. Evidencia P: que los recintos tuvieran
+# torres es una inferencia razonable de la iconografia y de los recintos
+# conservados, no una estructura excavada e identificada como tal.
+schema_version: 1
+id: egipto:predynastic_watchtower
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.predynastic_watchtower
+description_key: egipto:building.predynastic_watchtower.description
+epoch_window:
+  - 3
+  - 5
+kind: civic
+footprint:
+  width_cells: 1
+  height_cells: 1
+  blocks_movement: true
+stats:
+  hp: 160
+  armor:
+    cut: 4
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 40
+  chunsa:stone: 40
+build_time_ticks: 140
+attack: 10
+range_millitiles: 4500
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:old_kingdom
+  - egipto:new_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: minimax
+  task_id: Sprint-1.52-contrajuego-defensivo
+  generated_on: "2026-08-04"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: P
+    evidence_label_key: egipto:evidence.predynastic_watchtower_abstraction
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+    sources:
+      - citation: "Torres de recinto en los asentamientos amurallados del Alto Egipto predinastico"
+        locator: "Fortificacion de la civilizacion en su epoca 2-3"
+        url: "https://en.wikipedia.org/wiki/Nekhen"
+        accessed_on: "2026-08-04"
+  balance_design:
+    author: architect
+    rationale: "Torre nilotica: 10 de ataque y 4,5 tiles, la mas floja de las tres. Egipto compensa con el muro mas resistente. Que las civilizaciones difieran en la FORMA de defenderse y no en cuanto, es la premisa del proyecto."
+    reviewed_by:
+      - architect

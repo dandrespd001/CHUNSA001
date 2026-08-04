@@ -97,6 +97,7 @@ building_ids:
   - china:jiangnan_arsenal
   - china:jingdezhen_kilns
   - china:longjiang_shipyard
+  - china:longshan_hangtu_wall
   - china:longshan_workshop
   - china:market
   - china:movable_type_workshop
@@ -104,6 +105,7 @@ building_ids:
   - china:planted_grove
   - china:settlement_center
   - china:shang_foundry
+  - china:shimao_watchtower
   - china:thirteen_factories
   - china:woodblock_workshop
   - china:yangshao_granary

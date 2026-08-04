@@ -53,7 +53,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 13;  // Sprint 1.47: la IA VENDE excedente abrumador para PAGAR una compra concreta  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 14;  // Sprint 1.52: la IA levanta TORRES cuando el enemigo esta en casa  // Sprint 1.47: la IA VENDE excedente abrumador para PAGAR una compra concreta  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -116,6 +116,22 @@ inline constexpr int32_t AI_FARM_FOOD_OUTLOOK_THRESHOLD = 200;
 // tope de población. El "no encadenar" (una granja en obra a la vez) es lo que
 // impide que esta prioridad degrade en construir campos sin parar.
 inline constexpr int32_t AI_FARM_PRIORITY_BP = 8000;
+
+// Sprint 1.52 — prioridad de DEFENDERSE. Entre la granja (8000) y la vivienda
+// (10000), y el orden importa:
+//
+//   · Gana a la granja porque con el enemigo en la base, plantar comida es
+//     administrar una hacienda que estan quemando.
+//   · Pierde contra la vivienda porque una torre no entrena a nadie: si estas
+//     topado de poblacion, la torre defiende un solar donde no puedes producir
+//     defensores. La casa desbloquea; la torre solo aguanta.
+inline constexpr int32_t AI_DEFENSE_PRIORITY_BP = 9000;
+
+// Cuantas defensas COMPLETAS bastan para dejar de construirlas. Dos, y no mas:
+// sin tope la IA gastaria toda su madera en torres en cuanto oliera un enemigo,
+// que es la version defensiva de arruinarse. Es exactamente la leccion de la
+// vivienda del Sprint 1.14, que tampoco encadena casas.
+inline constexpr uint32_t AI_DEFENSE_MAX = 2u;
 
 // Sprint 1.35 — prioridad del candidato COMERCIAR en la utilidad entera (bp)
 // de la capa estratégica. Justificación: comerciar es un MEDIO, no un fin.
@@ -542,6 +558,31 @@ inline BuildingId ai_find_housing_type(const DataCatalogV1& cat, CivId civ,
 // un deposito al completarse) y `creates_regen_per_tick > 0` (ese deposito se
 // regenera — es lo que separa un campo de una mina agotable). `constructible`
 // excluye los centros de escenario que declaran deposito pero no se construyen.
+// Sprint 1.52 — tipo de DEFENSA de la civilizacion valido en esta epoca: el
+// primer edificio construible CON ARMA (attack > 0).
+//
+// Mismo patron que ai_find_farm_type y ai_find_housing_type, y por la misma
+// leccion del 1.23: el filtro de epoca va DENTRO del barrido, para que la
+// busqueda CONTINUE hasta el primer candidato valido en vez de rendirse en el
+// primero a secas. Rendirse en el primero dejo a la IA enganchada a un cuartel
+// inalcanzable durante 30.000 ticks.
+//
+// Se reconoce la defensa por el ARMA y no por el `kind` del esquema: el kernel
+// no carga `kind` —es presentacion— y un edificio que dispara es defensivo
+// haga lo que haga el resto del tiempo.
+inline BuildingId ai_find_defense_type(const DataCatalogV1& cat, CivId civ,
+                                       uint8_t epoch) noexcept {
+    for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
+        const BuildingDefinitionV1& bdef = cat.buildings[bt];
+        if (bdef.constructible == 0u) continue;
+        if (bdef.attack <= 0) continue;
+        if (civ != INVALID_CIV_ID && bdef.civ_id != INVALID_CIV_ID && bdef.civ_id != civ) continue;
+        if (epoch != 0u && !ai_epoch_ok(epoch, bdef.epoch_min, bdef.epoch_max)) continue;
+        return static_cast<BuildingId>(bt);
+    }
+    return INVALID_BUILDING_ID;
+}
+
 inline BuildingId ai_find_farm_type(const DataCatalogV1& cat, CivId civ,
                                     uint8_t epoch) noexcept {
     for (uint32_t bt = 0; bt < cat.building_count; ++bt) {
@@ -1456,6 +1497,55 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
             }
         }
 
+        // Candidato DEFENDERSE (Sprint 1.52): levantar una torre cuando el
+        // enemigo esta en casa.
+        //
+        // El gatillo es `ai_enemy_near_base`, el MISMO que ya decide si la capa
+        // tactica defiende o ataca. Reutilizarlo no es ahorro de codigo: es que
+        // la IA no puede creer que la esten atacando para una cosa y no para la
+        // otra.
+        //
+        // Y no construye a ciegas: para al llegar a AI_DEFENSE_MAX completas y
+        // no encadena obras. Sin esas dos condiciones, una IA asustada gasta
+        // toda su madera en torres, que es la version defensiva de arruinarse.
+        bool       def_ok = false;
+        BuildingId def_type = INVALID_BUILDING_ID;
+        AiFreeCellV1 def_cell{};
+        {
+            if (macro.has_anchor
+                && ai_enemy_near_base(g, ai_player, macro.anchor_x, macro.anchor_y)) {
+                const BuildingId dt = ai_find_defense_type(cat, ai_civ, epoch);
+                if (dt != INVALID_BUILDING_ID) {
+                    uint32_t completas = 0;
+                    bool en_obra = false;
+                    for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+                        if (!g.entities.alive[j]) continue;
+                        if (g.owner[j] != ai_player) continue;
+                        if (g.entity_kind[j] != 1u) continue;
+                        if (g.building_id[j] >= cat.building_count) continue;
+                        const BuildingDefinitionV1& bd_j = cat.buildings[g.building_id[j]];
+                        if (bd_j.attack <= 0) continue;       // no es una defensa
+                        if (static_cast<uint32_t>(g.build_progress[j]) < bd_j.build_time_ticks) {
+                            en_obra = true;
+                        } else {
+                            ++completas;
+                        }
+                    }
+                    const BuildingDefinitionV1& dd = cat.buildings[dt];
+                    if (!en_obra && completas < AI_DEFENSE_MAX
+                        && ai_caps_ok(g, ai_player, dd)
+                        && ai_afford(g, ai_player, dd.cost)) {
+                        def_cell = ai_find_free_cell(g, macro.anchor_tx, macro.anchor_ty,
+                                                     dd.footprint_w, dd.footprint_h);
+                        if (def_cell.found) {
+                            def_ok = true;
+                            def_type = dt;
+                        }
+                    }
+                }
+            }
+        }
+
         // Candidato MILITARIZAR: entrenar una unidad de combate en el primer
         // edificio propio COMPLETO capaz de hacerlo.
         bool     mil_ok = false;
@@ -1653,6 +1743,12 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
         // constante sobre por que ese orden es el correcto.
         const int32_t u_farm  = farm_ok ? AI_FARM_PRIORITY_BP : 0;
         if (u_farm  > best_u) { best_u = u_farm;  best_idx = 6; }
+        // La DEFENSA se evalua despues de la granja y con estricto mayor: con
+        // AI_DEFENSE_PRIORITY_BP (9000) gana a la granja (8000) y a todos los
+        // pesos del perfil (5000), y pierde contra la vivienda (10000). El
+        // porque de ese orden esta en el comentario de la constante.
+        const int32_t u_def   = def_ok  ? AI_DEFENSE_PRIORITY_BP : 0;
+        if (u_def   > best_u) { best_u = u_def;   best_idx = 8; }
         if (u_craft > best_u) { best_u = u_craft; best_idx = 4; }
         // El COMERCIO se evalua el ULTIMO y con estricto mayor: con
         // AI_TRADE_PRIORITY_BP (3000) pierde contra todos los pesos del perfil
@@ -1678,6 +1774,10 @@ inline void ai_execute(AiJobBox& b, const GameState& g) noexcept {
                 emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
                      static_cast<int64_t>(farm_cell.tx), static_cast<int64_t>(farm_cell.ty),
                      farm_type);
+            } else if (best_idx == 8) {
+                emit(CommandType::PLACE_BUILDING, EntityHandle{0u, 0u},
+                     static_cast<int64_t>(def_cell.tx), static_cast<int64_t>(def_cell.ty),
+                     def_type);
             } else if (best_idx == 2) {
                 emit(CommandType::TRAIN_UNIT,
                      EntityHandle{mil_building, g.entities.generation[mil_building]},

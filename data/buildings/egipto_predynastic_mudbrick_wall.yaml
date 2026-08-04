@@ -1,0 +1,58 @@
+# Muro de adobe predinastico. La UNICA de las seis con evidencia H: los
+# recintos amurallados predinasticos estan bien publicados (Tell el-Farkha,
+# Hieracompolis) y el signo del recinto amurallado aparece en la escritura
+# temprana.
+schema_version: 1
+id: egipto:predynastic_mudbrick_wall
+civ_id: egipto:dynastic_nile
+display_name_key: egipto:building.predynastic_mudbrick_wall
+description_key: egipto:building.predynastic_mudbrick_wall.description
+epoch_window:
+  - 2
+  - 5
+kind: civic
+footprint:
+  width_cells: 1
+  height_cells: 1
+  blocks_movement: true
+stats:
+  hp: 280
+  armor:
+    cut: 4
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 20
+  chunsa:stone: 20
+build_time_ticks: 90
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - egipto:fayum_neolithic
+  - egipto:old_kingdom
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: minimax
+  task_id: Sprint-1.52-contrajuego-defensivo
+  generated_on: "2026-08-04"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+    sources:
+      - citation: "Recintos amurallados de adobe predinasticos, documentados en Tell el-Farkha e Hieracompolis"
+        locator: "Fortificacion de la civilizacion en su epoca 2-3"
+        url: "https://en.wikipedia.org/wiki/Tell_el-Farkha"
+        accessed_on: "2026-08-04"
+  balance_design:
+    author: architect
+    rationale: "Muro de adobe: mas vida que la empalizada y menos madera, mas piedra. La diferencia entre civilizaciones esta en los materiales, no en un bono numerico."
+    reviewed_by:
+      - architect

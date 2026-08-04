@@ -225,8 +225,13 @@ inline constexpr uint32_t AI_SKIRMISH_ECO_END_TICK = 1118u;
 // arreglo es correcto: la partida se resuelve ANTES porque el combate por fin
 // conecta. Si hubiera subido, o si el vencedor hubiera cambiado, seria un
 // fallo. winner=1 intacto.
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x1ca7d2a5866f503cull;
-inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0xc3446802755bfaf7ull;
+// Sprint 1.52 — re-registro por CAMBIO DE DOMINIO. El catalogo gana 6
+// edificios defensivos (64 -> 70), y BuildingId es el INDICE en orden bytewise
+// de record_id: anadir edificios reordena los ids y mueve el digest de todo
+// estado que los contenga. end_tick sigue en 9963 y winner=1, o sea que la
+// partida se juega igual. Precedente identico documentado arriba para el 1.45.
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_STATE = 0x854eb72c765c9cc1ull;
+inline constexpr uint64_t AI_SKIRMISH_APERTURA_CONTINUATION = 0x9306bf2568e5eda2ull;
 inline constexpr uint32_t AI_SKIRMISH_APERTURA_END_TICK = 9963u;
 
 }  // namespace chunsa::determinism_baselines

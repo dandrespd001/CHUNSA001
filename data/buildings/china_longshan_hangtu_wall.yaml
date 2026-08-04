@@ -1,0 +1,60 @@
+# Muralla de tierra apisonada (hangtu). La tecnica esta documentada en los
+# recintos Longshan y es UNA DE LAS MEJOR ATESTIGUADAS del neolitico chino:
+# se conservan tramos y el metodo constructivo es identificable.
+# 
+# Engancha ademas con el rasgo de la civilizacion: China ahorra madera, y esta
+# muralla es de tierra.
+schema_version: 1
+id: china:longshan_hangtu_wall
+civ_id: china:yellow_river
+display_name_key: china:building.longshan_hangtu_wall
+description_key: china:building.longshan_hangtu_wall.description
+epoch_window:
+  - 2
+  - 5
+kind: civic
+footprint:
+  width_cells: 1
+  height_cells: 1
+  blocks_movement: true
+stats:
+  hp: 300
+  armor:
+    cut: 4
+    pierce: 2
+    impact: 0
+constructible: true
+resource_costs:
+  chunsa:wood: 10
+  chunsa:stone: 30
+build_time_ticks: 110
+trains: []
+researches: []
+required_capabilities: []
+grants_capabilities: []
+recipes: []
+playable_period_ids:
+  - china:yangshao_neolithic
+  - china:longshan_chalcolithic
+availability_mode: historical
+provenance:
+  status: promoted
+  generator: minimax
+  task_id: Sprint-1.52-contrajuego-defensivo
+  generated_on: "2026-08-04"
+  reviewed_by:
+    - architect
+  historical_claims:
+    evidence: H
+    verification_reports:
+      - game_data/research/verificacion/REVISION_ARQUITECTO_SPRINT_0.4.md
+    sources:
+      - citation: "Murallas de tierra apisonada (hangtu) de los recintos Longshan del valle del rio Amarillo"
+        locator: "Fortificacion de la civilizacion en su epoca 2-3"
+        url: "https://en.wikipedia.org/wiki/Rammed_earth"
+        accessed_on: "2026-08-04"
+  balance_design:
+    author: architect
+    rationale: "Hangtu: la muralla mas resistente de las tres y casi sin madera, porque es tierra apisonada. Ancla el rasgo chino de ahorro de madera que ya aparece en su tecnologia del coque."
+    reviewed_by:
+      - architect

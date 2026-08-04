@@ -105,7 +105,9 @@ building_ids:
   - rome:foundry
   - rome:horreum
   - rome:horreum_annonae
+  - rome:italic_palisade
   - rome:italic_storehouse
+  - rome:italic_watchtower
   - rome:lingotto_works
   - rome:market
   - rome:murano_glassworks
