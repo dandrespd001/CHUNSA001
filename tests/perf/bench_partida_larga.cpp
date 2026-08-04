@@ -123,6 +123,97 @@ inline FarmGroveCount count_farms_groves(const GameState& g, uint32_t player,
     return out;
 }
 
+// ---- Replicación del barrido `research_ok` (ai_stub.hpp, candidato TECH) ----
+//
+// INSTRUMENTACIÓN EXTERNA DE SOLO LECTURA: copia exacta de los filtros del
+// bucle (~líneas 1508-1581 de ai_stub.hpp) para CONTAR por qué se descarta
+// cada tecnología candidata. El banco lee el catálogo y el estado igual que la
+// IA, sin tocar el kernel. Motivos, en orden de evaluación: (0) edificio no
+// completo, (1) edificio ocupado investigando, (2) tech fuera de catálogo,
+// (3) ya investigada, (4) en curso en otro edificio, (5) época no alcanzada,
+// (6) prerequisitos, (7) exclusión mutua, (8) asequibilidad (ai_afford). Lo
+// que pasa TODOS los filtros se cuenta en `eligible`. `cost_short` desglosa
+// los fallos de (8) por recurso corto.
+struct ResearchWhy {
+    uint64_t epoch = 0;         // tdef.epoch > época actual
+    uint64_t prereq = 0;        // prerequisitos sin cumplir
+    uint64_t mutex = 0;         // excluida por una ya investigada
+    uint64_t cost = 0;          // ai_afford falla
+    uint64_t already = 0;       // ya investigada
+    uint64_t in_progress = 0;   // en curso en otro edificio
+    uint64_t invalid_tech = 0;  // tid fuera de catálogo
+    uint64_t bld_not_complete = 0;  // edificio sin terminar (salto por edificio)
+    uint64_t bld_occupied = 0;      // edificio ya investigando (salto por edificio)
+    uint64_t eligible = 0;      // pasó TODOS los filtros
+    uint64_t cost_short[RESOURCE_COUNT] = {};  // por slot: nº de candidatos que fallan por él
+};
+
+inline void scan_research_reasons(const GameState& g, uint8_t player,
+                                  const DataCatalogV1& cat, uint8_t epoch,
+                                  ResearchWhy& out) {
+    const uint32_t cap = g.entities.capacity;
+    for (uint32_t bi = 0; bi < cap; ++bi) {
+        if (!g.entities.alive[bi]) continue;
+        if (g.owner[bi] != player) continue;
+        if (g.entity_kind[bi] != 1u) continue;
+        if (g.building_id[bi] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bdef = cat.buildings[g.building_id[bi]];
+        if (g.build_progress[bi] < bdef.build_time_ticks) { ++out.bld_not_complete; continue; }
+        if (g.research_tech[bi] != INVALID_TECH_ID) { ++out.bld_occupied; continue; }
+
+        for (uint8_t rk = 0; rk < bdef.research_count; ++rk) {
+            const TechId tid = bdef.researches[rk];
+            if (tid >= cat.tech_count) { ++out.invalid_tech; continue; }
+            const uint32_t tw = tid / 64u, tb = tid % 64u;
+            if (tw < TECH_WORDS && ((g.player_techs[player][tw] >> tb) & 1u) != 0u) {
+                ++out.already; continue;
+            }
+
+            bool in_progress = false;
+            for (uint32_t oi = 0; oi < cap; ++oi) {
+                if (!g.entities.alive[oi]) continue;
+                if (g.owner[oi] != player) continue;
+                if (g.research_tech[oi] == tid) { in_progress = true; break; }
+            }
+            if (in_progress) { ++out.in_progress; continue; }
+
+            const TechDefinitionV1& tdef = cat.techs[tid];
+            if (tdef.epoch > epoch) { ++out.epoch; continue; }
+
+            bool prereq_ok = true;
+            for (uint8_t pk = 0; pk < tdef.prereq_count; ++pk) {
+                const TechId pr = tdef.prerequisites[pk];
+                const uint32_t pw = pr / 64u, pb = pr % 64u;
+                if (!(pw < TECH_WORDS && ((g.player_techs[player][pw] >> pb) & 1u) != 0u)) {
+                    prereq_ok = false; break;
+                }
+            }
+            if (!prereq_ok) { ++out.prereq; continue; }
+
+            bool mutex_clear = true;
+            for (uint8_t mk = 0; mk < tdef.mutex_count; ++mk) {
+                const TechId mx = tdef.mutually_exclusive_with[mk];
+                const uint32_t mw = mx / 64u, mb = mx % 64u;
+                if (mw < TECH_WORDS && ((g.player_techs[player][mw] >> mb) & 1u) != 0u) {
+                    mutex_clear = false; break;
+                }
+            }
+            if (!mutex_clear) { ++out.mutex; continue; }
+
+            bool afford = true;
+            for (uint32_t r = 0; r < RESOURCE_COUNT; ++r) {
+                if (g.player_stock[player][r] < tdef.cost[r]) {
+                    afford = false;
+                    ++out.cost_short[r];
+                }
+            }
+            if (!afford) { ++out.cost; continue; }
+
+            ++out.eligible;
+        }
+    }
+}
+
 struct Counters {
     uint64_t ordered_farms = 0;   // PLACE_BUILDING de granja emitido por la IA
     uint64_t ordered_groves = 0;  // PLACE_BUILDING de bosque plantado emitido por la IA
@@ -319,26 +410,32 @@ int main() {
     uint8_t epoch_seen[2] = {g->player_epoch[0], g->player_epoch[1]};
     uint8_t epoch_max[2] = {g->player_epoch[0], g->player_epoch[1]};
     Counters cnt[2] = {};
+    ResearchWhy why[2] = {};
 
-    std::printf("----------------------------------------------------------------------------------------------------------\n");
-    std::printf("tick       | P0 ep | P0 comida | P0 madera | P0 cid | P0 ejer | P0 edif | P1 ep | P1 comida | P1 madera | P1 cid | P1 ejer | P1 edif |\n");
-    std::printf("----------------------------------------------------------------------------------------------------------\n");
-
+    // Snapshot de TODO el stock (no solo comida/madera) de ambos jugadores en
+    // un tick dado: instrumentación de solo lectura, no decide nada.
     auto print_snapshot = [&](uint32_t t) {
         const FarmGroveCount fg0 = count_farms_groves(*g, 0u, cat);
         const FarmGroveCount fg1 = count_farms_groves(*g, 1u, cat);
         const Census c0 = census(*g, 0u);
         const Census c1 = census(*g, 1u);
-        std::printf("%-11u | %4u  | %9lld | %9lld | %3u  | %3u   | %3u    | %4u  | %9lld | %9lld | %3u  | %3u   | %3u    |\n",
+        std::printf("bench_partida_larga: --- stock tick %u | ep p0=%u p1=%u | "
+                    "ciudadanos p0=%u p1=%u | ejercito p0=%u p1=%u | edificios p0=%u p1=%u ---\n",
                     t,
                     static_cast<unsigned>(g->player_epoch[0]),
-                    static_cast<long long>(g->player_stock[0][RESOURCE_INDEX_FOOD]),
-                    static_cast<long long>(g->player_stock[0][RESOURCE_INDEX_WOOD]),
-                    c0.citizens, c0.army, c0.buildings,
                     static_cast<unsigned>(g->player_epoch[1]),
-                    static_cast<long long>(g->player_stock[1][RESOURCE_INDEX_FOOD]),
-                    static_cast<long long>(g->player_stock[1][RESOURCE_INDEX_WOOD]),
-                    c1.citizens, c1.army, c1.buildings);
+                    c0.citizens, c1.citizens, c0.army, c1.army, c0.buildings, c1.buildings);
+        for (uint32_t r = 0; r < cat.resource_count; ++r) {
+            const uint32_t slot = cat.resources[r].index;
+            if (slot >= RESOURCE_COUNT) continue;
+            const char* name = (cat.resource_names != nullptr)
+                                   ? cat.resource_names[r].record_id_utf8
+                                   : nullptr;
+            std::printf("  %-24s p0=%12lld p1=%12lld\n",
+                        (name != nullptr) ? name : "?",
+                        static_cast<long long>(g->player_stock[0][slot]),
+                        static_cast<long long>(g->player_stock[1][slot]));
+        }
         (void)fg0; (void)fg1;
     };
 
@@ -382,6 +479,13 @@ int main() {
         accepted += res.accepted;
         rejected += res.rejected;
 
+        // Barrido de investigación REPLICADO: contar por qué el bucle de
+        // `research_ok` descarta cada candidato (solo lectura, no decide).
+        scan_research_reasons(*g, static_cast<uint8_t>(0u), cat,
+                              g->player_epoch[0], why[0]);
+        scan_research_reasons(*g, static_cast<uint8_t>(1u), cat,
+                              g->player_epoch[1], why[1]);
+
         // Subidas de época: registrar el tick exacto del salto.
         for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
             if (g->player_epoch[p] > epoch_seen[p]) {
@@ -402,6 +506,43 @@ int main() {
 
     const auto t_end = std::chrono::steady_clock::now();
     const double wall_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    // Stock COMPLETO de cada jugador al final de la partida (aunque el tick
+    // final no caiga en un corte de 6000).
+    print_snapshot(g->tick);
+
+    // Por qué no se investiga: desglose de descartes del barrido replicado de
+    // `research_ok`. `coste` es el único motivo que puede hablar del recurso
+    // corto; los demás (epoca/prereqs/mutex/ya/en_curso) son estructurales.
+    for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
+        std::printf("bench_partida_larga: P%u barrido investigacion: "
+                    "epoca=%llu prereqs=%llu mutex=%llu coste=%llu | "
+                    "ya_investigada=%llu en_curso=%llu tech_invalida=%llu "
+                    "edif_incompleto=%llu edif_ocupado=%llu | elegibles=%llu\n",
+                    p,
+                    static_cast<unsigned long long>(why[p].epoch),
+                    static_cast<unsigned long long>(why[p].prereq),
+                    static_cast<unsigned long long>(why[p].mutex),
+                    static_cast<unsigned long long>(why[p].cost),
+                    static_cast<unsigned long long>(why[p].already),
+                    static_cast<unsigned long long>(why[p].in_progress),
+                    static_cast<unsigned long long>(why[p].invalid_tech),
+                    static_cast<unsigned long long>(why[p].bld_not_complete),
+                    static_cast<unsigned long long>(why[p].bld_occupied),
+                    static_cast<unsigned long long>(why[p].eligible));
+        std::printf("bench_partida_larga: P%u fallos de coste por recurso corto:", p);
+        for (uint32_t r = 0; r < cat.resource_count; ++r) {
+            const uint32_t slot = cat.resources[r].index;
+            if (slot >= RESOURCE_COUNT) continue;
+            if (why[p].cost_short[slot] == 0u) continue;
+            const char* name = (cat.resource_names != nullptr)
+                                   ? cat.resource_names[r].record_id_utf8
+                                   : nullptr;
+            std::printf(" %s=%llu", (name != nullptr) ? name : "?",
+                        static_cast<unsigned long long>(why[p].cost_short[slot]));
+        }
+        std::printf("\n");
+    }
 
     std::printf("----------------------------------------------------------------------------------------------------------\n");
 
