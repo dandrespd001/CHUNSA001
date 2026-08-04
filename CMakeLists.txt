@@ -284,6 +284,11 @@ add_test(NAME bosques COMMAND chunsa_test_bosques)
 # Con 36 recursos, quedarse sin uno es MAS probable que en AoE2, no menos. Sin
 # mercado eso es un callejon sin salida. La prueba 5 es la que importa: ir y
 # volver SIEMPRE pierde, o el juego tendria una fabrica de recursos infinitos.
+add_executable(chunsa_test_ai_mercado tests/unit/test_ai_mercado.cpp)
+target_link_libraries(chunsa_test_ai_mercado PRIVATE chunsa_sim_core)
+add_test(NAME ai_mercado COMMAND chunsa_test_ai_mercado)
+set_tests_properties(ai_mercado PROPERTIES LABELS "fast")
+
 add_executable(chunsa_test_market tests/unit/test_market.cpp)
 target_link_libraries(chunsa_test_market PRIVATE chunsa_sim_core)
 add_test(NAME market COMMAND chunsa_test_market)

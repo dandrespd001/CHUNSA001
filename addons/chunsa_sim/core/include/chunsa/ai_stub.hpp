@@ -53,7 +53,7 @@ namespace chunsa {
 // adaptativa) que puede emitir GATHER. Ambos cambian qué comandos calcula
 // ai_execute para el MISMO GameState — es, por contrato (SPEC-005 §7),
 // exactamente el caso que exige el bump.
-inline constexpr uint32_t AI_ALGO_VERSION     = 12;  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
+inline constexpr uint32_t AI_ALGO_VERSION     = 13;  // Sprint 1.47: la IA VENDE excedente abrumador para PAGAR una compra concreta  // Sprint 1.41: el aldeano ocioso vuelve al trabajo aunque no haya escasez  // Sprint 1.36: la IA PUNTÚA las tecnologías candidatas y elige la mejor, no la primera  // Sprint 1.35: la IA usa el MERCADO cuando un recurso la bloquea  // Sprint 1.34: la IA construye GRANJAS cuando escasea la comida  // Sprint 1.14: la IA construye VIVIENDAS cuando se acerca al tope
 inline constexpr uint16_t AI_INPUT_DELAY_TICKS = 4;
 inline constexpr uint32_t AI_DECISION_PHASE   = 7;     // dispatch cuando tick % 20 == 7
 inline constexpr uint32_t AI_MAX_COMMANDS     = 64;
@@ -140,6 +140,23 @@ inline constexpr int32_t AI_TRADE_PRIORITY_BP = 3000;
 // forma de usarlo. Por debajo de 2 lotes no se toca nada: el mercado castiga
 // la monotonía y vender poco a poco es perder oro en movimiento de precio.
 inline constexpr int32_t AI_TRADE_SELL_THRESHOLD = 200;
+
+// Sprint 1.47 — EXCEDENTE ABRUMADOR. Veinte lotes, y NO es lo mismo que el
+// umbral de arriba.
+//
+// AI_TRADE_SELL_THRESHOLD vende stock MUERTO: un recurso que la civilización no
+// tiene forma de gastar. Este otro vende stock VIVO —comida, que se gasta en
+// todo— cuando se ha acumulado en cantidad absurda. Hace falta porque el banco
+// de partida larga midió a p1 sentado encima de 10 984 de comida mientras se
+// moría sin madera: la comida NUNCA es "excedente claro" porque medio catálogo
+// la consume, así que el umbral de stock muerto jamás la alcanzaba.
+//
+// Y va emparejado con una compra concreta a propósito, no suelto. Una IA que
+// venda cada vez que le sobre algo mueve el precio en su contra sin obtener
+// nada: el mercado cobra horquilla (MARKET_SPREAD_BP) y el precio baja
+// MARKET_STEP_BP por lote vendido. VENDER NO ES UNA POLÍTICA, ES EL PAGO DE UNA
+// COMPRA. Si no hay nada que comprar, no se vende.
+inline constexpr int32_t AI_TRADE_GLUT = 2000;
 
 // Sprint 1.36 — pesos de la puntuación de tecnologías candidatas
 // (ai_tech_score). La justificación completa está en la función; aquí solo el
@@ -742,6 +759,14 @@ inline AiTradeV1 ai_find_trade(const GameState& g, uint8_t player) noexcept {
     }
     if (!has_market) return r;
 
+    // Sprint 1.47: una compra que falla SOLO por falta de oro no es un
+    // callejón sin salida, es una compra esperando a que se venda algo. Se
+    // anota aquí y la usa el caso de venta de excedente abrumador, al final.
+    // Sin esta memoria, comprar y vender serían dos políticas sueltas; con
+    // ella, la venta es el pago de una compra concreta.
+    bool    buy_pending_gold = false;
+    uint8_t buy_pending_res  = 0;
+
     // 2) COMPRAR: primera receta (barrido ascendente por edificio y por
     //    receta, el MISMO orden que el candidato FABRICAR de más abajo) que
     //    está lista para ejecutar — edificio completo, época alcanzada,
@@ -781,12 +806,105 @@ inline AiTradeV1 ai_find_trade(const GameState& g, uint8_t player) noexcept {
             int32_t precio = g.market_price_bp[player][missing];
             if (precio == 0) precio = MARKET_BASE_BP;           // sin inicializar = base
             const int32_t coste = market_buy_gold(precio);
-            if (g.player_stock[player][oro] < coste) continue;
+            if (g.player_stock[player][oro] < coste) {
+                // Sprint 1.47: antes esto era un `continue` y la compra se
+                // perdía. Ahora se recuerda: hay algo útil que comprar y solo
+                // falta el oro. El primer candidato gana (barrido ascendente).
+                if (!buy_pending_gold) {
+                    buy_pending_gold = true;
+                    buy_pending_res  = missing;
+                }
+                continue;
+            }
             r.found = true;
             r.buy = true;
             r.market_index = market;
             r.resource = missing;
             r.cost_gold = coste;
+            return r;
+        }
+    }
+
+    // 2-bis) COMPRAR PARA CONSTRUIR (Sprint 1.47). La pasada de arriba solo
+    //   desatasca RECETAS, y ése era el agujero que dejó al descubierto el
+    //   banco de partida larga: la IA se atascaba sin poder levantar el
+    //   edificio de época, que es lo que de verdad bloquea la partida, y el
+    //   mercado miraba hacia otro lado.
+    //
+    //   NO es una política nueva de qué construir: reutiliza los MISMOS
+    //   selectores que usa ai_execute para decidirlo (ai_find_trainer_type,
+    //   ai_find_housing_type, ai_find_farm_type). Si la IA quiere un edificio
+    //   y le falta UN único recurso no-oro que un lote cubre, se compra. Si
+    //   duplicara la política, las dos se separarían con el primer cambio.
+    {
+        const AiTrainerTypeV1 mt = ai_find_trainer_type(cat, g.player_civ[player],
+                                                        /*citizen_kind=*/false, epoch);
+        const BuildingId quiere[3] = {
+            mt.found ? mt.building_type : INVALID_BUILDING_ID,
+            ai_find_housing_type(cat, g.player_civ[player], epoch),
+            ai_find_farm_type(cat, g.player_civ[player], epoch),
+        };
+        for (uint32_t q = 0; q < 3; ++q) {
+            const BuildingId bid = quiere[q];
+            if (bid == INVALID_BUILDING_ID || bid >= cat.building_count) continue;
+            const BuildingDefinitionV1& bd = cat.buildings[bid];
+            if (bd.constructible == 0u) continue;
+            if (!ai_epoch_ok(epoch, bd.epoch_min, bd.epoch_max)) continue;
+            uint8_t missing = 0xFFu;
+            bool     clean = true;
+            for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+                const int32_t need = bd.cost[rr];
+                if (need <= 0) continue;
+                if (rr == oro) { clean = false; break; }   // el oro no se compra
+                if (g.player_stock[player][rr] >= need) continue;
+                if (missing != 0xFFu) { clean = false; break; }  // falta más de uno
+                missing = rr;
+            }
+            if (!clean || missing == 0xFFu) continue;
+            const int64_t deficit = bd.cost[missing] - g.player_stock[player][missing];
+            if (deficit <= 0 || deficit > MARKET_LOT) continue;
+            int32_t precio = g.market_price_bp[player][missing];
+            if (precio == 0) precio = MARKET_BASE_BP;
+            const int32_t coste = market_buy_gold(precio);
+            if (g.player_stock[player][oro] < coste) {
+                if (!buy_pending_gold) {
+                    buy_pending_gold = true;
+                    buy_pending_res  = missing;
+                }
+                continue;
+            }
+            r.found = true;
+            r.buy = true;
+            r.market_index = market;
+            r.resource = missing;
+            r.cost_gold = coste;
+            return r;
+        }
+    }
+
+    // 2-ter) VENDER EXCEDENTE ABRUMADOR PARA PAGAR ESA COMPRA (Sprint 1.47).
+    //   Sólo se llega aquí si hay una compra útil esperando y lo único que
+    //   falta es oro. Se vende el primer recurso (ascendente) acumulado por
+    //   encima de AI_TRADE_GLUT que NO sea el oro ni el que se quiere comprar
+    //   —vender justo lo que te falta sería absurdo— y que además deje margen:
+    //   se exige que tras el lote siga por encima del umbral de stock muerto,
+    //   para no vaciar la despensa por comprar una tabla.
+    //
+    //   Va ANTES de la venta de stock muerto porque es la venta con propósito:
+    //   si hay una compra concreta esperando, financiarla es mejor uso del
+    //   mercado que liquidar un excedente que no le urge a nadie.
+    if (buy_pending_gold) {
+        for (uint8_t rr = 0; rr < RESOURCE_COUNT; ++rr) {
+            if (rr == oro) continue;
+            if (rr == buy_pending_res) continue;
+            const int64_t stock = g.player_stock[player][rr];
+            if (stock < AI_TRADE_GLUT) continue;
+            if (stock - MARKET_LOT < AI_TRADE_SELL_THRESHOLD) continue;
+            r.found = true;
+            r.buy = false;
+            r.market_index = market;
+            r.resource = rr;
+            r.cost_gold = 0;
             return r;
         }
     }
