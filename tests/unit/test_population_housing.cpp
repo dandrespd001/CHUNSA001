@@ -96,6 +96,12 @@ void build_catalog(Fixture& f) {
 uint32_t put_building(GameState& g, uint8_t owner, BuildingId type, uint32_t build_progress) {
     const EntityHandle h = et_spawn(g.entities);
     const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+    if (i >= g.entities.capacity) return i;
     zero_components(g, i);
     g.owner[i] = owner;
     g.entity_kind[i] = 1u;

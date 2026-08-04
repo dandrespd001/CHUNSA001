@@ -125,6 +125,12 @@ MatchConfig01A cfg_of() {
 uint32_t put_soldier(GameState& g, uint8_t owner, int64_t tx, int64_t ty) {
     const EntityHandle h = et_spawn(g.entities);
     const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+    if (i >= g.entities.capacity) return i;
     zero_components(g, i);
     g.owner[i] = owner;
     g.entity_kind[i] = 0u;
@@ -145,6 +151,12 @@ uint32_t put_soldier(GameState& g, uint8_t owner, int64_t tx, int64_t ty) {
 uint32_t put_foundry(GameState& g, uint8_t owner) {
     const EntityHandle h = et_spawn(g.entities);
     const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+    if (i >= g.entities.capacity) return i;
     zero_components(g, i);
     g.owner[i] = owner;
     g.entity_kind[i] = 1u;
@@ -318,11 +330,18 @@ int main() {
         {
             const EntityHandle h = et_spawn(g->entities);
             const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+            if (i < g->entities.capacity) {
             zero_components(*g, i);
             g->owner[i] = 1u; g->entity_kind[i] = 1u; g->building_id[i] = 1u;
             g->build_progress[i] = 0; g->hp[i] = 400; g->max_hp[i] = 400;
             g->pos_x[i] = 40 * FX_ONE_RAW; g->pos_y[i] = 40 * FX_ONE_RAW;
             g->bld_anchor_tx[i] = 40; g->bld_anchor_ty[i] = 40;
+            }
         }
         // Enemigo: CABALLERÍA en mayoría.
         for (uint32_t k = 0; k < 4u; ++k) {

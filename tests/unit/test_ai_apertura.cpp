@@ -246,6 +246,12 @@ static void test_economic_layer_redirects_idle_citizen() {
     for (int k = 0; k < 3; ++k) {
         const EntityHandle h = et_spawn(g->entities);
         const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+        if (i >= g->entities.capacity) continue;
         g->owner[i] = 1;
         g->unit_class[i] = 3u;
         g->pos_x[i] = 101 * T; g->pos_y[i] = 101 * T;
@@ -316,6 +322,12 @@ static void test_economic_layer_redirects_surplus_when_no_idle() {
     for (int k = 0; k < 3; ++k) {
         const EntityHandle h = et_spawn(g->entities);
         const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+        if (i >= g->entities.capacity) continue;
         g->owner[i] = 1;
         g->unit_class[i] = 3u;
         g->pos_x[i] = 101 * T; g->pos_y[i] = 101 * T;
@@ -417,6 +429,12 @@ static void test_ai_execute_deterministic_with_economic_layer() {
     for (int k = 0; k < 2; ++k) {
         const EntityHandle h = et_spawn(g->entities);
         const uint32_t i = h.index;
+    // Sprint 1.42: la reserva de entidades puede agotarse y et_spawn devuelve
+    // un handle invalido. Sin esta guarda se escribe FUERA del array, y en
+    // Release GCC lo detecta con -Werror=stringop-overflow. Solo aparecia con
+    // optimizacion, asi que el proyecto llevaba ciego: aqui solo se compilaba
+    // RelWithDebInfo y la CI, que usa Release, lleva roja desde el 25 de julio.
+        if (i >= g->entities.capacity) continue;
         g->owner[i] = 1;
         g->unit_class[i] = 3u;
         g->pos_x[i] = 101 * T; g->pos_y[i] = 101 * T;

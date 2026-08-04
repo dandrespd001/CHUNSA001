@@ -24,7 +24,13 @@ jobs:
       - name: Golden vectors
         run: ./build/chunsa_sim_cli golden --vectors tests/determinism/golden
       - name: Unit props
-        run: ctest --test-dir build --output-on-failure
+        # EXCLUYE la etiqueta `perf`. Los bancos (bench_step,
+        # bench_partida_larga) comparan tiempos de PARED contra referencias
+        # medidas en la maquina de desarrollo. Un runner de GitHub es otra
+        # maquina y otra carga: dejarlos aqui produciria fallos aleatorios, y
+        # una prueba que falla sola se acaba ignorando — que es peor que no
+        # tenerla. Se ejecutan a proposito, en local.
+        run: ctest --test-dir build --output-on-failure -LE perf
       - name: G1 (dos corridas bit-exactas)
         run: ./build/chunsa_sim_cli run --selftest-g1
 
@@ -39,4 +45,4 @@ jobs:
       - name: Golden vectors
         run: ./build/Release/chunsa_sim_cli.exe golden --vectors tests/determinism/golden
       - name: Unit props
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure -LE perf

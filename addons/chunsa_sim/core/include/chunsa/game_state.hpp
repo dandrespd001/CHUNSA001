@@ -294,6 +294,16 @@ struct GameState {
 };
 
 inline void zero_components(GameState& g, uint32_t i) noexcept {
+    // Sprint 1.42: guarda de cota. En Release, GCC ve un camino en el que `i`
+    // podria salirse y -Werror=stringop-overflow convierte el aviso en error.
+    // Solo aparece con optimizacion, asi que llevabamos ciegos a esto: en el
+    // proyecto solo se compilaba RelWithDebInfo, y la CI —que si usa Release—
+    // lleva roja desde el 25 de julio sin que nadie mirara.
+    //
+    // La guarda no es una concesion al compilador: escribir fuera del array
+    // seria corrupcion silenciosa de memoria, y el kernel es determinista
+    // precisamente porque nada de eso puede pasar.
+    if (i >= ENTITY_HARD_CAP) return;
     g.pos_x[i] = 0; g.pos_y[i] = 0;
     g.vel_x[i] = 0; g.vel_y[i] = 0;
     g.tgt_x[i] = 0; g.tgt_y[i] = 0;
