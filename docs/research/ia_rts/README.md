@@ -28,4 +28,15 @@ marcado como dudoso a uno inventado con seguridad.
 
 ## Índice
 
-Se completa según entregan las partes.
+- **[SINTESIS.md](SINTESIS.md)** — léela primero. Lo que cambia y lo que no.
+- [P1_ARQUITECTURA.md](P1_ARQUITECTURA.md) — repertorio de arquitecturas, capas,
+  el techo documentado de los sistemas de utilidad, la IA de Age of Empires II.
+- [P2_ESTRATEGIA.md](P2_ESTRATEGIA.md) — reparto eco/militar/tech, ventana de
+  ataque, sumideros económicos, dificultades sin trampas.
+- [P3_TACTICA.md](P3_TACTICA.md) — escaramuza, retirada, moral, y por qué la
+  aniquilación mutua es estructural.
+- [P4_DETERMINISMO.md](P4_DETERMINISMO.md) — lockstep, desincronización, y qué
+  mide de verdad un banco de auto-juego simétrico.
+
+Todas de MiniMax M3, 2026-08-05. Ver §6 de la síntesis sobre el límite de tener
+una sola familia de fuentes.
