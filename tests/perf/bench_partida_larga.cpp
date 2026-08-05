@@ -178,6 +178,11 @@ struct DefenseWhy {
     uint64_t no_paga = 0;       // no llega de recursos
     uint64_t sin_sitio = 0;     // no hay celda libre
     uint64_t candidata = 0;     // paso todos los filtros
+    // Sprint 1.52: una obra solo AVANZA si hay un ciudadano asignado, y la IA
+    // solo asigna si tiene uno OCIOSO. Se cuentan los ticks con ocioso
+    // disponible y los ticks con obra parada, que es la sospecha.
+    uint64_t con_ocioso = 0;
+    uint64_t obra_sin_avance = 0;
 };
 
 inline void scan_defense_reasons(const GameState& g, uint8_t player,
@@ -185,6 +190,25 @@ inline void scan_defense_reasons(const GameState& g, uint8_t player,
                                  DefenseWhy& out) {
     AiMacroStateV1 macro{};
     ai_scan_macro(g, player, macro);
+    if (macro.has_idle_citizen) ++out.con_ocioso;
+    // Obra de DEFENSA parada: existe, esta incompleta y ningun ciudadano la
+    // tiene como build_target. Si esto es alto, el problema no es querer
+    // construir la torre: es que nadie va a levantarla.
+    for (uint32_t j = 0; j < g.entities.capacity; ++j) {
+        if (!g.entities.alive[j]) continue;
+        if (g.owner[j] != player || g.entity_kind[j] != 1u) continue;
+        if (g.building_id[j] >= cat.building_count) continue;
+        const BuildingDefinitionV1& bd_j = cat.buildings[g.building_id[j]];
+        if (bd_j.attack <= 0) continue;
+        if (static_cast<uint32_t>(g.build_progress[j]) >= bd_j.build_time_ticks) continue;
+        bool asignada = false;
+        for (uint32_t c = 0; c < g.entities.capacity && !asignada; ++c) {
+            if (!g.entities.alive[c]) continue;
+            if (g.owner[c] != player) continue;
+            if (g.build_target[c] == j) asignada = true;
+        }
+        if (!asignada) ++out.obra_sin_avance;
+    }
     if (!macro.has_anchor) { ++out.sin_anchor; return; }
     if (!ai_enemy_near_base(g, player, macro.anchor_x, macro.anchor_y)) {
         ++out.sin_enemigo; return;
@@ -600,7 +624,8 @@ int main() {
     for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
         std::printf("bench_partida_larga: P%u barrido DEFENSA: sin_anchor=%llu "
                     "sin_enemigo=%llu sin_tipo=%llu en_obra=%llu ya_tiene=%llu "
-                    "NO_PAGA=%llu sin_sitio=%llu | CANDIDATA=%llu\n",
+                    "NO_PAGA=%llu sin_sitio=%llu | CANDIDATA=%llu | "
+                    "con_ocioso=%llu OBRA_PARADA=%llu\n",
                     p,
                     static_cast<unsigned long long>(why_def[p].sin_anchor),
                     static_cast<unsigned long long>(why_def[p].sin_enemigo),
@@ -609,7 +634,9 @@ int main() {
                     static_cast<unsigned long long>(why_def[p].ya_tiene),
                     static_cast<unsigned long long>(why_def[p].no_paga),
                     static_cast<unsigned long long>(why_def[p].sin_sitio),
-                    static_cast<unsigned long long>(why_def[p].candidata));
+                    static_cast<unsigned long long>(why_def[p].candidata),
+                    static_cast<unsigned long long>(why_def[p].con_ocioso),
+                    static_cast<unsigned long long>(why_def[p].obra_sin_avance));
     }
     for (uint32_t p = 0; p < kN_PLAYERS; ++p) {
         std::printf("bench_partida_larga: P%u barrido investigacion: "

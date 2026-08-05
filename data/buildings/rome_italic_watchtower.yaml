@@ -2,13 +2,27 @@
 # madera aparecen en las fuentes latinas como referencia arcaica, pero
 # conservadas arqueologicamente en la peninsula para este periodo no hay
 # practicamente nada. Lo dijo MiniMax y lo mantengo.
+# ------------------------------------------------------------------
+# EPOCA 2 Y NO 3 (correccion del Arquitecto, medida con el banco).
+#
+# MiniMax las puso en la epoca 3 y el banco demostro que ahi NO SIRVEN: el
+# desglose dio 2898 ticks con el enemigo en la base pidiendo una torre que
+# todavia no existia, y las que se levantaban en la epoca 3 morian a medio
+# construir porque la guerra ya estaba encima. Una torre que solo puedes
+# empezar DURANTE el asalto no es una defensa, es una obra que regalas.
+#
+# Y la historia lo permite sin forzarla: la torre de Jerico es del octavo
+# milenio antes de nuestra era, o sea neolitico pleno — nuestra epoca 2. La
+# torre de vigilancia no es una invencion tardia; es de las primeras cosas
+# monumentales que construyo nadie.
+# ------------------------------------------------------------------
 schema_version: 1
 id: rome:italic_watchtower
 civ_id: rome:republic_imperial
 display_name_key: rome:building.italic_watchtower
 description_key: rome:building.italic_watchtower.description
 epoch_window:
-  - 3
+  - 2
   - 5
 kind: civic
 footprint:
